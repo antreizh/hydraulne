@@ -27,7 +27,7 @@
 
   <!-- ===== Vent ===== -->
   <div id="mwv-widget">
-    <div class="mwv-head"><span class="mwv-hico" aria-hidden="true">🌊</span><span class="mwv-t">Vent</span> <a class="mwv-zoom" href="https://www.antreizh.fr/livemareevent.html" target="_blank" rel="noopener" title="Marée et vent en direct">zoom</a><span class="mwv-per">15 dernières minutes</span></div>
+    <div class="mwv-head"><span class="mwv-hico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#1f7bb6" stroke-width="2" stroke-linecap="round"><path d="M3 8h10.5a2.5 2.5 0 1 0-2.5-2.5"/><path d="M3 12h15.5a2.5 2.5 0 1 1-2.5 2.5"/><path d="M3 16h7.5a2 2 0 1 1-2 2"/></svg></span><span class="mwv-t">Vent</span> <a class="mwv-zoom" href="https://www.antreizh.fr/livemareevent.html" target="_blank" rel="noopener" title="Marée et vent en direct">zoom</a><span class="mwv-per">15 dernières minutes</span></div>
   <div class="mwv-row" id="mwv-lanveoc">
     <span class="mwv-ico" aria-hidden="true"></span>
     <span class="mwv-l1">Lanvéoc</span>
@@ -136,6 +136,7 @@
 /* Titre « Vent » au même format que « Marée » : pastille ronde + intitulé, lien zoom, période à droite */
 #mwt-widget #mwv-widget .mwv-head{display:flex;align-items:center;gap:calc(10px*var(--k));margin:0 0 calc(4px*var(--k));text-transform:none;letter-spacing:0}
 #mwt-widget #mwv-widget .mwv-hico{flex:0 0 auto;width:calc(30px*var(--k));height:calc(30px*var(--k));border-radius:50%;background:#e1effa;display:inline-flex;align-items:center;justify-content:center;font-size:calc(15px*var(--k))}
+#mwt-widget #mwv-widget .mwv-hico svg{width:calc(18px*var(--k));height:calc(18px*var(--k))}
 #mwt-widget #mwv-widget .mwv-t{font-size:calc(13.5px*var(--k));font-weight:600;color:#1d2b36;margin-right:calc(-4px*var(--k))}
 #mwt-widget #mwv-widget .mwv-zoom{font-size:calc(10px*var(--k));font-weight:400;color:#1f7bb6;text-decoration:underline;text-underline-offset:2px}
 #mwt-widget #mwv-widget .mwv-per{margin-left:auto;font-size:calc(11px*var(--k));font-weight:400;color:var(--mwv-muted)}
