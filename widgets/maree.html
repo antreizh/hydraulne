@@ -10,11 +10,11 @@
 <!-- Widget servi depuis https://appli.antreizh.fr/widgets/ : toujours à jour sur le site -->
 <!-- =====================================================================
      Widget mini Marée Vent — marée au Pont de Térénez, puis vent des 15 dernières minutes
-     à Lanvéoc, au Tinduff (estimation) et à Saint-Ségal : moyen, rafales, direction.
+     à Lanvéoc et à Saint-Ségal : moyen, rafales, direction.
      À coller dans un bloc « Code HTML » de WebAcappella (≈ 340 × 260 px).
      Indépendant des autres widgets : ils peuvent être sur la même page.
      Sources : SHOM (Brest, port de référence) + corrections du port rattaché ;
-     vent : modèle AROME de Météo-France via Open-Meteo (ou mesures Météo-France avec une clé API)
+     vent : mesures des stations Météo-France (clé API) ; à défaut, modèle AROME via Open-Meteo, signalé « estimation »
      ===================================================================== -->
 <div id="mwt-widget">
   <div class="mwt-row">
@@ -31,13 +31,6 @@
   <div class="mwv-row" id="mwv-lanveoc">
     <span class="mwv-ico" aria-hidden="true"></span>
     <span class="mwv-l1">Lanvéoc</span>
-    <span class="mwv-r1"><i class="mwv-wait"></i></span>
-    <span class="mwv-l2"></span>
-    <span class="mwv-r2"></span>
-  </div>
-  <div class="mwv-row" id="mwv-tinduff">
-    <span class="mwv-ico" aria-hidden="true"></span>
-    <span class="mwv-l1">Tinduff</span>
     <span class="mwv-r1"><i class="mwv-wait"></i></span>
     <span class="mwv-l2"></span>
     <span class="mwv-r2"></span>
@@ -323,8 +316,7 @@
   var CFG = {
     sites: [
       { id: "mwv-lanveoc", nom: "Lanvéoc",     station: "29120001", lat: 48.2792, lon: -4.4392 },  // station Météo-France LANVEOC
-      { id: "mwv-segal",   nom: "Saint-Ségal", station: "29263002", lat: 48.2256, lon: -4.0897 },  // station Météo-France ST-SEGAL S A
-      { id: "mwv-tinduff", nom: "Tinduff",     station: null,       lat: 48.3353, lon: -4.3679 }   // port du Tinduff : pas de station, estimation du modèle
+      { id: "mwv-segal",   nom: "Saint-Ségal", station: "29263002", lat: 48.2256, lon: -4.0897 }   // station Météo-France ST-SEGAL S A
     ],
     // Option « mesures des stations » : clé API du portail https://portail-api.meteofrance.fr
     // (API « Données d'observation », valeurs toutes les 6 minutes). Laisser vide = modèle AROME.
@@ -420,7 +412,7 @@
       .then(function (j) {
         var rows = (Array.isArray(j) ? j : (j.features || []).map(function (f) { return f.properties; }))
           .filter(function (p) { return p && p.ff != null && p.dd != null; })
-          .map(function (p) { return { t: new Date(p.validity_time || p.reference_time), ff: +p.ff, fx: p.fxi10 != null ? +p.fxi10 : +p.ff, dd: +p.dd }; })
+          .map(function (p) { return { t: new Date(p.validity_time || p.reference_time), ff: +p.ff, fx: p.fxi10 != null ? +p.fxi10 : p.fxi != null ? +p.fxi : +p.ff, dd: +p.dd }; })
           .sort(function (a, b) { return a.t - b.t; });
         if (!rows.length) throw new Error("vide");
         var fin = rows[rows.length - 1].t, deb = fin.getTime() - 15 * 60000;
@@ -449,7 +441,7 @@
       var t = vals.filter(Boolean).map(function (v) { return v.t; }).sort(function (a, b) { return b - a; })[0];
       dernier = t || null;
       var a = $("mwv-src");
-      if (mixte) { a.textContent = "Météo-France"; a.href = "https://meteo.data.gouv.fr"; a.title = "Vent : mesures des stations Météo-France (6 min) ; Tinduff : estimation du modèle AROME"; }
+      if (mixte) { a.textContent = "Météo-France"; a.href = "https://meteo.data.gouv.fr"; a.title = "Vent : mesures des stations Météo-France (toutes les 6 minutes)"; }
       var per = root.querySelector(".mwv-per");
       if (per) per.textContent = mixte ? "15 dernières minutes" : "estimation · 15 dernières minutes";
       pied();
