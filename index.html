@@ -1,0 +1,1643 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Situation hydrologique</title>
+<meta name="description" content="Marée au Pont de Térénez, vigilance eau à Châteaulin, niveau de l'Aulne, nappe de Saint-Ségal et courbe de marée à Guily Glaz.">
+<meta name="theme-color" content="#0b3c5d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  html,body{margin:0;min-height:100%;background:#eaf1f6}
+  body{display:flex;justify-content:center;align-items:flex-start;
+       padding:calc(16px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));
+       box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .appli{width:100%;max-width:560px}
+  /* barre du haut : icône de l'application centrée sur la page, bouton « Actualiser » à droite */
+  .appli-bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin:0 4px 10px}
+  .appli-bar button{grid-column:3;justify-self:end}
+  .appli-icone{grid-column:2;display:block;width:56px;height:56px;border-radius:13px;box-shadow:0 2px 8px rgba(11,60,93,.18)}
+  .appli-bar button{border:0;background:#fff;color:#0b3c5d;font:600 13px system-ui,sans-serif;
+       padding:7px 14px;border-radius:999px;box-shadow:0 1px 6px rgba(11,60,93,.12);cursor:pointer}
+  /* onglets : barre défilante horizontalement, collée en haut de l'écran pendant le défilement */
+  .appli-onglets{position:sticky;top:0;z-index:20;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
+       margin:0 -12px 12px;padding:8px 12px;background:#eaf1f6;-webkit-overflow-scrolling:touch}
+  .appli-onglets::-webkit-scrollbar{display:none}
+  .appli-onglets button{flex:0 0 auto;border:1px solid #d5dde4;background:#fff;color:#0b3c5d;
+       font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:7px 13px;border-radius:999px;white-space:nowrap;cursor:pointer}
+  .appli-onglets button[aria-selected="true"]{background:#0b3c5d;border-color:#0b3c5d;color:#fff}
+  .appli-onglets button:focus-visible{outline:2px solid #1f7bb6;outline-offset:2px}
+  /* cadres météo : la hauteur s'ajuste au contenu (message envoyé par chaque page) */
+  .appli-meteo + .appli-meteo{margin-top:14px}
+  .appli-meteo{display:block;width:100%;height:900px;border:1px solid #d5dde4;border-radius:18px;background:#f4f7f8;overflow:hidden}
+  .appli-off{display:none;margin:0 4px 8px;padding:8px 12px;border-radius:12px;background:#fff7e0;color:#7a5a00;font-size:13px}
+</style>
+</head>
+<body>
+<main class="appli">
+  <div class="appli-bar">
+    <img class="appli-icone" src="icons/icon-192.png" width="56" height="56" alt="HYDRAULNE">
+    <button type="button" id="appli-maj" aria-label="Actualiser les données">↻ Actualiser</button>
+  </div>
+  <div class="appli-off" id="appli-off">Hors connexion : les données s'afficheront dès le retour du réseau.</div>
+  <nav class="appli-onglets" role="tablist" aria-label="Tableaux de bord">
+    <button type="button" role="tab" id="b-synthese" aria-controls="o-synthese" aria-selected="false" data-onglet="synthese">Synthèse</button>
+    <button type="button" role="tab" id="b-maree" aria-controls="o-maree" aria-selected="false" data-onglet="maree">Cycle de marée</button>
+    <button type="button" role="tab" id="b-hydro" aria-controls="o-hydro" aria-selected="false" data-onglet="hydro">Hydro</button>
+    <button type="button" role="tab" id="b-pluie-temperature" aria-controls="o-pluie-temperature" aria-selected="false" data-onglet="pluie-temperature">Pluie et température</button>
+    <button type="button" role="tab" id="b-pluviometrie" aria-controls="o-pluviometrie" aria-selected="false" data-onglet="pluviometrie">Pluviométrie</button>
+    <button type="button" role="tab" id="b-temperature" aria-controls="o-temperature" aria-selected="false" data-onglet="temperature">Température</button>
+    <button type="button" role="tab" id="b-nappe-pluie" aria-controls="o-nappe-pluie" aria-selected="false" data-onglet="nappe-pluie">Nappe et pluie</button>
+    <button type="button" role="tab" id="b-correlation" aria-controls="o-correlation" aria-selected="false" data-onglet="correlation">Corrélation nappe & pluie</button>
+  </nav>
+
+<section class="appli-onglet" id="o-synthese" role="tabpanel" aria-labelledby="b-synthese" hidden>
+<!-- ===== Mini-widget (identique à mini-widget-mer-eau.html) ===== -->
+<!-- =====================================================================
+     Mini-widget « Situation hydrologique » — résumé des 4 blocs sur une carte
+     À coller dans un bloc « Code HTML » de WebAcappella (≈ 330 × 330 px).
+     Indépendant du grand widget : les deux peuvent être sur la même page.
+     Sources : SHOM (marées), VigiEau, Hub'Eau (nappe ADES, hydrométrie)
+     ===================================================================== -->
+<div id="mwm-widget">
+  <div class="mwm-head">
+    <span class="mwm-title">🌊 Situation hydrologique</span>
+    <span class="mwm-time" id="mwm-time"></span>
+  </div>
+
+  <div class="mwm-row">
+    <span class="mwm-ico" style="background:#e1effa">⚓</span>
+    <span class="mwm-lbl">Marée<small>Pont de Térénez</small></span>
+    <a class="mwm-zoom" href="https://www.antreizh.fr/mareeguilyglas.html" target="_blank" rel="noopener" title="Marée à Guily Glaz : courbe détaillée">zoom</a>
+    <span class="mwm-val" id="mwm-tide"><i class="mwm-wait"></i></span>
+  </div>
+  <div class="mwm-row">
+    <span class="mwm-ico" style="background:#e3f6f4">💧</span>
+    <span class="mwm-lbl">Vigilance eau<small>Châteaulin</small></span>
+    <span class="mwm-val" id="mwm-vigi"><i class="mwm-wait"></i></span>
+  </div>
+  <div class="mwm-row">
+    <span class="mwm-ico" style="background:#e6f0f7">🏞️</span>
+    <span class="mwm-lbl">Niveau de l'Aulne<small>Châteaulin</small></span>
+    <span class="mwm-val" id="mwm-aulne"><i class="mwm-wait"></i></span>
+    <span class="mwm-varline mwm-debit" id="mwm-aulne-debit"></span>
+    <span class="mwm-varline" id="mwm-aulne-var"></span>
+  </div>
+  <div class="mwm-row">
+    <span class="mwm-ico" style="background:#eef6e3">🌱</span>
+    <span class="mwm-lbl">Nappe<small>Saint-Ségal</small></span>
+    <span class="mwm-val" id="mwm-nappe"><i class="mwm-wait"></i></span>
+    <span class="mwm-varline" id="mwm-nappe-var"></span>
+  </div>
+
+  <div class="mwm-foot" id="mwm-foot">
+    <span id="mwm-sources">Sources :
+    <a href="https://maree.shom.fr/harbor/BREST" target="_blank" rel="noopener" title="Marées SHOM – Brest, port de référence du Pont de Térénez">SHOM</a> ·
+    <a href="https://vigieau.gouv.fr/" target="_blank" rel="noopener" title="Restrictions d'eau en vigueur – VigiEau">VigiEau</a> ·
+    <a href="https://www.hydro.eaufrance.fr/stationhydro/J382182001/fiche" target="_blank" rel="noopener" title="L'Aulne à Châteaulin – HydroPortail">HydroPortail</a> ·
+    <a href="https://ades.eaufrance.fr/Fiche/PtEau?Code=03103X0047/PZ" target="_blank" rel="noopener" title="Piézomètre de Kergadalen (Saint-Ségal) – ADES">ADES</a></span>
+    <span class="mwm-copy">© <a href="https://www.antreizh.fr" target="_blank" rel="noopener" title="www.antreizh.fr">antreizh.fr</a></span>
+  </div>
+  <div id="mwm-shom-host" class="mwm-shom-host"></div>
+</div>
+
+<style>
+/* Toutes les tailles sont multipliées par --k, calculé selon la largeur allouée au widget */
+#mwm-widget{
+  --mwm-navy:#0b3c5d; --mwm-muted:#5f7180; --mwm-line:#e8edf1;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:#1d2b36; background:#fff; border-radius:calc(18px*var(--k)); padding:calc(14px*var(--k)) calc(14px*var(--k)) calc(10px*var(--k));
+  box-shadow:0 2px calc(12px*var(--k)) rgba(11,60,93,.10); width:100%; --k:1;
+  border:1px solid #d5dde4;                                             /* cadre gris très fin */
+  box-sizing:border-box; line-height:1.3;
+}
+#mwm-widget *,#mwm-widget *::before,#mwm-widget *::after{box-sizing:border-box}
+#mwm-widget a{color:#1f7bb6}
+#mwm-widget .mwm-head{display:flex;justify-content:space-between;align-items:baseline;gap:calc(8px*var(--k));margin-bottom:calc(6px*var(--k))}
+#mwm-widget .mwm-title{font-weight:700;font-size:calc(16px*var(--k));color:var(--mwm-navy)}
+#mwm-widget .mwm-time{font-size:calc(11.5px*var(--k));color:var(--mwm-muted);white-space:nowrap}
+#mwm-widget .mwm-row{display:flex;flex-wrap:wrap;align-items:center;gap:calc(10px*var(--k));padding:calc(9px*var(--k)) 0;border-top:1px solid var(--mwm-line)}
+#mwm-widget .mwm-ico{flex:0 0 calc(30px*var(--k));height:calc(30px*var(--k));border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:calc(15px*var(--k))}
+#mwm-widget .mwm-lbl{flex:0 0 auto;font-size:calc(13.5px*var(--k));font-weight:600;white-space:nowrap}
+#mwm-widget .mwm-lbl small{display:block;font-size:calc(11.5px*var(--k));font-weight:400;color:var(--mwm-muted)}
+#mwm-widget .mwm-zoom{flex:0 0 auto;align-self:center;font-size:calc(11px*var(--k));font-weight:600;color:#1f7bb6;text-decoration:none;border:1px solid #cfe2f1;background:#f2f8fc;border-radius:calc(999px*var(--k));padding:calc(1px*var(--k)) calc(8px*var(--k))}
+#mwm-widget .mwm-zoom:hover{background:#e1effa}
+#mwm-widget .mwm-val{flex:1 1 0;min-width:0;text-align:right;font-size:calc(13px*var(--k))}
+#mwm-widget .mwm-pill,#mwm-widget .mwm-nw,#mwm-widget .mwm-coef,#mwm-widget .mwm-up,#mwm-widget .mwm-down{white-space:nowrap}
+#mwm-widget #mwm-tide small{white-space:nowrap}
+/* Marée : coefficient puis sens de la marée l'un sous l'autre (place laissée au lien « zoom ») */
+#mwm-widget #mwm-tide .mwm-coef,#mwm-widget #mwm-tide .mwm-up,#mwm-widget #mwm-tide .mwm-down{display:block}
+#mwm-widget .mwm-val small{display:block;font-size:calc(11.5px*var(--k));color:var(--mwm-muted);margin-top:2px}
+#mwm-widget .mwm-val small.mwm-date{margin-top:0;font-size:calc(10.5px*var(--k))}
+#mwm-widget .mwm-val small.mwm-var{font-weight:600;color:#1d2b36}
+#mwm-widget .mwm-varline{flex:0 0 100%;text-align:right;font-style:italic;font-size:calc(11.5px*var(--k));color:var(--mwm-muted);white-space:nowrap;margin-top:calc(-6px*var(--k))}
+#mwm-widget .mwm-varline:empty{display:none}
+#mwm-widget .mwm-varline.mwm-debit{font-style:normal}
+#mwm-widget .mwm-varline + .mwm-varline{margin-top:calc(-8px*var(--k))}
+#mwm-widget .mwm-pill{display:inline-block;color:#fff;font-weight:700;font-size:calc(12px*var(--k));border-radius:calc(999px*var(--k));padding:calc(3px*var(--k)) calc(10px*var(--k))}
+#mwm-widget .mwm-coef{font-weight:800;color:var(--mwm-navy)}
+#mwm-widget .mwm-up{color:#1f7bb6;font-weight:700}
+#mwm-widget .mwm-down{color:#c56a1c;font-weight:700}
+#mwm-widget .mwm-na{color:var(--mwm-muted);font-size:calc(12px*var(--k))}
+#mwm-widget .mwm-foot{border-top:1px solid var(--mwm-line);padding-top:calc(7px*var(--k));font-size:calc(10.5px*var(--k));color:var(--mwm-muted)}
+#mwm-widget .mwm-foot a{color:var(--mwm-muted);text-decoration:underline;text-underline-offset:2px}
+#mwm-widget .mwm-foot a:hover{color:#1f7bb6}
+#mwm-widget .mwm-foot{display:flex;flex-wrap:wrap;align-items:baseline;gap:calc(2px*var(--k)) calc(8px*var(--k))}
+#mwm-widget .mwm-foot .mwm-copy{margin-left:auto;white-space:nowrap}
+#mwm-widget .mwm-wait{display:inline-block;width:calc(46px*var(--k));height:calc(10px*var(--k));border-radius:calc(6px*var(--k));background:linear-gradient(90deg,#eef2f5,#dde5ec,#eef2f5);background-size:200% 100%;animation:mwm-sh 1.2s linear infinite}
+#mwm-widget .mwm-shom-host iframe{position:absolute;left:-10000px;top:0;width:420px;height:700px;border:0;visibility:hidden}
+@keyframes mwm-sh{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){#mwm-widget *{animation:none!important}}
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================== PARAMÈTRES (modifiables) ================== */
+  var CFG = {
+    shomPort: "BREST",
+    portRattache: {                      // Pont de Térénez, rattaché à Brest (null = Brest)
+      pm: { ve: { dt: 5,  dh: 0.40 }, me: { dt: 5, dh: 0.35 } },
+      bm: { ve: { dt: 10, dh: 0.15 }, me: { dt: 5, dh: 0.20 } }
+    },
+    vigieauInsee: "29026", vigieauLat: 48.1966, vigieauLon: -4.0903, vigieauProfil: "particulier",
+    bss: "03103X0047/PZ",                // nappe de Saint-Ségal (Kergadalen)
+    stationAulne: "J382182001",          // l'Aulne à Châteaulin – Pont routier
+    fenetreJours: 10,
+    lienDetail: "",                      // ex. "/eau.html" : ajoute un lien « Voir le détail »
+    refreshMinutes: 30
+  };
+  /* ============================================================== */
+
+  var root = document.getElementById("mwm-widget");
+  if (!root || root.getAttribute("data-init")) return;
+  root.setAttribute("data-init", "1");
+
+  /* ---- Taille de police auto-adaptative : selon la largeur réellement allouée au widget ---- */
+  function fit() {
+    var w = root.clientWidth; if (!w) return;
+    var k = Math.max(0.75, Math.min(2.2, w / 340));                 // 340 px de large = taille de référence
+    root.style.setProperty("--k", k.toFixed(3));
+  }
+  fit();
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(root);
+  window.addEventListener("resize", fit);
+
+  function $(id) { return document.getElementById(id); }
+  function hm(d) { return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
+  function num(x, n) { return x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n }); }
+  function pill(txt, col) { return '<span class="mwm-pill" style="background:' + col + '">' + txt + "</span>"; }
+  function na(id) { $(id).innerHTML = '<span class="mwm-na">indisponible</span>'; }
+  function getJSON(url) {
+    return fetch(url, { headers: { Accept: "application/json" } }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status); return r.json();
+    });
+  }
+  // Rang du niveau actuel parmi les années passées, à la même période (0 = le plus bas, 1 = le plus haut)
+  function rangSaison(hist, tRef, vNow, minPts) {
+    var d = new Date(tRef), win = CFG.fenetreJours * 864e5, byYear = {};
+    hist.forEach(function (r) {
+      var yr = null;
+      [r.y - 1, r.y, r.y + 1].forEach(function (y) {
+        if (Math.abs(r.t - Date.UTC(y, d.getUTCMonth(), d.getUTCDate())) <= win) yr = y;
+      });
+      if (yr == null || yr === d.getUTCFullYear()) return;
+      (byYear[yr] = byYear[yr] || []).push(r.v);
+    });
+    var refs = Object.keys(byYear).filter(function (y) { return byYear[y].length >= minPts; })
+      .map(function (y) { var a = byYear[y]; return a.reduce(function (s, x) { return s + x; }, 0) / a.length; });
+    if (refs.length < 5) return null;
+    var below = 0, eq = 0;
+    refs.forEach(function (x) { if (x < vNow) below++; else if (x === vNow) eq++; });
+    return (below + eq / 2) / refs.length;
+  }
+  // Ligne « variation par rapport à J-7 » : flèche + valeur signée
+  function varJ7(txt, signe, prefixe, cls) {
+    var fl = signe > 0 ? "↗" : signe < 0 ? "↘" : "→";
+    return '<small class="' + (cls || "mwm-var") + '"><span class="mwm-nw">' + (prefixe || "") + fl + " " + txt + " vs J-7</span></small>";
+  }
+  // Mesure la plus récente à la date t ou juste avant (tolérance en jours)
+  function mesureA(d, t, tolJours) {
+    for (var i = d.length - 1; i >= 0; i--) if (d[i].t <= t) return t - d[i].t <= tolJours * 864e5 ? d[i] : null;
+    return null;
+  }
+  // Date de la dernière mesure : « 25 oct. à 11:30 » (Aulne) ou « 24 oct. » (nappe : valeur journalière, sans heure)
+  function jourCourt(d, utc) { return d.toLocaleDateString("fr-FR", utc ? { day: "numeric", month: "short", timeZone: "UTC" } : { day: "numeric", month: "short" }); }
+  function signed(x, n, unit) { return (x > 0 ? "+" : x < 0 ? "−" : "±") + num(Math.abs(x), n) + unit; }
+  function classe(list, p) { return list.filter(function (c) { return p < c.max; })[0] || list[list.length - 1]; }
+
+  /* ---------------- 1) Marée ---------------- */
+  var MOIS = { janvier: 0, "février": 1, fevrier: 1, mars: 2, avril: 3, mai: 4, juin: 5, juillet: 6,
+    "août": 7, aout: 7, septembre: 8, octobre: 9, novembre: 10, "décembre": 11, decembre: 11 };
+  var DAY_RE = /(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+(\d{1,2})(?:er)?\s+([a-zéû]+)\s+(\d{4})/i;
+  // Les jours suivants de la vignette SHOM sont notés « 20/10/2026 » (et non « Mardi 20 octobre 2026 »)
+  var DMY_RE = /(?:^|[^\d\/])(\d{1,2})\/(\d{1,2})\/(\d{4})(?![\d\/])/;
+  var tides = null;
+
+  function docsOf(doc) {
+    var out = [doc], fr = doc.querySelectorAll("iframe");
+    for (var i = 0; i < fr.length; i++) {
+      try { var d = fr[i].contentDocument; if (d && d !== doc) out = out.concat(docsOf(d)); } catch (e) {}
+    }
+    return out;
+  }
+  function parseShom(rootDoc) {
+    var ev = [], seen = {};
+    docsOf(rootDoc).forEach(function (doc) {
+      if (!doc || !doc.body) return;
+      var cur = null, els = doc.body.querySelectorAll("*");
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.tagName === "SCRIPT" || el.tagName === "STYLE") continue;
+        if (el.tagName === "TR") {
+          var type = null, time = null, h = null, coef = null, cells = el.querySelectorAll("td,th");
+          for (var c = 0; c < cells.length; c++) {
+            var t = cells[c].textContent.replace(/\s+/g, " ").trim();
+            if (/^(PM|BM)$/.test(t)) type = t;
+            else if (/^\d{1,2}[:h]\d{2}$/.test(t)) time = t;
+            else if (/^-?\d+[.,]\d+(\s?m)?$/.test(t)) h = parseFloat(t.replace(",", "."));
+            else if (/^\d{2,3}$/.test(t)) coef = +t;
+          }
+          if (type && time && cur) {
+            var p = time.split(/[:h]/), d = new Date(cur.y, cur.m, cur.d, +p[0], +p[1]), k = type + d.getTime();
+            if (!seen[k]) { seen[k] = 1; ev.push({ type: type, date: d, h: h, coef: type === "PM" ? coef : null }); }
+            continue;
+          }
+        }
+        var txt = (el.textContent || "").replace(/\s+/g, " ").trim();
+        if (txt.length > 60) continue;
+        var m = DAY_RE.exec(txt);
+        if (m && MOIS[m[3].toLowerCase()] != null) cur = { y: +m[4], m: MOIS[m[3].toLowerCase()], d: +m[2] };
+        else if ((m = DMY_RE.exec(txt))) cur = { y: +m[3], m: +m[2] - 1, d: +m[1] };
+      }
+    });
+    ev.sort(function (a, b) { return a.date - b.date; });
+    var out = [];                                   // une seule occurrence par marée
+    ev.forEach(function (e) {
+      var pr = out[out.length - 1];
+      if (pr) { var dh = (e.date - pr.date) / 3600e3; if (dh < 3 || (e.type === pr.type && dh < 9)) return; }
+      out.push(e);
+    });
+    return out;
+  }
+  function corrige(ev) {
+    var pr = CFG.portRattache; if (!pr) return ev;
+    return ev.map(function (e) {
+      var coef = e.coef;
+      if (coef == null) ev.forEach(function (x) {
+        if (x.type === "PM" && x.coef != null && (coef == null || Math.abs(x.date - e.date) < Math.abs(e._b - e.date))) { coef = x.coef; e._b = x.date; }
+      });
+      var c = pr[e.type === "PM" ? "pm" : "bm"], f = Math.max(0, Math.min(1, ((coef == null ? 70 : coef) - 45) / 50));
+      return { type: e.type, coef: e.coef,
+        date: new Date(e.date.getTime() + Math.round(c.me.dt + (c.ve.dt - c.me.dt) * f) * 60000),
+        h: e.h != null ? e.h + c.me.dh + (c.ve.dh - c.me.dh) * f : null };
+    });
+  }
+  // Règle « jour J d'abord » : coefficient = pleine mer du jour la plus proche de maintenant ;
+  // si aucune n'est disponible aujourd'hui, celle de la prochaine pleine mer (lendemain).
+  function choisirCoef(ev, now) {
+    var pm = null, jour = now.toDateString();
+    ev.forEach(function (e) {
+      if (e.type === "PM" && e.coef != null && e.date.toDateString() === jour &&
+          (!pm || Math.abs(e.date - now) < Math.abs(pm.date - now))) pm = e;
+    });
+    if (!pm) for (var i = 0; i < ev.length; i++) if (ev[i].type === "PM" && ev[i].coef != null && ev[i].date > now) { pm = ev[i]; break; }
+    return pm;
+  }
+  function estDemain(d, now) {
+    return d.toDateString() === new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
+  }
+  function renderTide() {
+    if (!tides) return;
+    var now = new Date(), prev = null, next = null;
+    for (var i = 0; i < tides.length; i++) { if (tides[i].date <= now) prev = tides[i]; else { next = tides[i]; break; } }
+    var pm = choisirCoef(tides, now);                // jour J d'abord, sinon lendemain
+    if (!next) return na("mwm-tide");
+    var rising = prev ? prev.type === "BM" : next.type === "PM";
+    $("mwm-tide").innerHTML =
+      (pm ? '<span class="mwm-coef">Coef. ' + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span>" : "") +
+      '<span class="' + (rising ? "mwm-up" : "mwm-down") + '">' + (rising ? "↑ Montante" : "↓ Descendante") + "</span>" +
+      "<small>" + (next.type === "PM" ? "Pleine mer" : "Basse mer") + (estDemain(next.date, now) ? " demain " : " ") + hm(next.date) + "</small>";
+  }
+  function loadTide() {
+    var host = $("mwm-shom-host"); host.innerHTML = "";
+    var f = document.createElement("iframe"), done = false, tries = 0;
+    f.title = "Marées SHOM";
+    f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body>' +
+      '<script src="https://services.data.shom.fr/hdm/vignette/grande/' + encodeURIComponent(CFG.shomPort) + '?locale=fr"><\/script></body></html>';
+    function attempt() {
+      if (done) return;
+      var ev = []; try { ev = parseShom(f.contentDocument); } catch (e) {}
+      if (ev.length >= 2) { done = true; tides = corrige(ev); renderTide(); }
+      else if (++tries > 24) { done = true; $("mwm-tide").innerHTML = '<a href="https://maree.shom.fr/harbor/BREST" target="_blank" rel="noopener">voir le SHOM</a>'; }
+      else setTimeout(attempt, 500);
+    }
+    f.onload = attempt; host.appendChild(f); setTimeout(attempt, 1500);
+  }
+
+  /* ---------------- 2) VigiEau ---------------- */
+  var GRAV = {
+    vigilance: { o: 1, lbl: "Vigilance", col: "#e0b100" }, alerte: { o: 2, lbl: "Alerte", col: "#e67e22" },
+    alerte_renforcee: { o: 3, lbl: "Alerte renforcée", col: "#d64535" }, crise: { o: 4, lbl: "Crise", col: "#8e1b3e" }
+  };
+  function loadVigi() {
+    getJSON("https://api.vigieau.gouv.fr/api/zones?lon=" + CFG.vigieauLon + "&lat=" + CFG.vigieauLat +
+      "&commune=" + CFG.vigieauInsee + "&profil=" + CFG.vigieauProfil).then(function (z) {
+      z = (Array.isArray(z) ? z : z ? [z] : []).filter(function (x) { return x && GRAV[x.niveauGravite]; });
+      if (!z.length) { $("mwm-vigi").innerHTML = pill("Aucune restriction", "#2e9e6a"); return; }
+      z.sort(function (a, b) { return GRAV[b.niveauGravite].o - GRAV[a.niveauGravite].o; });
+      var g = GRAV[z[0].niveauGravite];
+      $("mwm-vigi").innerHTML = pill(g.lbl, g.col);
+    }).catch(function () { na("mwm-vigi"); });
+  }
+
+  /* ---------------- 3) Nappe ---------------- */
+  var NAPPE = [
+    { max: .10, crit: "Critique", col: "#c0392b" }, { max: .20, crit: "Préoccupante", col: "#e67e22" },
+    { max: .40, crit: "Vigilance", col: "#e0b100" }, { max: .60, crit: "Normale", col: "#2e9e6a" },
+    { max: .80, crit: "Bonne", col: "#1aa39a" }, { max: .90, crit: "Très bonne", col: "#2f80c9" },
+    { max: 1.01, crit: "Très bonne", col: "#1d4f91" }
+  ];
+  function loadNappe() {
+    // Chronique journalière (historique, criticité, variations) + dernière mesure télétransmise (avec l'heure)
+    var tr = getJSON("https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques_tr?code_bss=" + encodeURIComponent(CFG.bss) +
+      "&size=1&sort=desc").then(function (j) { return (j.data || [])[0] || null; }).catch(function () { return null; });
+    Promise.all([getJSON("https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques?code_bss=" + encodeURIComponent(CFG.bss) +
+      "&fields=date_mesure,niveau_nappe_eau,profondeur_nappe&size=20000&sort=asc"), tr]).then(function (res) {
+      var j = res[0], dtr = res[1];
+      var d = (j.data || []).filter(function (r) { return r.niveau_nappe_eau != null && r.date_mesure; }).map(function (r) {
+        var p = r.date_mesure.split("-"); return { t: Date.UTC(+p[0], +p[1] - 1, +p[2]), y: +p[0], v: r.niveau_nappe_eau, prof: r.profondeur_nappe };
+      });
+      if (!d.length) throw 0;
+      var last = d[d.length - 1], p = rangSaison(d, last.t, last.v, 3);
+      if (p == null) throw 0;
+      var c = classe(NAPPE, p);
+      // Niveau du jour comparé à J-7 et au même jour de l'année N-1 (en m, + = la nappe est plus haute)
+      var J = 864e5;
+      function ecart(tRef) {
+        var b = mesureA(d, tRef, 3);
+        return b ? Math.round((last.v - b.v) * 100) : null;
+      }
+      function fmt(cm, ref) {
+        var fl = cm > 0 ? "↗" : cm < 0 ? "↘" : "→";
+        return fl + " " + (cm === 0 ? "stable" : signed(cm / 100, 2, " m")) + " vs " + ref;
+      }
+      var cm7 = ecart(last.t - 7 * J), cmN1 = ecart(last.t - 365 * J);
+      var parts = [];
+      if (cm7 != null) parts.push(fmt(cm7, "J-7"));
+      if (cmN1 != null) parts.push(fmt(cmN1, "N-1"));
+      // Date et heure de la dernière mesure : celle de la mesure télétransmise si elle est au moins aussi récente
+      var prof = last.prof, quand = "mesure du " + jourCourt(new Date(last.t), true);
+      var ttr = dtr && dtr.date_mesure ? new Date(dtr.date_mesure) : null;
+      if (ttr && !isNaN(ttr) && ttr.getTime() >= last.t) {
+        quand = "mesure du " + jourCourt(ttr) + (/T\d/.test(dtr.date_mesure) ? " à " + hm(ttr) : "");
+        if (dtr.profondeur_nappe != null) prof = dtr.profondeur_nappe;
+      }
+      $("mwm-nappe").innerHTML = pill(c.crit, c.col) +
+        '<small class="mwm-date">' + quand + "</small>" +
+        (prof != null ? "<small>eau à " + num(prof, 2) + " m sous la surface</small>" : "");
+      $("mwm-nappe-var").textContent = parts.join(" · ");          // ligne pleine largeur, en italique
+    }).catch(function () { na("mwm-nappe"); $("mwm-nappe-var").textContent = ""; });
+  }
+
+  /* ---------------- 4) Aulne ---------------- */
+  var AULNE = [   // couleurs inversées : étiage en violet/bleu, crue en orange/rouge
+    { max: .10, crit: "Critique (étiage)", col: "#5b2a86" }, { max: .25, crit: "Préoccupante", col: "#2f80c9" },
+    { max: .40, crit: "Vigilance", col: "#1aa39a" }, { max: .60, crit: "Normale", col: "#2e9e6a" },
+    { max: .75, crit: "Normale", col: "#e0b100" }, { max: .90, crit: "Vigilance", col: "#e67e22" },
+    { max: 1.01, crit: "Critique (crue)", col: "#c0392b" }
+  ];
+  function loadAulne() {
+    var b = "https://hubeau.eaufrance.fr/api/v2/hydrometrie/", st = encodeURIComponent(CFG.stationAulne);
+    Promise.all([
+      getJSON(b + "observations_tr?code_entite=" + st + "&grandeur_hydro=Q&date_debut_obs=" +
+        encodeURIComponent(new Date(Date.now() - 8.5 * 864e5).toISOString().slice(0, 19) + "Z") +
+        "&size=5000&sort=desc&format=json"),
+      getJSON(b + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=QmnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json"),
+      // hauteur d'eau à l'échelle (mm) sur 8 jours : sert aux variations en cm
+      getJSON(b + "observations_tr?code_entite=" + st + "&grandeur_hydro=H&date_debut_obs=" +
+        encodeURIComponent(new Date(Date.now() - 8.5 * 864e5).toISOString().slice(0, 19) + "Z") +
+        "&size=5000&sort=desc&format=json").catch(function () { return { data: [] }; })
+    ]).then(function (res) {
+      var q = (res[0].data || []).filter(function (r) { return r.resultat_obs != null; })
+        .map(function (r) { return { t: new Date(r.date_obs).getTime(), v: r.resultat_obs }; });
+      if (!q.length) throw 0;
+      var day = q.filter(function (r) { return r.t > q[0].t - 864e5; });
+      var qNow = day.reduce(function (s, r) { return s + r.v; }, 0) / day.length;
+      var hist = (res[1].data || []).filter(function (r) { return r.resultat_obs_elab != null; }).map(function (r) {
+        var p = r.date_obs_elab.split("-"); return { t: Date.UTC(+p[0], +p[1] - 1, +p[2]), y: +p[0], v: r.resultat_obs_elab };
+      });
+      var p = rangSaison(hist, q[0].t, qNow, 5);
+      if (p == null) throw 0;
+      var c = classe(AULNE, p);
+      // Variation de la hauteur d'eau (en cm) : dernière mesure comparée à J-1 et J-7 à la même heure environ
+      var h = (res[2].data || []).filter(function (r) { return r.resultat_obs != null; })
+        .map(function (r) { return { t: new Date(r.date_obs).getTime(), v: r.resultat_obs }; })
+        .sort(function (a, b) { return b.t - a.t; });
+      function procheDe(t, tol) {
+        var best = null;
+        h.forEach(function (r) { var d = Math.abs(r.t - t); if (d <= tol && (!best || d < best.d)) best = { r: r, d: d }; });
+        return best && best.r;
+      }
+      function cmVs(jours, tolH, lbl) {
+        if (!h.length) return null;
+        var ref = procheDe(h[0].t - jours * 864e5, tolH * 3600e3); if (!ref) return null;
+        var cm = Math.round((h[0].v - ref.v) / 10), fl = cm > 0 ? "↗" : cm < 0 ? "↘" : "→";   // mm -> cm
+        return fl + " " + (cm === 0 ? "stable" : signed(cm, 0, " cm")) + " vs " + lbl;
+      }
+      var parts = [cmVs(1, 1, "J-1"), cmVs(7, 3, "J-7")].filter(Boolean);
+      // Variation du débit du jour (moyenne 24 h) en % : vs J-7 et vs le même jour de l'année N-1
+      function pctVs(ref, lbl) {
+        if (!ref) return null;
+        var pc = Math.round((qNow - ref) / ref * 100), fl = pc > 0 ? "↗" : pc < 0 ? "↘" : "→";
+        return fl + " " + (Math.abs(pc) < 1 ? "stable" : signed(pc, 0, " %")) + " vs " + lbl;
+      }
+      var old = q.filter(function (r) { return r.t <= q[0].t - 7 * 864e5 && r.t > q[0].t - 8 * 864e5; });
+      var q7 = old.length ? old.reduce(function (s, r) { return s + r.v; }, 0) / old.length : null;
+      var d0 = new Date(q[0].t), jourN1 = Date.UTC(d0.getUTCFullYear() - 1, d0.getUTCMonth(), d0.getUTCDate());
+      hist.sort(function (a, b) { return a.t - b.t; });
+      var mN1 = mesureA(hist, jourN1, 3);                         // débit moyen journalier, même jour N-1
+      var debit = ["débit " + (qNow >= 10000 ? num(qNow / 1000, 0) : num(qNow / 1000, 2)) + " m³/s"]
+        .concat([pctVs(q7, "J-7"), pctVs(mN1 && mN1.v, "N-1")].filter(Boolean));
+      $("mwm-aulne").innerHTML = pill(c.crit, c.col) +
+        '<small class="mwm-date">mesure du ' + jourCourt(new Date(q[0].t)) + " à " + hm(new Date(q[0].t)) + "</small>";
+      $("mwm-aulne-debit").textContent = debit.join(" · ");        // ligne débit : valeur + variations en %
+      $("mwm-aulne-var").textContent = parts.length ? "hauteur " + parts.join(" · ") : "";   // ligne pleine largeur, en italique
+    }).catch(function () { na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = ""; });
+  }
+
+  /* ---------------- Lancement ---------------- */
+  if (CFG.lienDetail) {
+    $("mwm-sources").innerHTML += ' · <a href="' + CFG.lienDetail + '">Voir le détail</a>';
+  }
+  function tick() { var d = new Date(); $("mwm-time").textContent = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + hm(d); }
+  function refreshAll() { loadTide(); loadVigi(); loadNappe(); loadAulne(); }
+  tick(); refreshAll();
+  setInterval(refreshAll, CFG.refreshMinutes * 60000);
+  setInterval(function () { tick(); renderTide(); }, 60000);
+})();
+</script>
+
+<!-- ===== fin du mini-widget ===== -->
+</section>
+
+<section class="appli-onglet" id="o-maree" role="tabpanel" aria-labelledby="b-maree" hidden>
+<!-- ===== Cycle de marée (identique à widget-courbe-maree.html) ===== -->
+<!-- =====================================================================
+     Widget « Cycle de marée » — Guily Glaz, Port-Launay (29)
+     Hauteur d'eau mesurée depuis 0 h aujourd'hui, axe horaire sur 24 h.
+     Taille auto-adaptative : le widget remplit la largeur et la hauteur du bloc.
+     À coller dans un bloc « Code HTML » de WebAcappella (toute taille ; ≈ 340 × 330 px minimum conseillé).
+     Indépendant des autres widgets : ils peuvent être sur la même page.
+     Courbes superposées : Guily Glaz mesurée (trait plein) et Guily Glaz théorique extrapolée (tirets).
+     Sources : marégraphe de Guily Glaz (station J382183001) via Hub'Eau Hydrométrie ;
+     coefficient et prédictions servant à la courbe théorique : SHOM (Brest, port de référence)
+     ===================================================================== -->
+<div id="mwc-widget">
+  <div class="mwc-head">
+    <span class="mwc-ico" aria-hidden="true">〰️</span>
+    <div class="mwc-ttl">
+      <div class="mwc-line1"><span class="mwc-t">Cycle de marée</span></div>
+      <div class="mwc-info" id="mwc-info"><i class="mwc-wait"></i></div>
+      <div class="mwc-sub" id="mwc-sub"><span>Guily Glaz · Port-Launay</span></div>
+    </div>
+  </div>
+
+  <div class="mwc-chart" id="mwc-chart" role="img" aria-label="Hauteur d'eau depuis minuit à Guily Glaz : courbe mesurée et courbe théorique">
+    <svg id="mwc-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="mwc-tip" id="mwc-tip" hidden></div>
+  </div>
+  <div class="mwc-legend" id="mwc-legend" aria-label="Courbes affichées (toucher pour masquer ou afficher)"></div>
+
+  <details class="mwc-table">
+    <summary>Valeurs heure par heure</summary>
+    <div id="mwc-rows"></div>
+  </details>
+
+  <div class="mwc-foot">
+    <span class="mwc-time" id="mwc-time"></span>
+    <span class="mwc-src">Sources : <a href="https://www.hydro.eaufrance.fr/stationhydro/J382183001/fiche" target="_blank" rel="noopener" title="L'Aulne à Port-Launay – Guily Glaz [marégraphe] – HydroPortail">HydroPortail</a> · <a href="https://maree.shom.fr/harbor/BREST" target="_blank" rel="noopener" title="Coefficient et prédictions de marée – SHOM, Brest">SHOM</a></span>
+    <span class="mwc-copy">© <a href="https://www.antreizh.fr" target="_blank" rel="noopener" title="www.antreizh.fr">antreizh.fr</a></span>
+    <span class="mwc-avert">Données et représentation indicatives non officielles</span>
+  </div>
+  <div id="mwc-shom-host" class="mwc-shom-host" aria-hidden="true"></div>
+</div>
+
+<style>
+/* Toutes les tailles sont multipliées par --k, calculé selon la largeur allouée au widget */
+#mwc-widget{
+  --mwc-navy:#0b3c5d; --mwc-blue:#1f7bb6; --mwc-sky:#e8f4fb; --mwc-muted:#5f7180; --mwc-line:#e8edf1; --mwc-grid:#eef2f5;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:#1d2b36; background:#fff; border-radius:calc(18px*var(--k));
+  padding:calc(14px*var(--k)) calc(14px*var(--k)) calc(10px*var(--k));
+  box-shadow:0 2px calc(12px*var(--k)) rgba(11,60,93,.10); width:100%; --k:1; --kh:1;
+  border:1px solid #d5dde4;                                             /* cadre gris très fin */
+  box-sizing:border-box; line-height:1.3; position:relative;
+  height:100%; display:flex; flex-direction:column; overflow:hidden;   /* remplit le bloc s'il a une hauteur fixe */
+}
+#mwc-widget > *{flex:0 0 auto}
+#mwc-widget *,#mwc-widget *::before,#mwc-widget *::after{box-sizing:border-box}
+#mwc-widget a{color:var(--mwc-muted);text-decoration:underline;text-underline-offset:2px}
+#mwc-widget a:hover{color:var(--mwc-blue)}
+/* Haut du widget : échelle propre --kh (suit la largeur du bloc) et tailles minimales garanties, pour rester lisible */
+#mwc-widget .mwc-head{display:flex;flex-wrap:wrap;align-items:center;gap:calc(4px*var(--kh)) calc(10px*var(--kh));margin-bottom:calc(8px*var(--kh))}
+#mwc-widget .mwc-ico{flex:0 0 calc(30px*var(--kh));height:calc(30px*var(--kh));border-radius:50%;background:#e1effa;display:inline-flex;align-items:center;justify-content:center;font-size:calc(15px*var(--kh))}
+/* Titre « Cycle de marée », puis dessous, une taille de police en moins : « Coef. 30 · ↑ montante · −0,2 m »
+   (coupure possible entre deux éléments seulement) */
+#mwc-widget .mwc-ttl{flex:1 1 0;min-width:0}
+#mwc-widget .mwc-line1{line-height:1.2;font-size:calc(16px*var(--kh));color:#0b3c5d}   /* = titre du mini-widget */
+#mwc-widget .mwc-t{font-weight:700;white-space:nowrap}
+#mwc-widget .mwc-info{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:calc(6px*var(--kh));line-height:1.25;
+  font-size:calc(16px*var(--kh));margin-top:calc(2px*var(--kh))}   /* = titre du mini-widget */
+#mwc-widget .mwc-info:empty{display:none}
+#mwc-widget .mwc-info > span{white-space:nowrap;color:var(--mwc-muted)}
+/* séparateur « · » placé en fin d'élément : une ligne coupée ne commence jamais par un point */
+#mwc-widget .mwc-info > span:not(:last-child)::after{content:" ·";color:var(--mwc-muted);font-weight:400}
+#mwc-widget .mwc-h{font-weight:800;color:var(--mwc-navy)!important;font-variant-numeric:tabular-nums}
+#mwc-widget .mwc-sub{font-size:calc(11.5px*var(--kh));color:var(--mwc-muted);margin-top:calc(2px*var(--kh))}
+#mwc-widget .mwc-sub span{white-space:nowrap}
+#mwc-widget .mwc-coef{font-weight:800;color:var(--mwc-navy)!important}
+#mwc-widget .mwc-shom-host iframe{position:absolute;left:-10000px;top:0;width:420px;height:700px;border:0;visibility:hidden}
+#mwc-widget .mwc-up{color:var(--mwc-blue)!important;font-weight:700}
+#mwc-widget .mwc-down{color:#c56a1c!important;font-weight:700}
+/* La courbe occupe tout l'espace restant ; sans hauteur imposée, elle garde un format 2:1 */
+#mwc-widget .mwc-chart{position:relative;width:100%;flex:1 1 auto;aspect-ratio:2 / 1;min-height:calc(110px*var(--k))}
+#mwc-widget .mwc-chart > svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;touch-action:pan-y}
+#mwc-widget svg text{font-family:inherit;fill:var(--mwc-muted);font-variant-numeric:tabular-nums}
+#mwc-widget .mwc-tip{position:absolute;top:0;transform:translateX(-50%);z-index:2;pointer-events:none;background:#fff;border:1px solid var(--mwc-line);
+  border-radius:calc(8px*var(--k));padding:calc(4px*var(--k)) calc(8px*var(--k));font-size:calc(12px*var(--k));white-space:nowrap;
+  box-shadow:0 2px 8px rgba(11,60,93,.12);color:#1d2b36}
+#mwc-widget .mwc-tip b{font-variant-numeric:tabular-nums}
+#mwc-widget .mwc-tip-l{display:flex;align-items:center;gap:calc(5px*var(--k));margin-top:calc(2px*var(--k))}
+#mwc-widget .mwc-tip-l i{width:calc(8px*var(--k));height:calc(8px*var(--k));border-radius:50%;flex:0 0 auto}
+#mwc-widget .mwc-tip-l b{margin-left:auto;padding-left:calc(8px*var(--k))}
+/* Légende : une ligne par courbe (couleur + style de trait), touchable pour masquer / afficher */
+#mwc-widget .mwc-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(2px*var(--k)) calc(16px*var(--k));margin-top:calc(6px*var(--k))}   /* légende centrée */
+#mwc-widget .mwc-legend:empty{display:none}
+#mwc-widget .mwc-legend button{display:inline-flex;align-items:center;gap:calc(5px*var(--k));border:0;background:none;padding:calc(2px*var(--k)) 0;
+  font:inherit;font-size:calc(13.5px*var(--k));color:#1d2b36;cursor:pointer;white-space:nowrap}
+#mwc-widget .mwc-legend button svg{width:calc(26px*var(--k));height:calc(9px*var(--k));flex:0 0 auto}
+#mwc-widget .mwc-legend button[aria-pressed="false"]{color:var(--mwc-muted);text-decoration:line-through;opacity:.6}
+#mwc-widget .mwc-legend button:disabled{display:none}
+#mwc-widget .mwc-msg{font-size:calc(12.5px*var(--k));color:var(--mwc-muted);text-align:center;padding:calc(30px*var(--k)) 0}
+#mwc-widget .mwc-table{margin-top:calc(4px*var(--k));font-size:calc(11.5px*var(--k));color:var(--mwc-muted)}
+#mwc-widget .mwc-table summary{cursor:pointer;width:max-content}
+#mwc-widget .mwc-table table{border-collapse:collapse;margin-top:calc(4px*var(--k));width:100%;font-variant-numeric:tabular-nums}
+#mwc-widget .mwc-table td,#mwc-widget .mwc-table th{padding:calc(2px*var(--k)) calc(6px*var(--k));text-align:right;border-bottom:1px solid var(--mwc-grid);font-weight:400}
+#mwc-widget .mwc-table th{text-align:left;color:#1d2b36}
+#mwc-widget .mwc-foot{display:grid;grid-template-columns:1fr auto 1fr;align-items:baseline;gap:calc(2px*var(--k)) calc(8px*var(--k));
+  border-top:1px solid var(--mwc-line);margin-top:calc(6px*var(--k));padding-top:calc(7px*var(--k));font-size:calc(10.5px*var(--k));color:var(--mwc-muted)}
+#mwc-widget .mwc-time{text-align:left;white-space:nowrap}
+#mwc-widget .mwc-src{text-align:center;white-space:nowrap}
+#mwc-widget .mwc-copy{text-align:right;white-space:nowrap}
+/* Avertissement centré sous les sources */
+#mwc-widget .mwc-avert{grid-column:1 / -1;text-align:center;font-style:italic}
+/* Pied sur une seule ligne quand la largeur le permet : date · sources · mention · © antreizh.fr */
+#mwc-widget .mwc-foot.mwc-foot-1{display:flex;justify-content:space-between;align-items:baseline;gap:calc(12px*var(--k))}
+#mwc-widget .mwc-foot-1 > *{white-space:nowrap;text-align:left}
+#mwc-widget .mwc-foot-1 .mwc-avert{order:3}
+#mwc-widget .mwc-foot-1 .mwc-copy{order:4}
+#mwc-widget .mwc-wait{display:inline-block;width:calc(60px*var(--k));height:calc(12px*var(--k));border-radius:calc(6px*var(--k));background:linear-gradient(90deg,#eef2f5,#dde5ec,#eef2f5);background-size:200% 100%;animation:mwc-sh 1.2s linear infinite}
+@keyframes mwc-sh{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){#mwc-widget *{animation:none!important}}
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================== PARAMÈTRES (modifiables) ================== */
+  var CFG = {
+    station: "J382183001",          // L'Aulne à Port-Launay – Guily Glaz [marégraphe]
+    refreshMinutes: 5,              // le marégraphe de Guily Glaz mesure toutes les 5 minutes
+    trouMinutes: 20,                // au-delà de cet écart entre deux mesures, la courbe est interrompue
+    shomPort: "BREST",              // port de référence SHOM (coefficient et prédictions)
+    decalageMaxMin: 240             // décalage horaire maximal recherché entre Brest et Guily Glaz (minutes)
+  };
+  /* ============================================================== */
+
+  var root = document.getElementById("mwc-widget");
+  if (!root || root.getAttribute("data-init")) return;
+  root.setAttribute("data-init", "1");
+
+  function $(id) { return document.getElementById(id); }
+  function hm(d) { return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
+  function m2(x) { return x.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function m1(x) { var r = Math.round(x * 10) / 10; return (r === 0 ? 0 : r).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+  var NS = "http://www.w3.org/2000/svg", MIN = 60000, HEURE = 3600e3, JOUR = 864e5;
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var a in attrs) e.setAttribute(a, attrs[a]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  /* ---- Les trois courbes : identité = couleur + style de trait (jamais la couleur seule) ---- */
+  var SERIES = {
+    mes:    { col: "#1f7bb6", dash: "",      lbl: "mesure" },
+    theo:   { col: "#2e9e6a", dash: "7 4",   lbl: "théorique" }
+  };
+  var visible = { mes: true, theo: true };
+  try { var mem = JSON.parse(localStorage.getItem("mwc-visible-v2") || "null"); if (mem) for (var c in visible) if (c in mem) visible[c] = !!mem[c]; } catch (e) {}
+
+  /* ---- Taille auto-adaptative selon l'espace alloué au widget (largeur ET hauteur) ----
+     1) le texte suit la largeur (340 px = taille de référence) ;
+     2) si le bloc a une hauteur imposée, le texte suit aussi la hauteur (300 px = référence) : la plus
+        petite des deux échelles est retenue, puis réduite si besoin jusqu'à ce que tout tienne ;
+     3) la courbe occupe toute la place restante. */
+  var k = 1, lastSize = "";
+  function setK(v) { k = v; root.style.setProperty("--k", k.toFixed(3)); }
+  var kh = 1;
+  function setKh(v) { kh = v; root.style.setProperty("--kh", kh.toFixed(3)); }
+  function fit() {                                      // (appelée aussi quand le contenu change)
+    var w = root.clientWidth; if (!w) return;
+    var hBloc = root.clientHeight;
+    root.style.height = "auto"; var hNat = root.offsetHeight; root.style.height = "";
+    var fixe = Math.abs(hBloc - hNat) > 2;
+    // Haut du widget (titre, hauteur mesurée, coefficient) : suit la largeur du bloc, jamais plus petit
+    // que la taille de référence, et limité à environ un tiers de la hauteur si celle-ci est imposée.
+    // Haut du widget : même échelle que le mini-widget (340 px de large = taille de référence), pour des titres identiques
+    setKh(Math.max(0.75, Math.min(2.2, w / 340)));
+    // Reste du widget (courbe, légende, pied) : suit la largeur, et la hauteur si elle est imposée
+    setK(Math.max(0.75, Math.min(2.2, fixe ? Math.min(w / 340, hBloc / 300) : w / 340)));
+    // Si tout ne tient pas : on réduit d'abord le bas du widget, puis seulement le haut
+    for (var i = 0; i < 12 && root.scrollHeight > root.clientHeight + 1 && k > 0.6; i++) setK(k * 0.92);
+    for (i = 0; i < 6 && root.scrollHeight > root.clientHeight + 1 && kh > 0.85; i++) setKh(kh * 0.95);
+    // Pied de widget : tout sur une ligne si la place le permet, sinon sur deux lignes (mention centrée dessous)
+    var pied = root.querySelector(".mwc-foot");
+    pied.classList.add("mwc-foot-1");
+    if (pied.scrollWidth > pied.clientWidth + 1) pied.classList.remove("mwc-foot-1");
+    lastSize = root.clientWidth + "x" + root.clientHeight;
+    draw();
+  }
+  function onResize() { if (root.clientWidth + "x" + root.clientHeight !== lastSize) fit(); }
+
+  /* ================== DONNÉES ================== */
+  var jour0 = null;
+  var pts = [], ptsFit = [];      // Guily Glaz : mesures du jour / mesures depuis la veille (pour l'ajustement)
+  var tides = null;               // pleines et basses mers SHOM (Brest)
+  var theo = null;                // ajustement { a, b, tau } de la courbe théorique de Guily Glaz
+  var msgVide = "En attente des premières mesures du jour…";
+
+  function getJSON(url) {
+    return fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+  }
+
+  /* 1) Marégraphe de Guily Glaz (Hub'Eau) : depuis 0 h la veille, pour disposer d'assez de points d'ajustement */
+  function load() {
+    var now = new Date();
+    jour0 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    var debut = new Date(jour0.getTime() - JOUR);
+    getJSON("https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=" + encodeURIComponent(CFG.station) +
+      "&grandeur_hydro=H&date_debut_obs=" + encodeURIComponent(debut.toISOString().slice(0, 19) + "Z") +
+      "&size=2000&sort=asc&format=json")
+      .then(function (j) {
+        ptsFit = (j.data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
+          .map(function (r) { return { t: new Date(r.date_obs), v: r.resultat_obs / 1000 }; })   // mm -> m
+          .sort(function (a, b) { return a.t - b.t; });
+        pts = ptsFit.filter(function (p) { return p.t >= jour0; });
+        msgVide = "En attente des premières mesures du jour…";
+        ajuster(); draw(); summary(); table();
+      })
+      .catch(function () {
+        pts = []; ptsFit = []; theo = null;
+        msgVide = "Mesures du marégraphe indisponibles pour le moment.";
+        hauteurHTML = ""; sousTitre("données indisponibles");
+        trendHTML = ""; renderState(); draw();
+      });
+  }
+
+  /* 2) Vignette officielle SHOM (Brest) : coefficient + pleines/basses mers pour la courbe théorique */
+  function loadShom() {
+    var host = $("mwc-shom-host"); host.innerHTML = "";
+    var f = document.createElement("iframe"), done = false, tries = 0;
+    f.title = "Marées SHOM"; f.tabIndex = -1;
+    f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body>' +
+      '<script src="https://services.data.shom.fr/hdm/vignette/grande/' + encodeURIComponent(CFG.shomPort) + '?locale=fr"><\/script></body></html>';
+    function attempt() {
+      if (done) return;
+      var ev = []; try { ev = parseShom(f.contentDocument); } catch (e) {}
+      if (ev.length >= 2) { done = true; tides = ev; ajuster(); renderState(); table(); draw(); }
+      else if (++tries > 24) { done = true; renderState(); }
+      else setTimeout(attempt, 500);
+    }
+    f.onload = attempt; host.appendChild(f); setTimeout(attempt, 1500);
+  }
+
+  var MOIS = { janvier: 0, "février": 1, fevrier: 1, mars: 2, avril: 3, mai: 4, juin: 5, juillet: 6,
+    "août": 7, aout: 7, septembre: 8, octobre: 9, novembre: 10, "décembre": 11, decembre: 11 };
+  var DAY_RE = /(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+(\d{1,2})(?:er)?\s+([a-zéû]+)\s+(\d{4})/i;
+  // Les jours suivants de la vignette SHOM sont notés « 20/10/2026 » (et non « Mardi 20 octobre 2026 »)
+  var DMY_RE = /(?:^|[^\d\/])(\d{1,2})\/(\d{1,2})\/(\d{4})(?![\d\/])/;
+
+  function docsOf(doc) {
+    var out = [doc], fr = doc.querySelectorAll("iframe");
+    for (var i = 0; i < fr.length; i++) {
+      try { var d = fr[i].contentDocument; if (d && d !== doc) out = out.concat(docsOf(d)); } catch (e) {}
+    }
+    return out;
+  }
+  function parseShom(rootDoc) {
+    var ev = [], seen = {};
+    docsOf(rootDoc).forEach(function (doc) {
+      if (!doc || !doc.body) return;
+      var cur = null, els = doc.body.querySelectorAll("*");
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.tagName === "SCRIPT" || el.tagName === "STYLE") continue;
+        if (el.tagName === "TR") {
+          var type = null, time = null, h = null, coef = null, cells = el.querySelectorAll("td,th");
+          for (var c = 0; c < cells.length; c++) {
+            var t = cells[c].textContent.replace(/\s+/g, " ").trim();
+            if (/^(PM|BM)$/.test(t)) type = t;
+            else if (/^\d{1,2}[:h]\d{2}$/.test(t)) time = t;
+            else if (/^-?\d+[.,]\d+(\s?m)?$/.test(t)) h = parseFloat(t.replace(",", "."));
+            else if (/^\d{2,3}$/.test(t)) coef = +t;
+          }
+          if (type && time && cur) {
+            var p = time.split(/[:h]/), d = new Date(cur.y, cur.m, cur.d, +p[0], +p[1]), k = type + d.getTime();
+            if (!seen[k]) { seen[k] = 1; ev.push({ type: type, date: d, h: h, coef: type === "PM" ? coef : null }); }
+            continue;
+          }
+        }
+        var txt = (el.textContent || "").replace(/\s+/g, " ").trim();
+        if (txt.length > 60) continue;
+        var m = DAY_RE.exec(txt);
+        if (m && MOIS[m[3].toLowerCase()] != null) cur = { y: +m[4], m: MOIS[m[3].toLowerCase()], d: +m[2] };
+        else if ((m = DMY_RE.exec(txt))) cur = { y: +m[3], m: +m[2] - 1, d: +m[1] };
+      }
+    });
+    ev.sort(function (a, b) { return a.date - b.date; });
+    var out = [];                                   // une seule occurrence par marée
+    ev.forEach(function (e) {
+      var pr = out[out.length - 1];
+      if (pr) { var dh = (e.date - pr.date) / 3600e3; if (dh < 3 || (e.type === pr.type && dh < 9)) return; }
+      out.push(e);
+    });
+    return out;
+  }
+  function choisirCoef(ev, now) {
+    var pm = null, jour = now.toDateString();
+    ev.forEach(function (e) {
+      if (e.type === "PM" && e.coef != null && e.date.toDateString() === jour &&
+          (!pm || Math.abs(e.date - now) < Math.abs(pm.date - now))) pm = e;
+    });
+    if (!pm) for (var i = 0; i < ev.length; i++) if (ev[i].type === "PM" && ev[i].coef != null && ev[i].date > now) { pm = ev[i]; break; }
+    return pm;
+  }
+  function estDemain(d, now) {
+    return d.toDateString() === new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
+  }
+  /* ================== COURBE THÉORIQUE ==================
+     a) Courbe prédite de Brest : interpolation en cosinus entre pleines et basses mers SHOM
+        (méthode classique des annuaires de marée). Des extrémités « virtuelles » sont ajoutées avant
+        la première et après la dernière marée de la vignette, pour couvrir toute la journée.
+     b) Guily Glaz théorique = a × Brest prédite (t − τ) + b, où le décalage τ, l'amplitude a et le
+        niveau b sont ajustés (moindres carrés) sur les mesures réelles de Guily Glaz.
+     c) La courbe est ensuite tracée de 0 h à 24 h : au-delà de « maintenant », elle est extrapolée. */
+  var evPred = null;
+  function preparerPrediction() {
+    evPred = null;
+    if (!tides) return;
+    var ev = tides.filter(function (e) { return e.h != null; });
+    if (ev.length < 2) return;
+    // Demi-période moyenne entre pleine et basse mer (≈ 6 h 12) ; valeur type si une seule marée connue
+    var demi = ev.length >= 2 ? (ev[ev.length - 1].date - ev[0].date) / (ev.length - 1) : 372.5 * MIN;
+    if (!(demi > 5 * HEURE && demi < 7.5 * HEURE)) demi = 372.5 * MIN;
+    function oppose(t) { return t === "PM" ? "BM" : "PM"; }
+    // Extrémités « virtuelles » avant la première et après la dernière marée connue, pour couvrir
+    // toute la journée de 0 h à 24 h (et le décalage de Guily Glaz) même si le SHOM ne fournit
+    // que les marées du jour : on reprend en alternance les dernières hauteurs connues.
+    var premier = ev[0], second = ev[1];
+    var avant = [];
+    for (var i = 1; i <= 3; i++) {
+      var refAv = i % 2 ? second : premier;
+      avant.unshift({ type: i % 2 ? oppose(premier.type) : premier.type, date: new Date(premier.date - i * demi), h: refAv.h });
+    }
+    var dernier = ev[ev.length - 1], avantDernier = ev[ev.length - 2];
+    var apres = [];
+    for (i = 1; i <= 4; i++) {
+      var refAp = i % 2 ? avantDernier : dernier;
+      apres.push({ type: i % 2 ? oppose(dernier.type) : dernier.type, date: new Date(+dernier.date + i * demi), h: refAp.h });
+    }
+    evPred = avant.concat(ev, apres);
+  }
+
+  function brestPredite(t) {
+    if (!evPred) return null;
+    var tt = +t;
+    for (var i = 0; i < evPred.length - 1; i++) {
+      var a = evPred[i], b = evPred[i + 1];
+      if (tt >= +a.date && tt <= +b.date) {
+        var f = (tt - a.date) / (b.date - a.date);
+        return a.h + (b.h - a.h) * (1 - Math.cos(Math.PI * f)) / 2;
+      }
+    }
+    return null;
+  }
+  function ajuster() {
+    theo = null;
+    preparerPrediction();
+    if (!evPred || ptsFit.length < 30) return;
+    var best = null;
+    for (var tau = -60; tau <= CFG.decalageMaxMin; tau += 5) {
+      var xs = [], ys = [];
+      ptsFit.forEach(function (p) {
+        var x = brestPredite(p.t.getTime() - tau * MIN);
+        if (x != null) { xs.push(x); ys.push(p.v); }
+      });
+      if (xs.length < 30) continue;
+      var n = xs.length, mx = 0, my = 0;
+      for (var i = 0; i < n; i++) { mx += xs[i]; my += ys[i]; }
+      mx /= n; my /= n;
+      var sxy = 0, sxx = 0;
+      for (i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) * (xs[i] - mx); }
+      if (sxx < 1e-6) continue;
+      var a = sxy / sxx, b = my - a * mx;
+      if (a <= 0) continue;
+      var sse = 0;
+      for (i = 0; i < n; i++) { var r = ys[i] - (a * xs[i] + b); sse += r * r; }
+      var rmse = Math.sqrt(sse / n);
+      if (!best || rmse < best.rmse) best = { a: a, b: b, tau: tau, rmse: rmse };
+    }
+    theo = best;
+  }
+  function theorique(t) {
+    if (!theo) return null;
+    var x = brestPredite(t.getTime() - theo.tau * MIN);
+    return x == null ? null : theo.a * x + theo.b;
+  }
+
+  /* Séries à tracer, limitées à la journée en cours */
+  function serieTheo() {
+    var out = [];
+    if (!theo) return out;
+    for (var m = 0; m <= 24 * 60; m += 5) {
+      var t = new Date(jour0.getTime() + m * MIN), v = theorique(t);
+      if (v != null) out.push({ t: t, v: v });
+    }
+    return out;
+  }
+  /* ---- Bandeau d'état : « Coef. 25 · ↑ montante » ---- */
+  var trendHTML = "";
+  // Prolongement du titre : « · Coef. 30 · ↑ montante · −0,2 m »
+  var hauteurHTML = "";
+  function renderState() {
+    var now = new Date(), pm = tides ? choisirCoef(tides, now) : null, parts = [];
+    if (pm) parts.push('<span class="mwc-coef">Coef. ' + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span>");
+    if (trendHTML) parts.push(trendHTML);
+    if (hauteurHTML) parts.push(hauteurHTML);
+    var html = parts.join("");
+    if ($("mwc-info").innerHTML !== html) { $("mwc-info").innerHTML = html; fit(); }
+  }
+
+  // Sous-titre « Guily Glaz · Port-Launay, mesure à 09:10 » (la virgule reste en fin de ligne si le texte est coupé)
+  function sousTitre(txt) {
+    $("mwc-sub").innerHTML = "<span>Guily Glaz · Port-Launay" + (txt ? "," : "") + "</span>" + (txt ? " <span>" + txt + "</span>" : "");
+  }
+
+  /* ---- Valeur actuelle + tendance mesurée à Guily Glaz (30 dernières minutes) ---- */
+  function summary() {
+    if (!pts.length) { trendHTML = ""; hauteurHTML = ""; sousTitre("pas encore de mesure"); renderState(); return; }
+    var last = pts[pts.length - 1], ref = null;
+    for (var i = pts.length - 1; i >= 0; i--) if (last.t - pts[i].t >= 25 * MIN) { ref = pts[i]; break; }
+    trendHTML = "";
+    if (ref) {
+      var d = last.v - ref.v;
+      trendHTML = Math.abs(d) < 0.02 ? '<span>→ étale</span>'
+        : d > 0 ? '<span class="mwc-up">↑ montante</span>' : '<span class="mwc-down">↓ descendante</span>';
+    }
+    hauteurHTML = '<span class="mwc-h">' + m1(last.v) + " m</span>";        // arrondi au décimètre
+    sousTitre("mesure à " + hm(last.t));
+    renderState();
+  }
+
+  /* ---- Légende interactive : toucher un libellé masque / affiche la courbe ---- */
+  function legend() {
+    var box = $("mwc-legend");
+    var dispo = { mes: pts.length > 0, theo: !!theo };
+    box.innerHTML = Object.keys(SERIES).map(function (key) {
+      var s = SERIES[key];
+      return '<button type="button" data-s="' + key + '" aria-pressed="' + visible[key] + '"' + (dispo[key] ? "" : " disabled") + '>' +
+        '<svg viewBox="0 0 22 8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" stroke="' + s.col +
+        '" stroke-width="2.4" stroke-linecap="round"' + (s.dash ? ' stroke-dasharray="' + s.dash + '"' : "") + "/></svg>" +
+        s.lbl + "</button>";
+    }).join("");
+  }
+  $("mwc-legend").addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-s]"); if (!btn || btn.disabled) return;
+    var key = btn.getAttribute("data-s");
+    var autres = Object.keys(visible).filter(function (c) { return c !== key && visible[c]; });
+    if (visible[key] && !autres.length) return;                          // au moins une courbe reste affichée
+    visible[key] = !visible[key];
+    try { localStorage.setItem("mwc-visible-v2", JSON.stringify(visible)); } catch (err) {}
+    draw();
+  });
+
+  /* ---- Tableau des valeurs horaires (accessibilité) ---- */
+  function table() {
+    if (!jour0) return;
+    var rows = [];
+    function proche(serie, cible, tol) {
+      var best = null;
+      serie.forEach(function (p) { if (Math.abs(p.t - cible) <= tol && (!best || Math.abs(p.t - cible) < Math.abs(best.t - cible))) best = p; });
+      return best;
+    }
+    for (var h = 0; h < 24; h++) {
+      var cible = jour0.getTime() + h * HEURE;
+      var pm = proche(pts, cible, 10 * MIN), vt = theo ? theorique(new Date(cible)) : null;
+      if (!pm && vt == null) continue;
+      rows.push("<tr><th>" + String(h).padStart(2, "0") + " h</th><td>" + (pm ? m2(pm.v) + " m" : "–") + "</td><td>" +
+        (vt != null ? m2(vt) + " m" : "–") + "</td></tr>");
+    }
+    $("mwc-rows").innerHTML = rows.length
+      ? "<table><tr><th>Heure</th><th>Mesure</th><th>Théorique</th></tr>" + rows.join("") + "</table>" : "";
+  }
+
+  /* ---- Échelle verticale « ronde » ---- */
+  function niceStep(span, n) {
+    var raw = span / n, steps = [0.1, 0.2, 0.25, 0.5, 1, 2, 5];
+    for (var i = 0; i < steps.length; i++) if (steps[i] >= raw) return steps[i];
+    return 10;
+  }
+
+  function showMsg(svg, W, H, txt) {
+    var t = el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", "font-size": 12.5 * k }, svg);
+    t.textContent = txt;
+  }
+
+  /* ================== DESSIN ================== */
+  function draw() {
+    var svg = $("mwc-svg"), box = $("mwc-chart");
+    if (!jour0) return;
+    legend();
+    svg.innerHTML = "";
+    var W = box.clientWidth, H = box.clientHeight;
+    if (!W || !H) return;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+
+    var data = {
+      mes: visible.mes ? pts : [],
+      theo: visible.theo ? serieTheo() : []
+    };
+    var tous = data.mes.concat(data.theo);
+    if (!tous.length) { showMsg(svg, W, H, msgVide); return; }
+
+    var fs = 10.5 * k;
+    var padL = 38 * k, padR = 10 * k, padT = fs * 1.6, padB = 20 * k;
+    var x0 = padL, x1 = W - padR, y0 = H - padB, y1 = padT;
+
+    // domaine vertical commun aux courbes affichées sur les 24 h :
+    //  - haut de l'axe = le mètre entier immédiatement supérieur à la plus haute valeur affichée
+    //    (ex. 1,46 m -> 2 m ; 2,00 m -> 3 m) ;
+    //  - bas de l'axe = graduation ronde sous la plus basse valeur, avec une petite marge.
+    var vmin = Infinity, vmax = -Infinity;
+    tous.forEach(function (p) { vmin = Math.min(vmin, p.v); vmax = Math.max(vmax, p.v); });
+    var hi = Math.floor(vmax) + 1;
+    var span = Math.max(0.4, hi - vmin), step = Math.min(1, niceStep(span * 1.15, 5));   // pas qui divise 1 m
+    var lo = Math.floor((vmin - span * 0.08) / step) * step;
+    var nGrad = Math.round((hi - lo) / step);
+    var X = function (t) { return x0 + (t - jour0) / JOUR * (x1 - x0); };
+    var Y = function (v) { return y0 - (v - lo) / (hi - lo) * (y0 - y1); };
+
+    // grille et graduations : traits très fins, gris semi-transparent -> discrets quel que soit le fond
+    var GRILLE = "#5f7180";
+    for (var g = 0; g <= nGrad; g++) {
+      var v = Math.round((lo + g * step) * 1000) / 1000;
+      var yy = Y(v), zero = Math.abs(v) < 1e-9;
+      el("line", { x1: x0, x2: x1, y1: yy, y2: yy, stroke: GRILLE, "stroke-opacity": zero ? 0.38 : 0.16, "stroke-width": zero ? 0.8 : 0.6 }, svg);
+      var t = el("text", { x: x0 - 5 * k, y: yy + fs * 0.35, "text-anchor": "end", "font-size": fs }, svg);
+      t.textContent = (Math.round(v * 100) / 100).toLocaleString("fr-FR") + (g === nGrad ? " m" : "");
+    }
+    var every = (x1 - x0) / 24 >= 26 * k ? 1 : (x1 - x0) / 24 >= 13 * k ? 2 : 3;
+    for (var h = 0; h <= 24; h++) {
+      var xx = x0 + h / 24 * (x1 - x0);
+      el("line", { x1: xx, x2: xx, y1: y1, y2: y0, stroke: GRILLE, "stroke-opacity": h % every === 0 ? 0.14 : 0.07, "stroke-width": 0.6 }, svg);
+      if (h % every === 0) {
+        var lab = el("text", { x: xx, y: y0 + fs * 1.4, "text-anchor": "middle", "font-size": fs }, svg);
+        lab.textContent = h === 24 ? "24h" : h + "h";
+      }
+    }
+
+    // tracé d'une série (interrompue en cas de trou de mesure)
+    function trace(serie, s, aire, trouMin) {
+      var segs = [], cur = [];
+      serie.forEach(function (p, i) {
+        if (i && p.t - serie[i - 1].t > trouMin * MIN) { segs.push(cur); cur = []; }
+        cur.push(p);
+      });
+      segs.push(cur);
+      segs.forEach(function (sg) {
+        if (!sg.length) return;
+        var d = sg.map(function (p, i) { return (i ? "L" : "M") + X(p.t).toFixed(1) + " " + Y(p.v).toFixed(1); }).join(" ");
+        if (aire) el("path", { d: d + " L" + X(sg[sg.length - 1].t).toFixed(1) + " " + y0 + " L" + X(sg[0].t).toFixed(1) + " " + y0 + " Z",
+          fill: s.col, "fill-opacity": 0.10, stroke: "none" }, svg);
+        var attrs = { d: d, fill: "none", stroke: s.col, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" };
+        if (s.dash) attrs["stroke-dasharray"] = s.dash.split(" ").map(function (x) { return (+x * k).toFixed(1); }).join(" ");
+        el("path", attrs, svg);
+      });
+    }
+    // ordre de superposition : théorique, puis la mesure de Guily Glaz au premier plan
+    if (data.theo.length) trace(data.theo, SERIES.theo, false, 9999);
+    if (data.mes.length) trace(data.mes, SERIES.mes, true, CFG.trouMinutes);
+
+    // repère « maintenant » : à droite, la courbe théorique est extrapolée
+    var now = new Date(), xn = X(now), tn = null;
+    if (xn >= x0 && xn <= x1) {
+      el("line", { x1: xn, x2: xn, y1: fs * 1.2, y2: y0, stroke: "#9aa9b5", "stroke-width": 1, "stroke-dasharray": (3 * k) + " " + (3 * k) }, svg);
+      tn = el("text", { x: xn, y: fs * 0.9, "text-anchor": xn > x1 - 40 * k ? "end" : xn < x0 + 40 * k ? "start" : "middle", "font-size": fs * 0.95 }, svg);
+      tn.textContent = "maintenant";
+    }
+
+    // plus haut / plus bas mesurés à Guily Glaz (étiquettes sélectives, sans chevauchement)
+    function chevauche(a, c) {
+      if (!a || !c) return false;
+      var r1 = a.getBBox(), r2 = c.getBBox();
+      return r1.x < r2.x + r2.width && r2.x < r1.x + r1.width && r1.y < r2.y + r2.height && r2.y < r1.y + r1.height;
+    }
+    if (data.mes.length >= 6) {
+      var pmax = pts[0], pmin = pts[0], etiquettes = [];
+      pts.forEach(function (p) { if (p.v > pmax.v) pmax = p; if (p.v < pmin.v) pmin = p; });
+      if (pmax.v - pmin.v >= 0.05) [[pmax, -1], [pmin, 1]].forEach(function (a) {
+        var p = a[0], sens = a[1], px = X(p.t), py = Y(p.v);
+        el("circle", { cx: px, cy: py, r: 3 * k, fill: SERIES.mes.col, stroke: "#fff", "stroke-width": 2 }, svg);
+        var anchor = px < x0 + 40 * k ? "start" : px > x1 - 40 * k ? "end" : "middle";
+        var lb = el("text", { "text-anchor": anchor, "font-size": fs }, svg);
+        lb.style.fill = "#1d2b36";
+        lb.textContent = m2(p.v) + " m · " + hm(p.t);
+        var essais = sens < 0 ? [py - fs * 0.6 - 3 * k, py + fs * 1.1 + 3 * k] : [py + fs * 1.1 + 3 * k, py - fs * 0.6 - 3 * k];
+        for (var i = 0; i < essais.length; i++) {
+          lb.setAttribute("x", px); lb.setAttribute("y", essais[i]);
+          var bb = lb.getBBox();
+          if (bb.y >= 0 && bb.y + bb.height <= y0 && !chevauche(lb, tn) && !etiquettes.some(function (e) { return chevauche(lb, e); })) break;
+          if (i === essais.length - 1) lb.remove();
+        }
+        if (lb.parentNode) etiquettes.push(lb);
+      });
+      var last = pts[pts.length - 1];
+      el("circle", { cx: X(last.t), cy: Y(last.v), r: 4.5 * k, fill: "#0b3c5d", stroke: "#fff", "stroke-width": 2 }, svg);
+    }
+
+    // survol / toucher : réticule + infobulle avec les valeurs des courbes affichées
+    var hair = el("line", { x1: 0, x2: 0, y1: y1, y2: y0, stroke: "#0b3c5d", "stroke-width": 1, opacity: 0 }, svg);
+    var dots = {};
+    Object.keys(SERIES).forEach(function (key) {
+      dots[key] = el("circle", { r: 4 * k, fill: SERIES[key].col, stroke: "#fff", "stroke-width": 2, opacity: 0 }, svg);
+    });
+    var hit = el("rect", { x: x0, y: 0, width: x1 - x0, height: H, fill: "transparent" }, svg);
+    var tip = $("mwc-tip");
+    function proche(serie, t, tol) {
+      var best = null;
+      serie.forEach(function (p) { var d = Math.abs(p.t - t); if (d <= tol && (!best || d < best.d)) best = { p: p, d: d }; });
+      return best ? best.p : null;
+    }
+    function show(ev) {
+      var r = svg.getBoundingClientRect(), cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+      var sx = Math.max(x0, Math.min(x1, cx * W / r.width));
+      var t = new Date(jour0.getTime() + (sx - x0) / (x1 - x0) * JOUR);
+      var lignes = [], topY = Infinity;
+      var vals = {
+        mes: data.mes.length ? proche(data.mes, t, 8 * MIN) : null,
+        theo: data.theo.length ? proche(data.theo, t, 3 * MIN) : null
+      };
+      var tRef = vals.mes ? vals.mes.t : t;
+      Object.keys(SERIES).forEach(function (key) {
+        var p = vals[key], dot = dots[key];
+        if (!p) { dot.setAttribute("opacity", 0); return; }
+        var py = Y(p.v); topY = Math.min(topY, py);
+        dot.setAttribute("cx", X(p.t)); dot.setAttribute("cy", py); dot.setAttribute("opacity", 1);
+        lignes.push('<span class="mwc-tip-l"><i style="background:' + SERIES[key].col + '"></i>' +
+          SERIES[key].lbl.replace("Guily Glaz ", "") + " <b>" + m2(p.v) + " m</b></span>");
+      });
+      if (!lignes.length) { hide(); return; }
+      var px = X(tRef);
+      hair.setAttribute("x1", px); hair.setAttribute("x2", px); hair.setAttribute("opacity", 0.35);
+      tip.innerHTML = "<b>" + hm(tRef) + "</b>" + lignes.join("");
+      tip.hidden = false;
+      var left = px * r.width / W, half = tip.offsetWidth / 2, top = topY * r.height / H - tip.offsetHeight - 10 * k;
+      tip.style.left = Math.max(half, Math.min(r.width - half, left)) + "px";
+      tip.style.top = Math.max(0, top) + "px";
+    }
+    function hide() {
+      hair.setAttribute("opacity", 0); tip.hidden = true;
+      Object.keys(dots).forEach(function (key) { dots[key].setAttribute("opacity", 0); });
+    }
+    hit.addEventListener("mousemove", show); hit.addEventListener("mouseleave", hide);
+    hit.addEventListener("touchstart", show, { passive: true }); hit.addEventListener("touchmove", show, { passive: true });
+    hit.addEventListener("touchend", function () { setTimeout(hide, 1500); });
+  }
+
+  function tick() {
+    var d = new Date();
+    $("mwc-time").textContent = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + hm(d);
+    if (jour0 && d.toDateString() !== jour0.toDateString()) load();   // passage à minuit : nouvelle journée
+    else draw();                                                       // fait avancer le repère « maintenant »
+    renderState();                                                     // le coefficient suit la marée en cours
+  }
+
+  tick(); load(); loadShom(); fit();
+  if (window.ResizeObserver) {
+    new ResizeObserver(onResize).observe(root);
+    if (root.parentElement) new ResizeObserver(onResize).observe(root.parentElement);
+  }
+  window.addEventListener("resize", onResize);
+  root.querySelector(".mwc-table").addEventListener("toggle", fit);   // tableau déplié : on recalcule la place
+  setInterval(load, CFG.refreshMinutes * 60000);                       // mesures de Guily Glaz
+  setInterval(loadShom, 60 * 60000);                                   // prédictions SHOM : une fois par heure
+  setInterval(tick, 60000);
+})();
+</script>
+
+<!-- ===== fin du cycle de marée ===== -->
+</section>
+
+<section class="appli-onglet" id="o-hydro" role="tabpanel" aria-labelledby="b-hydro" hidden>
+<!-- ===== Widget Hydro (identique à widget-hydro.html) ===== -->
+<!-- =====================================================================
+     Widget « Hydro » — Châteaulin · Saint-Ségal (sans le bloc Marée)
+     À coller tel quel dans un bloc « Code HTML » de WebAcappella.
+     Sources : VigiEau (restrictions d'eau), Hub'Eau HydroPortail (Aulne), Hub'Eau/ADES (nappe)
+     Préfixe mwh- : peut cohabiter sur la même page avec les autres widgets.
+     ===================================================================== -->
+<div id="mwh-widget">
+  <div class="mwh-head">
+    <div class="mwh-title"><span class="mwh-emoji">🌊</span> Situation hydrologique</div>
+    <div class="mwh-updated" id="mwh-updated">Chargement des données…</div>
+  </div>
+
+  <div class="mwh-grid">
+    <!-- ===== VigiEau ===== -->
+    <section class="mwh-card">
+      <h3 class="mwh-h3"><span class="mwh-ico mwh-ico-drop">💧</span> Vigilance eau à Châteaulin</h3>
+      <div id="mwh-vigi" class="mwh-body"><div class="mwh-loading"><span></span><span></span><span></span></div></div>
+      <p class="mwh-src">Source <a href="https://vigieau.gouv.fr/" target="_blank" rel="noopener">VigiEau</a> · arrêtés préfectoraux</p>
+    </section>
+
+
+    <!-- ===== Aulne ===== -->
+    <section class="mwh-card">
+      <h3 class="mwh-h3"><span class="mwh-ico mwh-ico-river">🏞️</span> Niveau de l'Aulne</h3>
+      <div id="mwh-aulne" class="mwh-body"><div class="mwh-loading"><span></span><span></span><span></span></div></div>
+      <p class="mwh-src">Station de Châteaulin – Pont routier · <a href="https://www.hydro.eaufrance.fr/stationhydro/J382182001/fiche" target="_blank" rel="noopener">HydroPortail</a> via Hub'Eau · crues : <a href="https://www.vigicrues.gouv.fr/" target="_blank" rel="noopener">Vigicrues</a></p>
+    </section>
+
+    <!-- ===== Nappe ===== -->
+    <section class="mwh-card">
+      <h3 class="mwh-h3"><span class="mwh-ico mwh-ico-ground">🌱</span> Nappe de Saint-Ségal</h3>
+      <div id="mwh-nappe" class="mwh-body"><div class="mwh-loading"><span></span><span></span><span></span></div></div>
+      <p class="mwh-src">Piézomètre de Kergadalen · <a href="https://ades.eaufrance.fr/Fiche/PtEau?Code=03103X0047/PZ" target="_blank" rel="noopener">ADES</a> via Hub'Eau</p>
+    </section>
+  </div>
+</div>
+
+<style>
+/* Toutes les tailles sont multipliées par --k, calculé selon la largeur allouée au widget */
+#mwh-widget{
+  --mwh-navy:#0b3c5d; --mwh-blue:#1f7bb6; --mwh-sky:#e8f4fb; --mwh-sand:#fbf7ef;
+  --mwh-ink:#1d2b36; --mwh-muted:#5f7180; --mwh-line:#e3e9ee; --mwh-radius:calc(18px*var(--k));
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:var(--mwh-ink); background:var(--mwh-sand); border-radius:calc(22px*var(--k));
+  padding:calc(18px*var(--k)); box-sizing:border-box; width:100%; line-height:1.4; --k:1;
+  border:1px solid #d5dde4;                                             /* cadre gris très fin */
+}
+#mwh-widget *,#mwh-widget *::before,#mwh-widget *::after{box-sizing:border-box}
+#mwh-widget a{color:var(--mwh-blue)}
+#mwh-widget .mwh-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:calc(6px*var(--k)) calc(16px*var(--k));margin:2px calc(4px*var(--k)) calc(14px*var(--k))}
+#mwh-widget .mwh-title{font-size:calc(20px*var(--k));font-weight:700;color:var(--mwh-navy)}
+#mwh-widget .mwh-emoji{display:inline-block;animation:mwh-bob 3s ease-in-out infinite}
+#mwh-widget .mwh-updated{font-size:calc(13px*var(--k));color:var(--mwh-muted)}
+/* Par défaut : les 3 blocs sur une même ligne.
+   Responsive selon la largeur disponible (ordinateur / tablette / téléphone) :
+   3 colonnes ≥ 900 px · 2 colonnes de 560 à 900 px (la Nappe passe dessous, pleine largeur) · 1 colonne en dessous */
+#mwh-widget .mwh-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(14px*var(--k));align-items:stretch}
+#mwh-widget.mwh-c2 .mwh-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+#mwh-widget.mwh-c2 .mwh-grid > .mwh-card:last-child:nth-child(odd){grid-column:1 / -1}
+#mwh-widget.mwh-narrow .mwh-grid{grid-template-columns:1fr}
+/* Secours sans JavaScript : selon l'écran */
+@media (max-width:900px){#mwh-widget:not([data-mwh-init]) .mwh-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){#mwh-widget:not([data-mwh-init]) .mwh-grid{grid-template-columns:1fr}}
+#mwh-widget .mwh-card{background:#fff;border:1px solid #d5dde4;border-radius:var(--mwh-radius);padding:calc(16px*var(--k)) calc(16px*var(--k)) calc(10px*var(--k));box-shadow:0 2px calc(10px*var(--k)) rgba(11,60,93,.08);display:flex;flex-direction:column;min-width:0}
+#mwh-widget .mwh-h3{margin:0 0 calc(12px*var(--k));font-size:calc(16px*var(--k));font-weight:700;color:var(--mwh-navy);display:flex;align-items:center;gap:calc(8px*var(--k))}
+#mwh-widget .mwh-ico{width:calc(30px*var(--k));height:calc(30px*var(--k));border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:calc(15px*var(--k))}
+#mwh-widget .mwh-ico-sea{background:#e1effa}
+#mwh-widget .mwh-ico-drop{background:#e3f6f4}
+#mwh-widget .mwh-ico-ground{background:#eef6e3}
+#mwh-widget .mwh-ico-river{background:#e6f0f7}
+#mwh-widget .mwh-body{flex:1}
+#mwh-widget .mwh-src{margin:calc(12px*var(--k)) 0 0;padding-top:calc(8px*var(--k));border-top:1px solid var(--mwh-line);font-size:calc(11.5px*var(--k));color:var(--mwh-muted)}
+#mwh-widget .mwh-muted{color:var(--mwh-muted);font-size:calc(13px*var(--k))}
+#mwh-widget .mwh-err{font-size:calc(14px*var(--k));color:var(--mwh-muted);background:#f6f8fa;border-radius:calc(12px*var(--k));padding:calc(10px*var(--k)) calc(12px*var(--k))}
+
+/* chargement */
+#mwh-widget .mwh-loading{display:flex;gap:calc(6px*var(--k));padding:calc(24px*var(--k)) 0;justify-content:center}
+#mwh-widget .mwh-loading span{width:calc(9px*var(--k));height:calc(9px*var(--k));border-radius:50%;background:var(--mwh-blue);opacity:.35;animation:mwh-dot 1.2s infinite}
+#mwh-widget .mwh-loading span:nth-child(2){animation-delay:.2s}
+#mwh-widget .mwh-loading span:nth-child(3){animation-delay:.4s}
+
+/* ---- Pastilles de niveau ---- */
+#mwh-widget .mwh-badge{display:flex;align-items:center;gap:calc(12px*var(--k));border-radius:calc(14px*var(--k));padding:calc(12px*var(--k)) calc(14px*var(--k));color:#fff}
+#mwh-widget .mwh-badge-ico{font-size:calc(26px*var(--k));line-height:1}
+#mwh-widget .mwh-badge-lbl{font-size:calc(12px*var(--k));opacity:.9;text-transform:uppercase;letter-spacing:.04em}
+#mwh-widget .mwh-badge-val{font-size:calc(21px*var(--k));font-weight:800;line-height:1.15}
+#mwh-widget .mwh-msg{font-size:calc(14px*var(--k));margin:calc(10px*var(--k)) 0 calc(8px*var(--k))}
+#mwh-widget .mwh-chips{display:flex;flex-wrap:wrap;gap:calc(6px*var(--k));margin:calc(6px*var(--k)) 0}
+#mwh-widget .mwh-chip{font-size:calc(12px*var(--k));border-radius:calc(999px*var(--k));padding:calc(3px*var(--k)) calc(9px*var(--k));background:#f1f4f7;color:var(--mwh-ink);display:inline-flex;align-items:center;gap:calc(5px*var(--k))}
+#mwh-widget .mwh-chip i{width:calc(9px*var(--k));height:calc(9px*var(--k));border-radius:50%;display:inline-block}
+#mwh-widget details{margin-top:calc(8px*var(--k));font-size:calc(13px*var(--k))}
+#mwh-widget summary{cursor:pointer;color:var(--mwh-blue);font-weight:600}
+#mwh-widget details ul{margin:calc(8px*var(--k)) 0 0;padding-left:calc(18px*var(--k));max-height:calc(220px*var(--k));overflow:auto}
+#mwh-widget details li{margin-bottom:calc(6px*var(--k))}
+#mwh-widget details li span{color:var(--mwh-muted)}
+
+/* ---- Jauge nappe ---- */
+#mwh-widget .mwh-gauge{position:relative;margin:calc(16px*var(--k)) 0 calc(6px*var(--k))}
+#mwh-widget .mwh-gauge-bar{display:flex;height:calc(12px*var(--k));border-radius:calc(999px*var(--k));overflow:hidden}
+#mwh-widget .mwh-gauge-bar span{flex:1}
+#mwh-widget .mwh-gauge-pin{position:absolute;top:-6px;width:calc(4px*var(--k));height:calc(24px*var(--k));border-radius:calc(3px*var(--k));background:var(--mwh-ink);box-shadow:0 0 0 2px #fff;transform:translateX(-50%);transition:left 1s ease}
+#mwh-widget .mwh-gauge-legend{display:flex;justify-content:space-between;font-size:calc(11px*var(--k));color:var(--mwh-muted);margin-top:calc(4px*var(--k))}
+#mwh-widget .mwh-kv{display:grid;grid-template-columns:auto 1fr;gap:calc(4px*var(--k)) calc(10px*var(--k));font-size:calc(13.5px*var(--k));margin-top:calc(10px*var(--k))}
+#mwh-widget .mwh-kv dt{color:var(--mwh-muted)}
+#mwh-widget .mwh-kv dd{margin:0;font-weight:600;text-align:right}
+
+@keyframes mwh-dot{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-4px)}}
+@keyframes mwh-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){#mwh-widget *{animation:none!important;transition:none!important}}
+/* espace très étroit (classe posée par le script selon la largeur du widget) */
+#mwh-widget.mwh-xs{padding:calc(12px*var(--k));border-radius:calc(16px*var(--k))}
+#mwh-widget.mwh-xs .mwh-title{font-size:calc(17px*var(--k))}
+#mwh-widget.mwh-xs .mwh-card{padding:calc(14px*var(--k)) calc(12px*var(--k)) calc(10px*var(--k))}
+#mwh-widget.mwh-xs .mwh-row{font-size:calc(13px*var(--k));gap:calc(6px*var(--k));padding:calc(7px*var(--k)) calc(4px*var(--k))}
+#mwh-widget.mwh-xs .mwh-row .mwh-tag{flex-basis:calc(70px*var(--k));font-size:calc(10.5px*var(--k))}
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================== PARAMÈTRES (modifiables) ================== */
+  var CFG = {
+    vigieauInsee: "29026",             // code INSEE de Châteaulin
+    vigieauLat: 48.1966, vigieauLon: -4.0903,
+    vigieauProfil: "particulier",      // particulier | exploitation | collectivite | entreprise
+    bss: "03103X0047/PZ",              // piézomètre de Kergadalen (Saint-Ségal)
+    stationAulne: "J382182001",        // L'Aulne à Châteaulin – Pont routier (sonde Vigicrues)
+    nappeFenetreJours: 10,             // ± jours autour de la date pour comparer aux années passées
+    refreshMinutes: 30
+  };
+  /* ============================================================== */
+
+  var root = document.getElementById("mwh-widget");
+  if (!root || root.getAttribute("data-mwh-init")) return;
+  root.setAttribute("data-mwh-init", "1");
+
+  /* ---- Taille de police auto-adaptative : selon la largeur réellement allouée au widget ---- */
+  function fit() {
+    var w = root.clientWidth; if (!w) return;
+    // 3 blocs sur une ligne si la place le permet, sinon 2, sinon 1 (téléphone)
+    var cols = w >= 900 ? 3 : (w >= 560 ? 2 : 1);
+    var colW = (w - 40 - 14 * (cols - 1)) / cols;                   // largeur approximative d'une carte
+    // taille de référence : carte de 340 px (plusieurs colonnes) ou 380 px (1 colonne)
+    var k = cols === 1 ? Math.max(0.85, Math.min(1.1, colW / 380))
+                       : Math.max(0.82, Math.min(1.3, colW / 340));
+    root.style.setProperty("--k", k.toFixed(3));
+    root.classList.toggle("mwh-narrow", cols === 1);
+    root.classList.toggle("mwh-c2", cols === 2);
+    root.classList.toggle("mwh-c3", cols === 3);
+    root.classList.toggle("mwh-xs", w < 420);
+  }
+  fit();
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(root);
+  window.addEventListener("resize", fit);
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function hm(d) { return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
+  function dmy(d) { return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }); }
+  function num(x, n) { return x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n }); }
+  function fail(id, msg, link) {
+    $(id).innerHTML = '<div class="mwh-err">' + esc(msg) +
+      (link ? ' <a href="' + link + '" target="_blank" rel="noopener">Voir la source</a>' : "") + "</div>";
+  }
+  function getJSON(url) {
+    return fetch(url, { headers: { Accept: "application/json" } }).then(function (r) {
+      if (!r.ok) { var e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
+      return r.json();
+    });
+  }
+
+  /* ------------------------------------------------------------------
+     1) VIGIEAU — niveau de restriction à Châteaulin
+     ------------------------------------------------------------------ */
+  var GRAV = {
+    vigilance:        { o: 1, lbl: "Vigilance",        col: "#e0b100", ico: "👀", msg: "Pas de restriction, mais soyons économes : chaque goutte compte." },
+    alerte:           { o: 2, lbl: "Alerte",           col: "#e67e22", ico: "⚠️", msg: "Des restrictions d'usage de l'eau sont en vigueur." },
+    alerte_renforcee: { o: 3, lbl: "Alerte renforcée", col: "#d64535", ico: "🚱", msg: "Restrictions renforcées : les usages non essentiels sont limités." },
+    crise:            { o: 4, lbl: "Crise",            col: "#8e1b3e", ico: "🛑", msg: "Situation de crise : seuls les usages prioritaires (santé, sécurité, eau potable) sont autorisés." }
+  };
+  var TYPES = { SUP: "Rivières (eaux de surface)", SOU: "Eaux souterraines", AEP: "Eau du robinet" };
+  var THEME_ICO = { Arroser: "🪴", Nettoyer: "🧽", "Remplir ou vidanger": "🏊", "Ouvrages hydrauliques": "🚧", Irriguer: "🌾", Prélever: "🪣" };
+
+  function loadVigieau() {
+    var url = "https://api.vigieau.gouv.fr/api/zones?lon=" + CFG.vigieauLon + "&lat=" + CFG.vigieauLat +
+      "&commune=" + CFG.vigieauInsee + "&profil=" + CFG.vigieauProfil;
+    getJSON(url).then(function (zones) {
+      if (!Array.isArray(zones)) zones = zones ? [zones] : [];
+      zones = zones.filter(function (z) { return z && GRAV[z.niveauGravite]; });
+      if (!zones.length) {
+        $("mwh-vigi").innerHTML =
+          '<div class="mwh-badge" style="background:#2e9e6a"><div class="mwh-badge-ico">😊</div><div>' +
+          '<div class="mwh-badge-lbl">Situation</div><div class="mwh-badge-val">Aucune restriction</div></div></div>' +
+          '<p class="mwh-msg">Aucun arrêté sécheresse en vigueur à Châteaulin. Les bons gestes restent de mise !</p>';
+        return;
+      }
+      zones.sort(function (a, b) { return GRAV[b.niveauGravite].o - GRAV[a.niveauGravite].o; });
+      var worst = zones[0], g = GRAV[worst.niveauGravite];
+      var chips = zones.map(function (z) {
+        var gz = GRAV[z.niveauGravite];
+        return '<span class="mwh-chip"><i style="background:' + gz.col + '"></i>' + esc(TYPES[z.type] || z.type) + " : " + gz.lbl + "</span>";
+      }).join("");
+
+      var ref = zones.filter(function (z) { return z.type === "AEP"; })[0] || worst;
+      var usages = (ref.usages || []).filter(function (u) { return u.concerneParticulier !== false; });
+      var list = usages.map(function (u) {
+        var d = String(u.description || "").replace(/\s+/g, " ").trim();
+        return "<li>" + (THEME_ICO[u.thematique] || "•") + " <b>" + esc(u.nom) + "</b><br><span>" + esc(d) + "</span></li>";
+      }).join("");
+
+      var a = worst.arrete || {};
+      var fin = a.dateFinValidite ? dmy(new Date(a.dateFinValidite)) : null;
+
+      $("mwh-vigi").innerHTML =
+        '<div class="mwh-badge" style="background:' + g.col + '"><div class="mwh-badge-ico">' + g.ico + "</div><div>" +
+        '<div class="mwh-badge-lbl">Niveau en vigueur · ' + esc(worst.nom || "") + '</div><div class="mwh-badge-val">' + g.lbl + "</div></div></div>" +
+        '<p class="mwh-msg">' + g.msg + "</p>" +
+        '<div class="mwh-chips">' + chips + "</div>" +
+        (fin ? '<div class="mwh-muted">Arrêté valable jusqu\'au ' + fin +
+          (a.cheminFichier ? ' · <a href="' + esc(a.cheminFichier) + '" target="_blank" rel="noopener">lire l\'arrêté</a>' : "") + "</div>" : "") +
+        (list ? "<details><summary>Ce qui est interdit ou limité (" + usages.length + ")</summary><ul>" + list + "</ul></details>" : "");
+    }).catch(function (e) {
+      fail("mwh-vigi", e && e.status === 404 ? "Données VigiEau indisponibles pour ce secteur." :
+        "Impossible de joindre VigiEau pour le moment.", "https://vigieau.gouv.fr/");
+    });
+  }
+
+  /* ------------------------------------------------------------------
+     2) NAPPE — niveau du piézomètre comparé aux années passées
+     ------------------------------------------------------------------ */
+  var CLASSES = [
+    { max: 0.10, lbl: "Très bas",             crit: "Critique",     col: "#c0392b", ico: "🔴" },
+    { max: 0.20, lbl: "Bas",                  crit: "Préoccupante", col: "#e67e22", ico: "🟠" },
+    { max: 0.40, lbl: "Modérément bas",       crit: "Vigilance",    col: "#e0b100", ico: "🟡" },
+    { max: 0.60, lbl: "Proche de la normale", crit: "Normale",      col: "#2e9e6a", ico: "🟢" },
+    { max: 0.80, lbl: "Modérément haut",      crit: "Bonne",        col: "#1aa39a", ico: "🟢" },
+    { max: 0.90, lbl: "Haut",                 crit: "Très bonne",   col: "#2f80c9", ico: "🔵" },
+    { max: 1.01, lbl: "Très haut",            crit: "Très bonne",   col: "#1d4f91", ico: "🔵" }
+  ];
+
+  function loadNappe() {
+    var url = "https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques?code_bss=" + encodeURIComponent(CFG.bss) +
+      "&fields=date_mesure,niveau_nappe_eau,profondeur_nappe&size=20000&sort=asc";
+    getJSON(url).then(function (json) {
+      var data = (json.data || []).filter(function (r) { return r.niveau_nappe_eau != null && r.date_mesure; })
+        .map(function (r) {
+          var p = r.date_mesure.split("-");
+          return { t: Date.UTC(+p[0], +p[1] - 1, +p[2]), y: +p[0], v: r.niveau_nappe_eau, prof: r.profondeur_nappe };
+        });
+      if (data.length < 30) throw new Error("données insuffisantes");
+
+      var last = data[data.length - 1], lastD = new Date(last.t);
+      var win = CFG.nappeFenetreJours * 864e5, byYear = {};
+      data.forEach(function (r) {
+        if (r.y === last.y && Math.abs(r.t - last.t) < 365 * 864e5 / 2) return;
+        var center = Date.UTC(r.y, lastD.getUTCMonth(), lastD.getUTCDate());
+        var yr = r.y;
+        // gère le passage d'année (fenêtre autour du 1er janvier)
+        if (Math.abs(r.t - center) > win) {
+          var c2 = Date.UTC(r.y + 1, lastD.getUTCMonth(), lastD.getUTCDate());
+          var c0 = Date.UTC(r.y - 1, lastD.getUTCMonth(), lastD.getUTCDate());
+          if (Math.abs(r.t - c2) <= win) yr = r.y + 1; else if (Math.abs(r.t - c0) <= win) yr = r.y - 1; else return;
+        }
+        if (yr === last.y) return;
+        (byYear[yr] = byYear[yr] || []).push(r.v);
+      });
+      var refs = Object.keys(byYear).filter(function (y) { return byYear[y].length >= 3; }).map(function (y) {
+        var a = byYear[y]; return a.reduce(function (s, x) { return s + x; }, 0) / a.length;
+      });
+      if (refs.length < 5) throw new Error("historique insuffisant");
+
+      var below = 0, eq = 0;
+      refs.forEach(function (x) { if (x < last.v) below++; else if (x === last.v) eq++; });
+      var p = (below + eq / 2) / refs.length;
+      var cls = CLASSES.filter(function (c) { return p < c.max; })[0] || CLASSES[CLASSES.length - 1];
+
+      var before = null;
+      for (var i = data.length - 1; i >= 0; i--) if (data[i].t <= last.t - 7 * 864e5) { before = data[i]; break; }
+      var trend = "";
+      if (before) {
+        var dcm = Math.round((last.v - before.v) * 100);
+        trend = Math.abs(dcm) <= 2 ? "→ stable" : (dcm > 0 ? "↗ en hausse (+" + dcm + " cm)" : "↘ en baisse (" + dcm + " cm)");
+      }
+
+      var bar = CLASSES.map(function (c) { return '<span style="background:' + c.col + '"></span>'; }).join("");
+      var pinLeft = Math.max(2, Math.min(98, p * 100));
+
+      $("mwh-nappe").innerHTML =
+        '<div class="mwh-badge" style="background:' + cls.col + '"><div class="mwh-badge-ico">' + cls.ico + "</div><div>" +
+        '<div class="mwh-badge-lbl">Criticité</div><div class="mwh-badge-val">' + cls.crit + "</div></div></div>" +
+        '<p class="mwh-msg">Niveau <b>' + cls.lbl.toLowerCase() + "</b> pour la saison : plus haut que " +
+        Math.round(p * 100) + " % des " + refs.length + " années mesurées à la même période.</p>" +
+        '<div class="mwh-gauge" role="img" aria-label="Position du niveau : ' + esc(cls.lbl) + '">' +
+          '<div class="mwh-gauge-bar">' + bar + '</div><div class="mwh-gauge-pin" style="left:' + pinLeft + '%"></div>' +
+          '<div class="mwh-gauge-legend"><span>Très bas</span><span>Normal</span><span>Très haut</span></div></div>' +
+        '<dl class="mwh-kv">' +
+          (last.prof != null ? "<dt>Eau à</dt><dd>" + num(last.prof, 2) + " m sous le sol</dd>" : "") +
+          (trend ? "<dt>Sur 7 jours</dt><dd>" + trend + "</dd>" : "") +
+          "<dt>Dernière mesure</dt><dd>" + dmy(lastD) + "</dd>" +
+        "</dl>";
+    }).catch(function () {
+      fail("mwh-nappe", "Impossible de récupérer le niveau de la nappe pour le moment.",
+        "https://ades.eaufrance.fr/Fiche/PtEau?Code=03103X0047/PZ");
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* ------------------------------------------------------------------
+     3) AULNE — débit actuel à Châteaulin comparé à l'historique (depuis 2010)
+     ------------------------------------------------------------------ */
+  var CLASSES_RIV = [
+    // Couleurs inversées : basses eaux en violet/bleu, hautes eaux (crue) en orange/rouge
+    { max: 0.10, lbl: "Très basses eaux", crit: "Critique (étiage)", col: "#5b2a86", ico: "🟣", msg: "Rivière à un niveau exceptionnellement bas pour la saison." },
+    { max: 0.25, lbl: "Basses eaux",      crit: "Préoccupante",      col: "#2f80c9", ico: "🔵", msg: "Débit nettement inférieur à la normale de saison." },
+    { max: 0.40, lbl: "Plutôt bas",       crit: "Vigilance",         col: "#1aa39a", ico: "🟢", msg: "Débit un peu en dessous de la normale de saison." },
+    { max: 0.60, lbl: "Normal",           crit: "Normale",           col: "#2e9e6a", ico: "🟢", msg: "Débit habituel pour la saison." },
+    { max: 0.75, lbl: "Plutôt haut",      crit: "Normale",           col: "#e0b100", ico: "🟡", msg: "Débit un peu au-dessus de la normale de saison." },
+    { max: 0.90, lbl: "Hautes eaux",      crit: "Vigilance",         col: "#e67e22", ico: "🟠", msg: "Rivière haute : restez attentifs aux bulletins de crue." },
+    { max: 1.01, lbl: "Très hautes eaux", crit: "Critique (crue)",   col: "#c0392b", ico: "🔴", msg: "Niveau exceptionnellement haut : consultez Vigicrues." }
+  ];
+
+  function loadAulne() {
+    var base = "https://hubeau.eaufrance.fr/api/v2/hydrometrie/";
+    var st = encodeURIComponent(CFG.stationAulne);
+    Promise.all([
+      getJSON(base + "observations_tr?code_entite=" + st + "&grandeur_hydro=Q&size=400&sort=desc&format=json"),
+      getJSON(base + "observations_tr?code_entite=" + st + "&grandeur_hydro=H&size=1&sort=desc&format=json").catch(function () { return { data: [] }; }),
+      getJSON(base + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=QmnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json")
+    ]).then(function (res) {
+      var q = (res[0].data || []).filter(function (r) { return r.resultat_obs != null; })
+        .map(function (r) { return { t: new Date(r.date_obs).getTime(), v: r.resultat_obs }; });
+      if (!q.length) throw new Error("pas de mesure récente");
+      var last = q[0];
+      // débit moyen des dernières 24 h (lisse les variations de court terme)
+      var day = q.filter(function (r) { return r.t > last.t - 864e5; });
+      var qNow = day.reduce(function (s, r) { return s + r.v; }, 0) / day.length;   // en l/s
+
+      var hist = (res[2].data || []).filter(function (r) { return r.resultat_obs_elab != null; }).map(function (r) {
+        var p = r.date_obs_elab.split("-");
+        return { t: Date.UTC(+p[0], +p[1] - 1, +p[2]), y: +p[0], v: r.resultat_obs_elab };
+      });
+      var lastD = new Date(last.t), win = CFG.nappeFenetreJours * 864e5, byYear = {};
+      hist.forEach(function (r) {
+        var yr = null;
+        [r.y - 1, r.y, r.y + 1].forEach(function (y) {
+          if (Math.abs(r.t - Date.UTC(y, lastD.getUTCMonth(), lastD.getUTCDate())) <= win) yr = y;
+        });
+        if (yr == null || yr === lastD.getUTCFullYear()) return;
+        (byYear[yr] = byYear[yr] || []).push(r.v);
+      });
+      var refs = Object.keys(byYear).filter(function (y) { return byYear[y].length >= 5; }).map(function (y) {
+        var a = byYear[y]; return a.reduce(function (s, x) { return s + x; }, 0) / a.length;
+      });
+      if (refs.length < 5) throw new Error("historique insuffisant");
+
+      var below = 0, eq = 0;
+      refs.forEach(function (x) { if (x < qNow) below++; else if (x === qNow) eq++; });
+      var p = (below + eq / 2) / refs.length;
+      var cls = CLASSES_RIV.filter(function (c) { return p < c.max; })[0] || CLASSES_RIV[CLASSES_RIV.length - 1];
+      var med = refs.slice().sort(function (a, b) { return a - b; })[Math.floor(refs.length / 2)];
+
+      // tendance : dernier débit vs ~24 h plus tôt
+      var old = day[day.length - 1], trend = "";
+      if (old && old !== last && old.v > 0) {
+        var r = (last.v - old.v) / old.v;
+        trend = Math.abs(r) < 0.05 ? "→ stable" : (r > 0 ? "↗ en hausse" : "↘ en baisse");
+      }
+      var h = (res[1].data || [])[0];
+      var m3 = function (ls) { return ls >= 10000 ? num(ls / 1000, 0) : num(ls / 1000, 2); };
+
+      var bar = CLASSES_RIV.map(function (c) { return '<span style="background:' + c.col + '"></span>'; }).join("");
+      $("mwh-aulne").innerHTML =
+        '<div class="mwh-badge" style="background:' + cls.col + '"><div class="mwh-badge-ico">' + cls.ico + "</div><div>" +
+        '<div class="mwh-badge-lbl">Criticité · ' + esc(cls.lbl) + '</div><div class="mwh-badge-val">' + cls.crit + "</div></div></div>" +
+        '<p class="mwh-msg">' + cls.msg + " " +
+        (below === 0 ? "Débit plus faible que toutes les " + refs.length + " années mesurées à la même période."
+          : below === refs.length ? "Débit plus fort que toutes les " + refs.length + " années mesurées à la même période."
+          : "Débit plus élevé que " + Math.round(p * 100) + " % des " + refs.length + " années mesurées à la même période.") + "</p>" +
+        '<div class="mwh-gauge" role="img" aria-label="Position du débit : ' + esc(cls.lbl) + '">' +
+          '<div class="mwh-gauge-bar">' + bar + '</div><div class="mwh-gauge-pin" style="left:' + Math.max(2, Math.min(98, p * 100)) + '%"></div>' +
+          '<div class="mwh-gauge-legend"><span>Étiage</span><span>Normal</span><span>Crue</span></div></div>' +
+        '<dl class="mwh-kv">' +
+          "<dt>Débit (moy. 24 h)</dt><dd>" + m3(qNow) + " m³/s</dd>" +
+          "<dt>Normale de saison</dt><dd>≈ " + m3(med) + " m³/s</dd>" +
+          (h && h.resultat_obs != null ? "<dt>Hauteur à l'échelle</dt><dd>" + num(h.resultat_obs / 1000, 2) + " m</dd>" : "") +
+          (trend ? "<dt>Sur 24 h</dt><dd>" + trend + "</dd>" : "") +
+          "<dt>Dernière mesure</dt><dd>" + dmy(lastD) + " " + hm(lastD) + "</dd>" +
+        "</dl>";
+    }).catch(function () {
+      fail("mwh-aulne", "Impossible de récupérer le niveau de l'Aulne pour le moment.",
+        "https://www.hydro.eaufrance.fr/stationhydro/J382182001/fiche");
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  function refreshAll() {
+    loadVigieau(); loadNappe(); loadAulne();
+    var d = new Date();
+    $("mwh-updated").textContent = "Mis à jour le " + dmy(d) + " à " + hm(d);
+  }
+  refreshAll();
+  setInterval(refreshAll, CFG.refreshMinutes * 60000);
+})();
+</script>
+<!-- ===== fin du widget Hydro ===== -->
+</section>
+
+<!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
+<section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=37" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+</section>
+<section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=37" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+</section>
+<section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=37" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+</section>
+<section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=37" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=37" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+</section>
+<section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=37" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=37" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+</section>
+<!-- ===== fin des tableaux météo ===== -->
+</main>
+
+<script>
+(function () {
+  // Bouton « Actualiser » et rechargement automatique au retour dans l'application (après 10 min)
+  var ouvertLe = Date.now();
+  document.getElementById("appli-maj").addEventListener("click", function () { location.reload(); });
+  // Onglets : un tableau de bord par onglet ; l'onglet choisi est retenu (adresse #… et mémoire du téléphone)
+  var boutons = [].slice.call(document.querySelectorAll(".appli-onglets button"));
+  function montrer(cle, defiler) {
+    boutons.forEach(function (b) {
+      var on = b.getAttribute("data-onglet") === cle;
+      b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1;
+      document.getElementById("o-" + b.getAttribute("data-onglet")).hidden = !on;
+      if (on && b.scrollIntoView) b.scrollIntoView({ block: "nearest", inline: "center" });
+    });
+    try { localStorage.setItem("hydraulne-onglet", cle); } catch (e) {}
+    if (history.replaceState) history.replaceState(null, "", "#" + cle);
+    if (defiler) window.scrollTo(0, 0);
+    window.dispatchEvent(new Event("resize"));   // les widgets recalculent leur taille une fois visibles
+  }
+  boutons.forEach(function (b, i) {
+    b.addEventListener("click", function () { montrer(b.getAttribute("data-onglet"), true); });
+    b.addEventListener("keydown", function (e) {
+      var d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0; if (!d) return;
+      var n = boutons[(i + d + boutons.length) % boutons.length]; n.focus(); montrer(n.getAttribute("data-onglet"), true);
+    });
+  });
+  var depart = (location.hash || "").slice(1);
+  if (!document.getElementById("o-" + depart)) { try { depart = localStorage.getItem("hydraulne-onglet") || ""; } catch (e) { depart = ""; } }
+  montrer(document.getElementById("o-" + depart) ? depart : "synthese", false);
+  // hauteur des cadres météo
+  window.addEventListener("message", function (e) {
+    var h = e.data && e.data.hydraulneHauteur; if (!h) return;
+    var cadres = document.querySelectorAll("iframe.appli-meteo");
+    for (var i = 0; i < cadres.length; i++)
+      if (cadres[i].contentWindow === e.source) cadres[i].style.height = (h + 2) + "px";
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && Date.now() - ouvertLe > 10 * 60000) location.reload();
+  });
+  // Bandeau hors connexion
+  var off = document.getElementById("appli-off");
+  function etat() { off.style.display = navigator.onLine ? "none" : "block"; }
+  window.addEventListener("online", etat); window.addEventListener("offline", etat); etat();
+  // Service worker : rend l'application installable et garde la page en cache
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+  }
+})();
+</script>
+</body>
+</html>

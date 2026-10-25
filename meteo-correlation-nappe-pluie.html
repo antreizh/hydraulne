@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="fr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Corrélation nappe et pluie à Saint-Ségal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+html, body { margin: 0; }
+
+/* Réponse de la nappe de Saint-Ségal à la pluie : tableau mensuel (2015-2025) + explication du calcul */
+:root {
+  --bg: #f4f7f8; --surface: #ffffff; --fg: #16262c; --muted: #5b6d74; --grid: #dde5e8; --frame: #c3ced3;
+  --bar: #2f6f8f;
+  --good: #1d6b3a; --good-bg: #e3f1e7; --mid: #8a5a00; --mid-bg: #f8edd6; --low: #a3342b; --low-bg: #f8e3e0;
+  --font-display: "Fraunces", Georgia, serif; --font-body: "Public Sans", system-ui, sans-serif; --font-data: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+.wbody { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body);
+  padding-block: 14px 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main.np { max-width: 880px; margin: 0 auto; display: grid; gap: 18px; container-type: inline-size; container-name: np; }
+main > * { min-width: 0; }
+h1 { font: 600 clamp(22px, 5.5cqi, 32px)/1.15 var(--font-display); margin: 0 0 6px; text-wrap: balance; }
+.station { font: 500 13px var(--font-data); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 8px; }
+.disclaimer { margin: 0 0 4px; font-size: 13px; font-style: italic; color: var(--mid); }
+.disclaimer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.sub { margin: 0; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--frame); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h2 { margin: 0 0 4px; font: 600 15px var(--font-body); }
+.card .lead { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+thead th { font: 500 11px var(--font-data); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); text-align: left; vertical-align: bottom;
+  padding: 7px 8px; border-bottom: 1px solid var(--frame); }
+thead th.num { text-align: right; }
+tbody th { text-align: left; font-weight: 600; padding: 7px 8px; white-space: nowrap; }
+td { padding: 7px 8px; white-space: nowrap; }
+tbody tr + tr th, tbody tr + tr td { border-top: 1px solid var(--grid); }
+.num { text-align: right; }
+.bar { display: flex; align-items: center; gap: 8px; min-width: 9rem; }
+.track { flex: 1; height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+.fill { display: block; height: 100%; background: var(--bar); border-radius: 4px; }
+.pc { width: 3em; text-align: right; font-family: var(--font-data); font-size: 13px; }
+.pill { display: inline-block; font: 500 12px var(--font-data); padding: 1px 8px; border-radius: 999px; }
+.pill.bonne { color: var(--good); background: var(--good-bg); }
+.pill.moyenne { color: var(--mid); background: var(--mid-bg); }
+.pill.faible { color: var(--low); background: var(--low-bg); }
+h3 { margin: 14px 0 4px; font: 600 14px var(--font-body); }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr) auto; max-width: 40rem; font-variant-numeric: tabular-nums; font-size: 14px; }
+.steps > * { padding: 6px 0; border-bottom: 1px solid var(--grid); }
+.steps > :nth-child(even) { text-align: right; padding-left: 16px; font-family: var(--font-data); font-size: 13px; }
+.steps .res { font-weight: 600; }
+.txt { margin: 0; font-size: 14px; line-height: 1.6; max-width: 66ch; }
+footer { font-size: 12px; color: var(--muted); }
+footer a { color: var(--bar); }
+/* Largeur réduite : chaque mois devient une fiche, sans défilement horizontal */
+@container np (max-width: 640px) {
+  table, tbody, tr, td, tbody th { display: block; width: 100%; }
+  thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  tbody tr { border: 1px solid var(--grid); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+  tbody tr + tr th, tbody tr + tr td { border-top: 0; }
+  tbody th { padding: 0 0 4px; font-size: 15px; }
+  td { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; white-space: normal; text-align: right; border-top: 1px solid var(--grid); }
+  td::before { content: attr(data-label); color: var(--muted); font-size: 12px; text-align: left; flex: 1 1 50%; min-width: 0; }
+  .bar { min-width: 0; }
+  .bar .track { flex: 0 0 28%; }
+  .steps { grid-template-columns: 1fr; }
+  .steps > :nth-child(odd) { border-bottom: 0; padding-bottom: 0; color: var(--muted); font-size: 13px; }
+  .steps > :nth-child(even) { text-align: left; padding-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wbody"><main class="np">
+  <header>
+    <h1>Réponse de la nappe de Saint-Ségal à la pluie</h1>
+    <p class="station">Piézomètre de Kergadalen BSS000XCLK · station Météo-France 29263002</p>
+    <p class="disclaimer">Tableaux de bord indicatifs © <a href="https://www.antreizh.fr" target="_blank" rel="noopener">antreizh.fr</a> - se référer aux sites météorologiques officiels</p>
+    <p class="sub">Analyse 2015-2025 (11 années complètes). Niveau de la nappe exprimé en altitude (m NGF). Porosité efficace retenue : 1 %.</p>
+  </header>
+
+  <section class="card">
+    <h2>Effet de 10 mm de pluie, par mois</h2>
+    <p class="lead">10 mm de pluie tombés à partir du jour J : effet sur le niveau de la nappe, mesuré à la fin du délai propre à chaque mois (95 % de l’effet atteint).</p>
+    <table>
+      <thead><tr>
+        <th scope="col">Mois</th>
+        <th scope="col" class="num">Délai pour 95 % d’effet</th>
+        <th scope="col" class="num">Effet de 10 mm de pluie sur la nappe</th>
+        <th scope="col">Part de la pluie qui recharge la nappe (%)</th>
+        <th scope="col">Fiabilité</th>
+        <th scope="col" class="num">Pluie max observée sur le délai</th>
+        <th scope="col" class="num">Pluie observée en moyenne sur le délai</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <th scope="row">Janvier</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+1</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+41,6 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:100.0%"></span></span><span class="pc">42 %</span></td>
+          <td data-label="Fiabilité"><span class="pill moyenne">moyenne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">48 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">4,5 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Février</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+2</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+37,5 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:90.2%"></span></span><span class="pc">37 %</span></td>
+          <td data-label="Fiabilité"><span class="pill bonne">bonne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">45 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">7,2 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Mars</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+3</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+26,8 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:64.5%"></span></span><span class="pc">27 %</span></td>
+          <td data-label="Fiabilité"><span class="pill moyenne">moyenne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">60 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">7,7 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Avril</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+3</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+9,0 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:21.6%"></span></span><span class="pc">9 %</span></td>
+          <td data-label="Fiabilité"><span class="pill faible">faible</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">45 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">6,0 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Mai</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+6</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+12,5 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:30.2%"></span></span><span class="pc">13 %</span></td>
+          <td data-label="Fiabilité"><span class="pill moyenne">moyenne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">79 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">11,6 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Juin</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+10</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+5,8 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:13.8%"></span></span><span class="pc">6 %</span></td>
+          <td data-label="Fiabilité"><span class="pill bonne">bonne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">80 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">20,6 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Juillet</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+9</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+8,1 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:19.4%"></span></span><span class="pc">8 %</span></td>
+          <td data-label="Fiabilité"><span class="pill bonne">bonne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">83 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">17,5 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Août</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+12</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+6,4 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:15.3%"></span></span><span class="pc">6 %</span></td>
+          <td data-label="Fiabilité"><span class="pill bonne">bonne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">87 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">24,9 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Septembre</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+5</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+8,2 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:19.8%"></span></span><span class="pc">8 %</span></td>
+          <td data-label="Fiabilité"><span class="pill bonne">bonne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">100 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">13,2 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Octobre</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+16</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+14,8 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:35.6%"></span></span><span class="pc">15 %</span></td>
+          <td data-label="Fiabilité"><span class="pill bonne">bonne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">178 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">63,7 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Novembre</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+2</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+27,1 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:65.1%"></span></span><span class="pc">27 %</span></td>
+          <td data-label="Fiabilité"><span class="pill moyenne">moyenne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">48 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">8,5 mm</td>
+        </tr>
+        <tr>
+          <th scope="row">Décembre</th>
+          <td data-label="Délai pour 95 % d’effet" class="num">J+2</td>
+          <td data-label="Effet de 10 mm de pluie sur la nappe" class="num">+37,3 cm</td>
+          <td data-label="Part de la pluie qui recharge la nappe (%)" class="bar"><span class="track"><span class="fill" style="width:89.9%"></span></span><span class="pc">37 %</span></td>
+          <td data-label="Fiabilité"><span class="pill bonne">bonne</span></td>
+          <td data-label="Pluie max observée sur le délai" class="num">57 mm</td>
+          <td data-label="Pluie observée en moyenne sur le délai" class="num">9,4 mm</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Comment lire la part de pluie qui recharge la nappe</h2>
+    <h3>Le calcul, étape par étape, pour janvier (95 % de l’effet atteint à J+1)</h3>
+    <div class="steps">
+      <span>Effet de 10 mm de pluie sur le niveau</span><span>+41,6 cm</span>
+      <span>Converti en millimètres (× 10)</span><span>416 mm de hausse du niveau</span>
+      <span>Multiplié par la porosité efficace (1 %)</span><span>4,16 mm d’eau entrés dans la nappe</span>
+      <span class="res">Divisé par la pluie tombée (10 mm)</span><span class="res">42 %</span>
+    </div>
+    <h3>Pourquoi le chiffre a l’air faux</h3>
+    <p class="txt">Avec 10 mm de pluie et une porosité de 1 %, le pourcentage est égal au nombre de centimètres : 41,6 cm donnent 42 %, 5,8 cm donnent 6 %. Les deux facteurs se compensent : × 10 pour passer en mm, puis × 1 % ÷ 10 mm. Ce n’est qu’une coïncidence de ces valeurs : avec une porosité de 2 %, on aurait 83 % pour janvier.</p>
+    <h3>Pourquoi la nappe monte de 416 mm pour 10 mm de pluie</h3>
+    <p class="txt">Dans le schiste, l’eau n’occupe qu’environ 1 % du volume de la roche (porosité efficace). 4,16 mm d’eau suffisent donc à remplir 416 mm de roche.</p>
+    <h3>Délai pour 95 % d’effet</h3>
+    <p class="txt">Nombre de jours après la pluie au bout desquels la hausse du niveau atteint 95 % de son maximum, tiré de la courbe de réponse de la nappe (2015-2025). En hiver, 95 % de l’effet est acquis en 1 à 2 jours, puis la nappe se vide ; de juin à octobre, l’essentiel de la hausse est acquis dès J+1 mais la hausse continue lentement sur un palier, et 95 % n’est atteint qu’après 9 à 16 jours.</p>
+    <h3>Fiabilité</h3>
+    <p class="txt">Selon la part de la variation du niveau expliquée par la pluie (R²) : bonne à partir de 0,5, moyenne de 0,3 à 0,5, faible en dessous.</p>
+  </section>
+
+  <footer>
+    Méthode : pour chaque jour J, pluie cumulée pendant le délai du mois comparée à la variation du niveau entre J-1 et la fin du délai, puis régression linéaire par mois, sur 2015-2025.
+    Données : <a href="https://ades.eaufrance.fr/Fiche/PtEau?code=03103X0047%2FPZ" target="_blank" rel="noopener">ADES, piézomètre de Kergadalen</a> ;
+    <a href="https://www.data.gouv.fr/fr/datasets/donnees-climatologiques-de-base-quotidiennes/" target="_blank" rel="noopener">Météo-France, station ST-SEGAL S A (29263002)</a>.
+    La porosité de 1 % est une hypothèse (habituellement 0,5 à 3 % pour un aquifère de socle schisteux) : la part de pluie lui est proportionnelle.
+  </footer>
+</main></div>
+<!-- ===== Intégration dans l'application HYDRAULNE ===== -->
+<script>
+  // Signale la hauteur du contenu à l'application pour que le cadre s'ajuste (pas de barre de défilement)
+  (function () {
+    if (window.parent === window) return;
+    var last = 0;
+    function envoyer() {
+      var h = Math.ceil(document.body.getBoundingClientRect().height);
+      if (h && h !== last) { last = h; window.parent.postMessage({ hydraulneHauteur: h }, "*"); }
+    }
+    if (window.ResizeObserver) new ResizeObserver(envoyer).observe(document.body);
+    window.addEventListener("load", envoyer);
+    setTimeout(envoyer, 500); setTimeout(envoyer, 2000);
+  })();
+</script>
+</body></html>

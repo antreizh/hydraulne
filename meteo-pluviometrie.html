@@ -1,0 +1,482 @@
+<!doctype html><html lang="fr" data-theme="light"><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Pluie secteur de Châteaulin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Mise en page : en-tête, trois blocs N vs N-1 (S-1, S, 30 jours), puis histogramme journalier */
+:root {
+  --bg: #f4f7f8;
+  --surface: #ffffff;
+  --fg: #16262c;
+  --muted: #5b6d74;
+  --grid: #dde5e8;
+  --frame: #c3ced3;    /* contour fin des blocs */
+  --cur: #2f6f8f;      /* année en cours */
+  --prev: #b7c6cc;     /* N-1 */
+  --wk1: #8fb8cc;      /* semaine S-1 dans l'histogramme */
+  --up: #1f6e8c;
+  --down: #8a5a1f;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Public Sans", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1a1e; --surface: #16252b; --fg: #e3eef1; --muted: #93a8b0; --grid: #263a42; --frame: #344b54;
+    --cur: #7cc0de; --prev: #4a5f67; --wk1: #3f6d82; --up: #8fd0ec; --down: #e0b073;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+    --bg: #0f1a1e; --surface: #16252b; --fg: #e3eef1; --muted: #93a8b0; --grid: #263a42; --frame: #344b54;
+    --cur: #7cc0de; --prev: #4a5f67; --wk1: #3f6d82; --up: #8fd0ec; --down: #e0b073;
+    color-scheme: dark;
+  }
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 var(--font-body);
+  padding-block: 32px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 880px; margin: 0 auto; display: grid; gap: 24px; }
+.eyebrow { font: 500 12px var(--font-data); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+h1 { font: 600 clamp(26px, 5vw, 36px)/1.15 var(--font-display); margin: 4px 0 6px; text-wrap: balance; }
+.sub { margin: 0; color: var(--muted); }
+.eyebrow.station { margin: 0 0 8px; color: var(--fg); font-size: 13px; }
+.disclaimer { margin: 0 0 6px; font-size: 13px; font-style: italic; color: var(--down); }
+.disclaimer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Ligne 1 : S-3/S-2 en petit, S-1, S, 30 j ; ligne 2 : les 2 blocs annuels côte à côte */
+.cmp { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+.cmp > .block.small { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 16px; align-content: start; }
+.cmp > .block.small h2 { grid-column: 1 / -1; }
+.cmp > .block.small .sw { border-top: 0; padding-top: 0; }
+.cmp > .block.small .sw + .sw { border-left: 1px solid var(--grid); padding-left: 14px; }
+.years { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .years { grid-template-columns: 1fr; } }
+.cmp > .block { min-width: 0; }
+.big .val { font-size: clamp(28px, 3.4vw, 36px); }
+.block.small { gap: 8px; padding: 14px; }
+.block.small h2 { font-size: 13px; color: var(--muted); font-weight: 500; }
+.sw { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid var(--grid); }
+.sw-h { display: flex; flex-wrap: wrap; column-gap: 8px; font: 11px var(--font-data); color: var(--muted); }
+.sw-h strong { color: var(--fg); font-weight: 500; font-size: 12px; }
+.sw-h strong, .sw-h span { white-space: nowrap; }
+.sw-h span { flex-basis: 100%; }
+.sw-v { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px; }
+.sw-n { font: 600 24px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.sw-n small { font: 12px var(--font-body); color: var(--muted); }
+.sw .delta { font-size: 11px; padding: 1px 6px; }
+.sw-p { font: 11px var(--font-data); color: var(--muted); }
+.sw-d { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.dmm { font: 500 11px var(--font-data); white-space: nowrap; }
+.big .dmm { font-size: 13px; }
+.dmm.up { color: var(--up); } .dmm.down { color: var(--down); } .dmm.eq { color: var(--muted); }
+#chart svg { min-width: 760px; }
+@media (max-width: 820px) { .cmp { grid-template-columns: 1fr; } }
+@media (max-width: 520px) {
+  .cmp > .block.small { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
+  .cmp > .block.small .sw:nth-of-type(odd) { border-left: 0; padding-left: 0; }
+  .cmp > .block.small .sw:nth-of-type(n+3) { border-top: 1px solid var(--grid); padding-top: 10px; }
+}
+.cmp > p { grid-column: 1 / -1; }
+.qnote { margin: 0; font-size: 11px; color: var(--muted); font-style: italic; }
+.block { background: var(--surface); border: 1px solid var(--frame); border-radius: 10px; padding: 16px 18px; display: grid; gap: 10px; align-content: start; }
+.block h2 { margin: 0; font: 600 15px var(--font-body); }
+.block .dates { font: 12px var(--font-data); color: var(--muted); margin-top: -8px; }
+.big { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.big .val { font: 600 36px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.big .unit { color: var(--muted); }
+.delta { font: 500 13px var(--font-data); padding: 2px 8px; border-radius: 999px; background: var(--bg); white-space: nowrap; }
+.delta.up { color: var(--up); }
+.delta.down { color: var(--down); }
+.delta.eq { color: var(--muted); }
+.bars { display: grid; gap: 6px; }
+.row { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 8px; font: 12px var(--font-data); color: var(--muted); }
+.row .track { height: 10px; background: var(--bg); border-radius: 0 4px 4px 0; overflow: hidden; }
+.row .fill { height: 100%; border-radius: 0 4px 4px 0; }
+.row .num { text-align: right; color: var(--fg); font-variant-numeric: tabular-nums; }
+.diff { font-size: 12px; line-height: 1.45; color: var(--muted); margin: 0; }
+
+.quarters { border-top: 1px solid var(--grid); padding-top: 10px; display: grid; gap: 4px; }
+.qhead { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font: 500 12px var(--font-body); color: var(--muted); }
+.qhead span { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-data); }
+.qhead i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-left: 6px; }
+main > * { min-width: 0; }
+svg.mini { min-width: 0; width: 100%; max-width: 400px; justify-self: center; }
+svg.mini text { font-size: 11px; }
+.chart-card { background: var(--surface); border: 1px solid var(--frame); border-radius: 10px; padding: 18px 18px 10px; position: relative; }
+.chart-card h2 { font: 600 15px var(--font-body); margin: 0 0 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart-wrap { overflow-x: auto; }
+svg { display: block; width: 100%; min-width: 560px; height: auto; }
+svg text { font-family: var(--font-data); font-size: 11px; fill: var(--muted); }
+.hit { fill: transparent; }
+.bar.on { opacity: .75; }
+.tip {
+  position: absolute; pointer-events: none; background: var(--fg); color: var(--bg);
+  font: 12px/1.4 var(--font-data); padding: 6px 9px; border-radius: 6px; white-space: nowrap;
+  transform: translate(-50%, -100%); margin-top: -8px;
+}
+.status { color: var(--muted); font-size: 14px; }
+.status.err { color: var(--down); }
+footer { font-size: 12px; color: var(--muted); }
+footer a { color: var(--cur); }
+</style>
+<main>
+  <header>
+    <h1>Pluviométrie du secteur de Châteaulin</h1>
+    <p class="eyebrow station">Station ST-SEGAL S A · Météo-France n° 29263002 · 89 m</p>
+    <p class="disclaimer">Tableaux de bord indicatifs © <a href="https://www.antreizh.fr" target="_blank" rel="noopener">antreizh.fr</a> - se référer aux sites météorologiques officiels</p>
+    <p class="sub" id="period">Dernière mesure : chargement…</p>
+  </header>
+
+  <section class="cmp" id="cmp" aria-live="polite">
+    <p class="status">Chargement des relevés…</p>
+  </section>
+
+  <section class="chart-card">
+    <h2>Pluie journalière sur 28 jours (mm)</h2>
+    <div class="chart-wrap" id="chart"></div>
+    <div class="tip" id="tip" hidden></div>
+  </section>
+
+  <footer>
+    Données : relevés quotidiens de la station Météo-France ST-SEGAL S A (29263002), à environ 3 km au nord de Châteaulin,
+    <a href="https://www.data.gouv.fr/fr/datasets/donnees-climatologiques-de-base-quotidiennes/" target="_blank" rel="noopener">données climatologiques de base quotidiennes</a> (data.gouv.fr).
+    Pluie relevée de 6 h à 6 h le lendemain, rattachée au premier jour. L'ancienne station CHATEAULIN (29026001) ne publie plus depuis 1966.
+    <span id="src"></span>
+  </footer>
+</main>
+
+<script>
+const fmtDay   = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric' });
+const fmtLong  = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+const fmtShort = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
+const fmtYear  = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+const mm = v => v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const mm0 = v => Math.round(v).toLocaleString('fr-FR');   // écarts en mm : sans décimale
+const toDate = s => new Date(s + 'T12:00:00');
+const minusYear = s => (+s.slice(0, 4) - 1) + s.slice(4);
+// Somme en dixièmes de mm entiers : les sous-totaux (semaines, trimestres) retombent exactement sur les totaux
+const sum = a => a.reduce((t, d) => t + Math.round(d.rain * 10), 0) / 10;
+
+// Station Météo-France ST-SEGAL S A (29263002), 89 m, à ~3 km au nord du centre de Châteaulin.
+// L'ancienne station CHATEAULIN (29026001) n'a plus de relevés depuis 1966.
+const STATION = { id: '29263002', nom: 'ST-SEGAL S A', alt: 89 };
+const MF_URL = 'https://meteofrance.s3.sbg.io.cloud.ovh.net/data/synchro_ftp/BASE/QUOT/Q_29_latest-2025-2026_RR-T-Vent.csv.gz';
+// Relevés quotidiens RR (mm, 6 h → 6 h) embarqués du 1er janv. 2024 au 20 oct. 2026 : servent de base
+// et de secours si le fichier en ligne ne peut pas être lu.
+const SNAP_START = '2024-01-01';
+const SNAP = '47.8,12.8,4.2,7.8,3.8,5.2,0,0,0,0,0,0.2,0.6,6.6,0,18.4,36.8,0,0.2,7.6,7,0.2,1,1.8,6.4,0,0,0,0.2,0.4,0,0.4,0.2,0.4,0.2,0.8,8.8,15.2,21.8,3.8,6,1.4,0,2.2,12,0.2,0,7.6,2,0.4,1.4,35,8,4.6,4.8,21.3,1.2,1,2,26.8,8.2,1.6,0,13.2,2.2,0.4,0,0.2,6.4,6.8,0.2,1.4,0,5.4,1.2,0.2,0.6,0,0,0,0,0.6,2.8,0,5.4,10,25,25.2,2,0.8,7.4,7.6,20,17.2,5.2,1.4,0,0,5.8,1.4,2.8,0,0.2,0,0.4,0.2,0.6,0.8,0.2,0.2,0,0,0.4,0.2,0.2,2.6,1.4,0.2,0.4,1.4,21.8,0,0.2,1,1,3.4,0,0.2,0,0.2,0,0,0.4,24.8,6.2,1.6,14.9,8.9,22.5,8,0.2,0.2,0.6,0.2,0,3.8,2.6,9.6,12.2,2.8,0.2,0.2,0.2,0,0,1,0.2,0,0.2,0.2,0,0.4,0.2,0,6,5.2,1.8,0,3.8,0.2,0,0.2,6.8,0.2,0.8,0,0,0.2,0,0,0,0.2,0.4,0.2,1,0,3.2,0.2,3.6,13.6,1.6,0.2,3,2.4,0,4,13.2,0,0,0.2,0,14.8,0.8,2.6,0,0,2.5,0,0,0,0,0,0,0,0,5,0,4.6,0.8,0,1.4,0.4,0,0,0.2,0.6,0,4,4.2,0,0,9.2,0.2,0,3.6,12.8,7.8,0,0.2,0,0.2,0.2,1.8,4.8,4.4,1.6,1.6,1.4,0.2,4.6,4.2,11.2,0,1.4,0.2,0.4,0,0,0,0.2,0.2,0,0.4,0,6.8,0.4,2.6,4.4,6.2,8,5.2,0,4.2,0.8,0.2,0.2,0.2,0.2,12.8,4.4,5.2,3.4,2.8,7.1,3.6,1.8,0,0,0.6,10.8,0.2,2.6,1.2,15.2,11.4,0,0,3.4,0,0.4,0.4,0,2,0.4,0,0.2,0,0,0,0.2,0,0,0.2,0,0.4,0.2,0.2,0,0.4,0,0.6,1.6,4.6,10,12,11,2,1.8,24.4,7.4,13.8,0.4,0.2,0,10,2.2,0.2,0,8.4,4.2,4.6,3,5.6,0.4,0,0,0,0.6,0,0.6,0.2,3.4,5,1.2,5.8,4.4,2.6,3,0.8,0.6,0,0,0.2,0,0,0.2,18.2,1.2,0,27.2,3.4,2,7.2,30.8,20.6,0.2,0,0,0,0.2,0.4,0.2,0,0.2,1.4,0.4,1.2,1.2,9.6,10.6,0,29.4,9.8,2.4,15.4,0,0.2,0.2,0.2,0,1.6,0.2,0,0.8,0.4,0,0.2,0.2,0.2,9.2,0.2,0,0.6,0.4,0.6,5,3.8,12,0.2,12.6,9.6,1.6,7.4,0.2,0.2,0.2,0.2,0.2,0,0,0,1.2,0.2,6.8,5.4,0.2,0.6,0.4,0.8,0,0.2,0,0.2,0,1.8,3.2,0.6,0.6,0,0,0.2,0,2.2,1,0.2,0,0,0,5.8,0,0,0.2,0,0,0.2,0.2,0,0,1,5.8,6,6,5.2,20.6,0.2,0,0.8,7.2,0.4,0.2,10.8,0.4,0.2,0,0.2,0,0.2,1,0,0.2,0.8,0,0,0.2,4,7.4,2.4,10.6,4.8,1.2,0,0.2,0.2,0,0.2,0.2,1.2,0.4,0,7.6,0.8,1.4,2,0.8,0,0.2,0.2,2,0.4,8.6,5.2,8.6,11.4,2.6,0.2,0,0.2,2.4,17.3,0,1.6,0,0,0.4,0,0.2,0.4,0.2,0,1.2,0,0.6,5.4,1.6,0,0.2,0,0.2,0.2,0.2,0.2,6.2,1.4,0.2,0,0.2,0,0,0,0.4,1,0,0.2,0.2,0.4,26.2,16.2,0.4,0.2,4.8,0.2,0.2,0.4,0.2,0,0.8,0.2,0.6,0.2,0,0.2,0.8,0.2,0.2,1,0,0.2,0.2,0,0,0.2,0.2,0,0,0,0,9.8,0,0.2,0,0.2,0,0.6,0,4.2,10.8,7,8.4,1.2,22.2,3.6,7.9,5.8,0,0,3,0.2,5.6,3.2,5.2,9,1.8,2.4,2.6,0,1,0.2,0,6.2,36.8,0.2,0,0,0,0,0,0,0.4,0.2,0.4,1.4,16.2,2.6,0,0.2,0.2,0.2,0,0,0.2,0.4,0.2,0,0,0.4,0,1.4,19.6,11.8,1.4,25.5,4.8,4.4,0,1.2,2.4,4,7.2,2.2,16.8,5.2,0.4,1.2,2.4,1,0.8,9.4,0.4,17.8,2.8,4.2,0.2,0,7.4,1.8,0,0,5.4,4.6,3.4,0,16.2,12,6.2,0.4,0.6,12.2,0.8,4,2.2,11,5.2,13.8,1.2,14,18.8,10.8,9.8,2.6,0,1.2,0,0,0.4,7.6,0,14,25.8,0.1,8.8,1.6,1.2,0,0.8,0.2,0,0,0,0,0,0,0.4,0.8,0,0.4,8,3,8,7.8,2.4,0.4,5,9.2,4.6,19.1,28.1,1.8,0,0.4,0,42.7,10.2,18.5,29.8,13.8,0.8,19.4,5.4,1.2,10.2,17,6.4,0,2.8,2,9.2,8.4,18.6,3,1.6,25.2,17.6,19.2,4.8,3.6,15.2,6.2,2.2,20,31.2,7.2,1.2,3.2,7.6,0,0,0,10.2,3,5.4,1.8,0,0,0,0.4,0,0.8,6.9,0,5.8,0,5,4.8,3.2,1.8,0,0,0,0.2,0,0,0,0,0.6,2.2,0,1.2,0,0.4,0.6,0,0.6,1.4,2,0.2,0,0,0,0.2,0,1.8,1.2,3.6,0.2,2.6,3,0.6,0.2,0.2,0,0,0,0,0,0,0.2,0,0,0.8,1.6,0,0.2,18.1,5.4,0.8,9.4,1.8,0,4.6,0,0.2,0.2,0,2.8,7,0,0.8,0,11.8,1.4,0,0,0.2,0,0.2,0,0.2,0,0,0,0,0.4,14,2.2,10.6,1.4,5.2,0,0,13.2,0.6,1.2,0.4,0.2,0.2,0.2,0.2,0,0,0,0,0.4,0,0.2,0,0,0.4,0.2,0.2,1.2,0,0,0,0,0,0,0,0,0,0,0,0,0,2.2,3.4,0,21.4,1.6,0,0.2,0,0.2,0,0,0,0.2,0.4,1,0.2,0,0,1.2,0.2,0.2,0,0,0.2,0,0.2,0,0,0.2,0,0,0,0,0,0.2,0.2,1.2,4.4,6.2,0.2,0.2,0.2,0.4,0.4,0.2,6.5,0.2,4.8,2.4,2,0,0.2,0.4,0,0.2,0,0.4,1.2,7.2,0.2,2,0.2,0.2,0.2,0.4,1.2,0.8,2.6,0.2,0.2,0,0.2,0.2,0.2,0.2,0.4,0,3,0,9.8,5.8,0.2,0,0.2,0.4,0,24.1,1.6,0.6,2.6,0,13.2,1.2,2.4,0,1.2,0.6,0,1.2,0.2,10,9,20.2,1.2';
+
+function addDays(s, n) {
+  const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+async function fetchLatest() {
+  const r = await fetch(MF_URL);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const txt = await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).text();
+  const lines = txt.split('\n');
+  const head = lines[0].split(';').map(s => s.trim());
+  const iD = head.indexOf('AAAAMMJJ'), iR = head.indexOf('RR');
+  const out = new Map();
+  for (const l of lines) {
+    if (!l.startsWith(STATION.id + ';')) continue;
+    const c = l.split(';'), d = c[iD];
+    if (c[iR] !== '' && c[iR] != null) out.set(`${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`, +c[iR]);
+  }
+  return out;
+}
+
+async function load() {
+  const series = new Map();
+  SNAP.split(',').forEach((v, i) => { if (v !== '') series.set(addDays(SNAP_START, i), +v); });
+  let live = false;
+  try { (await fetchLatest()).forEach((v, k) => series.set(k, v)); live = true; } catch (e) { /* on garde l'instantané */ }
+
+  const last = [...series.keys()].sort().at(-1);
+  const range = (start, end) => {
+    const out = []; let missing = 0;
+    for (let d = start; d <= end; d = addDays(d, 1)) {
+      const v = series.get(d);
+      if (v == null) missing++;
+      out.push({ date: d, rain: v ?? 0 });
+    }
+    return { out, missing };
+  };
+  const days = range(addDays(last, -29), last).out;                       // 30 derniers jours relevés
+  const prevDays = range(minusYear(days[0].date), minusYear(last)).out;
+  const yStart = addDays(minusYear(last), 1);
+  const y = range(yStart, last), yp = range(minusYear(yStart), minusYear(last));
+  return { days, prevDays, yearDays: y.out, yearPrev: yp.out, missing: y.missing + yp.missing, live, last };
+}
+
+// Tous les blocs : % + écart en mm entier ; au-delà de ±500 % (ou N-1 quasi nul), seul l'écart en mm est affiché
+function weekDelta(n, p) {
+  const d = Math.round(n) - Math.round(p);       // écart calculé sur les valeurs affichées (entières)
+  if (d === 0) return `<span class="delta eq">= N-1</span>`;
+  const cls = d > 0 ? 'up' : 'down', arrow = d > 0 ? '▲' : '▼';
+  const dmm = `${d > 0 ? '+' : '−'}${mm0(Math.abs(d))} mm`;
+  const pct = p >= 0.5 ? (n - p) / p * 100 : Infinity;
+  if (Math.abs(pct) > 500) return `<span class="delta ${cls}">${arrow} ${dmm}</span>`;
+  return `<span class="delta ${cls}">${arrow} ${pct > 0 ? '+' : ''}${Math.round(pct).toLocaleString('fr-FR')} %</span><span class="dmm ${cls}">${dmm}</span>`;
+}
+
+function deltaHTML(n, p) {
+  const d = n - p;
+  if (Math.abs(d) < 0.05) return `<span class="delta eq">= N-1</span>`;
+  const cls = d > 0 ? 'up' : 'down', sign = d > 0 ? '▲ +' : '▼ ';
+  const pct = p >= 0.5 ? `${sign}${Math.round(d / p * 100).toLocaleString('fr-FR')} %` : `${sign}${mm0(d)} mm`;
+  return `<span class="delta ${cls}">${pct}</span>`;
+}
+
+// Découpe l'année glissante en 4 trimestres glissants (91/91/91/92 jours, le plus récent en dernier)
+function quarters(cur, prev) {
+  const prevMap = new Map(prev.map(d => [d.date, d.rain]));
+  const sizes = [91, 91, 91, cur.length - 273];
+  let i = 0;
+  return sizes.map(n => {
+    const q = cur.slice(i, i += n);
+    const ps = minusYear(q[0].date), pe = minusYear(q.at(-1).date);
+    const p = prev.filter(d => d.date >= ps && d.date <= pe);
+    return { start: q[0].date, end: q.at(-1).date, ps, pe, n: sum(q), p: sum(p) };
+  });
+}
+
+const fmtMonth = new Intl.DateTimeFormat('fr-FR', { month: 'short' });
+const fmtDM = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function pctText(n, p) {
+  const d = n - p;
+  if (Math.abs(d) < 0.05) return { t: '=', c: 'var(--muted)' };
+  const t = p >= 0.5 ? `${d > 0 ? '+' : '−'}${Math.abs(Math.round(d / p * 100))} %` : `${d > 0 ? '+' : '−'}${mm0(Math.abs(d))} mm`;
+  return { t, c: d > 0 ? 'var(--up)' : 'var(--down)' };
+}
+
+// Trimestres calendaires de l'année en cours ; le dernier s'arrête à la dernière date disponible
+function calQuarters(cur, prev) {
+  const last = cur.at(-1).date, Y = last.slice(0, 4);
+  const bounds = [['01-01', '03-31'], ['04-01', '06-30'], ['07-01', '09-30'], ['10-01', '12-31']];
+  return bounds.map(([a, b], k) => ({ k, start: `${Y}-${a}`, endFull: `${Y}-${b}` }))
+    .filter(q => q.start <= last)
+    .map(q => {
+      const end = q.endFull < last ? q.endFull : last;
+      const ps = minusYear(q.start), pe = minusYear(end);
+      return {
+        start: q.start, end, ps, pe, partial: end < q.endFull,
+        label: `T${q.k + 1}${end < q.endFull ? ' en cours' : ''}`,
+        n: sum(cur.filter(d => d.date >= q.start && d.date <= end)),
+        p: sum(prev.filter(d => d.date >= ps && d.date <= pe))
+      };
+    });
+}
+
+function miniQuarters(qs, title = 'Par trimestre glissant') {
+  const W = 340, H = 150, m = { t: 22, b: 30, l: 4, r: 4 };
+  const ih = H - m.t - m.b, slot = (W - m.l - m.r) / Math.max(qs.length, 4), bw = Math.min(22, slot / 3);
+  const max = Math.max(...qs.flatMap(q => [q.n, q.p]), 1);
+  const y = v => m.t + ih - v / max * ih, base = m.t + ih;
+  const bar = (x, v, fill, label) => {
+    const h = base - y(v), r = Math.min(3, h, bw / 2);
+    const d = h > 0 ? `M${x},${base} V${base - h + r} Q${x},${base - h} ${x + r},${base - h} H${x + bw - r} Q${x + bw},${base - h} ${x + bw},${base - h + r} V${base} Z` : '';
+    return d ? `<path d="${d}" fill="${fill}"><title>${label}</title></path>` : '';
+  };
+  let s = `<svg class="mini" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumul par trimestre glissant, comparé à l'an dernier">`;
+  s += `<line x1="${m.l}" x2="${W - m.r}" y1="${base}" y2="${base}" stroke="var(--grid)"/>`;
+  qs.forEach((q, i) => {
+    const cx = m.l + slot * i + slot / 2, x1 = cx - bw - 1, x2 = cx + 1;
+    const range = `${fmtDM.format(toDate(q.start))} → ${fmtDM.format(toDate(q.end))}`;
+    s += bar(x2, q.n, 'var(--cur)', `${range} : ${mm0(q.n)} mm`);
+    s += bar(x1, q.p, 'var(--prev)', `${fmtDM.format(toDate(q.ps))} → ${fmtDM.format(toDate(q.pe))} : ${mm0(q.p)} mm`);
+    const v = pctText(q.n, q.p);
+    s += `<text x="${cx}" y="${y(Math.max(q.n, q.p)) - 6}" text-anchor="middle" style="fill:${v.c};font-weight:500">${v.t}</text>`;
+    s += `<text x="${cx}" y="${base + 13}" text-anchor="middle" style="fill:var(--fg)">${mm0(q.n)}</text>`;
+    const lab = q.label ?? `${fmtMonth.format(toDate(q.start)).replace('.', '')}–${fmtMonth.format(toDate(q.end)).replace('.', '')}`;
+    s += `<text x="${cx}" y="${base + 26}" text-anchor="middle" style="font-size:10px${q.partial ? ';font-style:italic' : ''}">${lab}</text>`;
+  });
+  s += `</svg>`;
+  const part = qs.find(q => q.partial);
+  const foot = part ? `<p class="qnote">${part.label.replace(' en cours', '')} en cours : du ${fmtShort.format(toDate(part.start))} au ${fmtShort.format(toDate(part.end))}, comparé aux mêmes dates en ${part.ps.slice(0, 4)}.</p>` : '';
+  return `<div class="quarters">
+    <div class="qhead">${title} <span><i style="background:var(--prev)"></i>N-1 <i style="background:var(--cur)"></i>N</span></div>
+    ${s}${foot}
+  </div>`;
+}
+
+function diffText(d, ref) {
+  if (Math.abs(d) < 0.05) return `Identique ${ref.startsWith('aux') ? '' : 'à ce qui est tombé '}${ref}`;
+  const que = /^[aeiouy]/.test(ref) ? "qu'" : 'que ';
+  return `${mm0(Math.abs(d))} mm de ${d > 0 ? 'plus' : 'moins'} ${que}${ref}`;
+}
+
+function block(title, cls, cur, prev, note = '', extra = '') {
+  const n = sum(cur), p = sum(prev), max = Math.max(n, p, 0.1), d = Math.round(n) - Math.round(p);
+  const long = cur.length > 60, f = long ? fmtYear : fmtShort;
+  const range = (a) => `${f.format(toDate(a[0].date))} → ${f.format(toDate(a.at(-1).date))}`;
+  const yr = a => a[0].date.slice(0, 4) === a.at(-1).date.slice(0, 4)
+    ? a[0].date.slice(0, 4) : `${a[0].date.slice(0, 4)}-${a.at(-1).date.slice(2, 4)}`;
+  return `<article class="block ${cls}">
+    <h2>${title}</h2>
+    <div class="dates">${range(cur)}${long ? '' : ' ' + cur[0].date.slice(0, 4)}</div>
+    <div class="big"><span class="val">${mm0(n)}</span><span class="unit">mm</span><span class="sw-d">${weekDelta(n, p)}</span></div>
+    <div class="bars">
+      <div class="row"><span>${yr(cur)}</span><span class="track"><span class="fill" style="display:block;width:${n / max * 100}%;background:var(--cur)"></span></span><span class="num">${mm0(n)} mm</span></div>
+      <div class="row"><span>${yr(prev)}</span><span class="track"><span class="fill" style="display:block;width:${p / max * 100}%;background:var(--prev)"></span></span><span class="num">${mm0(p)} mm</span></div>
+    </div>
+    <p class="diff">${diffText(d, long ? 'sur la même période un an plus tôt' : `aux mêmes dates en ${prev[0].date.slice(0, 4)}`)} (${range(prev)}).${note ? ' ' + note : ''}</p>${extra}
+  </article>`;
+}
+
+function renderBlocks({ days, prevDays, yearDays, yearPrev, missing }) {
+  const S = days.slice(-7), S1 = days.slice(-14, -7);
+  const pS = prevDays.slice(-7), pS1 = prevDays.slice(-14, -7);
+  document.getElementById('period').textContent =
+    `Dernière mesure au ${new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(toDate(days.at(-1).date))}`;
+  const earlier = [['S-3', -28, -21], ['S-2', -21, -14], ['S-1', -14, -7], ['S', -7, undefined]].map(([lbl, a, b]) => {
+    const c = days.slice(a, b), p = prevDays.slice(a, b), n = sum(c), pv = sum(p);
+    return `<div class="sw">
+      <div class="sw-h"><strong>${lbl}</strong><span>${fmtShort.format(toDate(c[0].date))} → ${fmtShort.format(toDate(c.at(-1).date))}</span></div>
+      <div class="sw-v"><span class="sw-n">${mm0(n)}<small> mm</small></span>
+        <span class="sw-d">${weekDelta(n, pv)}</span></div>
+      <div class="sw-p">${p[0].date.slice(0, 4)} : ${mm0(pv)} mm</div>
+    </div>`;
+  }).join('');
+  document.getElementById('cmp').innerHTML =
+    `<article class="block small"><h2>Semaines glissantes · comparées aux mêmes dates en ${prevDays[0].date.slice(0, 4)}</h2>${earlier}</article>` +
+    block('28 jours glissants', 'month', days.slice(-28), prevDays.slice(-28)) +
+    '<div class="years">' +
+    block('Année glissante', 'year', yearDays, yearPrev,
+      missing ? `${missing} jour${missing > 1 ? 's' : ''} sans donnée compté${missing > 1 ? 's' : ''} à 0 mm.` : '',
+      miniQuarters(quarters(yearDays, yearPrev))) +
+    calendarBlock(yearDays, yearPrev) + '</div>';
+}
+
+function calendarBlock(yearDays, yearPrev) {
+  const Y = yearDays.at(-1).date.slice(0, 4);
+  const cur = yearDays.filter(d => d.date >= `${Y}-01-01`);
+  const pe = minusYear(cur.at(-1).date);
+  const prev = yearPrev.filter(d => d.date >= `${+Y - 1}-01-01` && d.date <= pe);
+  return block('Depuis le 1er janvier', 'year', cur, prev, '',
+    miniQuarters(calQuarters(cur, prev), 'Par trimestre calendaire'));
+}
+
+function niceMax(v) {
+  if (v <= 5) return 5;
+  const step = v <= 20 ? 5 : v <= 50 ? 10 : 20;
+  return Math.ceil(v / step) * step;
+}
+
+function renderChart(all, allPrev) {
+  const days = all.slice(-28), prev = allPrev.slice(-28);
+  const W = 900, H = 244, m = { t: 48, r: 8, b: 40, l: 36 };   // ordonnée compressée : hauteur fixe
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const ymax = niceMax(Math.max(...days.map(d => d.rain), ...prev.map(d => d.rain)));
+  const gap = 14, slot = (iw - 3 * gap) / 28;
+  const bw = Math.max(3, (slot - 4) / 2);                             // deux barres par jour : N-1 puis N
+  const sx = i => m.l + i * slot + Math.floor(i / 7) * gap;           // début de la case du jour i
+  const cx = i => sx(i) + slot / 2;
+  const y = v => m.t + ih - (v / ymax) * ih, base = m.t + ih;
+  const names = ['S-3', 'S-2', 'S-1', 'S'];
+  const yN = days[0].date.slice(0, 4), yP = prev[0].date.slice(0, 4);
+  const bar = (x0, v, fill, i) => {
+    const h = Math.max(0, base - y(v)), r = Math.min(2, bw / 2, h);
+    return h > 0 ? `<path class="bar" data-b="${i}" fill="${fill}" d="M${x0},${base} V${base - h + r} Q${x0},${base - h} ${x0 + r},${base - h} H${x0 + bw - r} Q${x0 + bw},${base - h} ${x0 + bw},${base - h + r} V${base} Z"/>` : '';
+  };
+
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Pluie journalière dans le secteur de Châteaulin sur 28 jours, comparée aux mêmes dates en ${yP}">`;
+  for (let k = 0; k <= 2; k++) {
+    const v = ymax * k / 2, yy = y(v);
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${yy}" y2="${yy}" stroke="var(--grid)"/>`;
+    s += `<text x="${m.l - 6}" y="${yy + 4}" text-anchor="end">${v.toLocaleString('fr-FR')}</text>`;
+  }
+  for (let w = 0; w < 4; w++) {
+    const a = sx(w * 7), b = sx(w * 7 + 6) + slot;
+    const wk = days.slice(w * 7, w * 7 + 7), wp = prev.slice(w * 7, w * 7 + 7);
+    if (w) s += `<line x1="${a - gap / 2}" x2="${a - gap / 2}" y1="${m.t - 42}" y2="${base}" stroke="var(--grid)" stroke-dasharray="3 4"/>`;
+    const d0 = toDate(wk[0].date), d1 = toDate(wk.at(-1).date);
+    const per = d0.getMonth() === d1.getMonth()
+      ? `${d0.getDate()}–${fmtShort.format(d1)}`
+      : `${fmtShort.format(d0)} – ${fmtShort.format(d1)}`;
+    s += `<text x="${(a + b) / 2}" y="${m.t - 30}" text-anchor="middle"><tspan style="fill:var(--fg);font-weight:500">${names[w]}</tspan> · ${per}</text>`;
+    // variation N vs N-1 : écart en mm (sur valeurs arrondies) et %, % masqué au-delà de ±500 % ou si N-1 ≈ 0
+    const n = sum(wk), p = sum(wp), dv = Math.round(n) - Math.round(p);
+    const pc = p >= 0.5 ? (n - p) / p * 100 : Infinity;
+    const col = dv > 0 ? 'var(--up)' : dv < 0 ? 'var(--down)' : 'var(--muted)';
+    const vtxt = dv === 0 ? '= N-1'
+      : `${dv > 0 ? '+' : '−'}${mm0(Math.abs(dv))} mm` + (Math.abs(pc) > 500 ? '' : ` (${pc > 0 ? '+' : '−'}${Math.abs(Math.round(pc)).toLocaleString('fr-FR')} %)`);
+    s += `<text x="${(a + b) / 2}" y="${m.t - 15}" text-anchor="middle">${mm0(p)} → ${mm0(n)} mm · <tspan style="fill:${col};font-weight:500">${vtxt}</tspan></text>`;
+  }
+  days.forEach((d, i) => {
+    const p = prev[i], c = cx(i);
+    s += bar(c - bw - 1, p.rain, 'var(--prev)', i);
+    s += bar(c + 1, d.rain, 'var(--cur)', i);
+    if (d.rain >= ymax * 0.25) s += `<text x="${c + 1 + bw / 2}" y="${y(d.rain) - 5}" text-anchor="middle" style="fill:var(--fg);font-size:10px">${mm0(d.rain)}</text>`;
+    const [wd, dn] = fmtDay.format(toDate(d.date)).replace('.', '').split(' ');
+    s += `<text x="${c}" y="${H - m.b + 17}" text-anchor="middle" style="font-size:10px">${wd}</text>`;
+    s += `<text x="${c}" y="${H - m.b + 31}" text-anchor="middle" style="fill:var(--fg);font-size:10px">${dn}</text>`;
+    s += `<rect class="hit" data-i="${i}" x="${sx(i)}" y="${m.t}" width="${slot}" height="${ih}"/>`;
+  });
+  s += `</svg>`;
+  const host = document.getElementById('chart');
+  host.innerHTML = `<div class="legend"><span><i style="background:var(--prev)"></i>${yP} (N-1)</span><span><i style="background:var(--cur)"></i>${yN} (N)</span></div>` + s;
+
+  const tip = document.getElementById('tip'), card = host.closest('.chart-card'), svg = host.querySelector('svg');
+  host.querySelectorAll('.hit').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      const i = +el.dataset.i, d = days[i], p = prev[i];
+      host.querySelectorAll(`[data-b="${i}"]`).forEach(b => b.classList.add('on'));
+      tip.innerHTML = `<strong>${fmtLong.format(toDate(d.date))}</strong><br>${yP} : ${mm(p.rain)} mm<br>${yN} : ${mm(d.rain)} mm`;
+      const sr = svg.getBoundingClientRect(), cr = card.getBoundingClientRect(), k = sr.width / W;
+      tip.style.left = Math.min(Math.max(sr.left - cr.left + cx(i) * k, 90), cr.width - 90) + 'px';
+      tip.style.top = (sr.top - cr.top + y(Math.max(d.rain, p.rain)) * k) + 'px';
+      tip.hidden = false;
+    });
+    el.addEventListener('mouseleave', () => {
+      host.querySelectorAll(`[data-b="${el.dataset.i}"]`).forEach(b => b.classList.remove('on'));
+      tip.hidden = true;
+    });
+  });
+}
+
+load().then(data => {
+  renderBlocks(data);
+  renderChart(data.days, data.prevDays);
+  document.getElementById('src').textContent = data.live
+    ? `Fichier Météo-France lu à l'ouverture ; dernier relevé publié : ${fmtYear.format(toDate(data.last))}.`
+    : `Fichier en ligne indisponible : affichage des relevés enregistrés jusqu'au ${fmtYear.format(toDate(data.last))}.`;
+}).catch(e => {
+  document.getElementById('cmp').innerHTML =
+    `<p class="status err">Impossible de récupérer les relevés (${e.message}). Vérifiez la connexion internet puis rechargez la page.</p>`;
+});
+</script>
+
+
+<!-- ===== Intégration dans l'application HYDRAULNE ===== -->
+<style>
+  /* affiché dans un cadre de l'application : marges réduites, toujours en thème clair comme le reste de l'appli */
+  body { padding: 14px 12px 16px !important; }
+  h1 { font-size: 22px !important; }
+</style>
+<script>
+  // Signale la hauteur du contenu à l'application pour que le cadre s'ajuste (pas de barre de défilement)
+  (function () {
+    if (window.parent === window) return;
+    var last = 0;
+    function envoyer() {
+      var h = Math.ceil(document.body.getBoundingClientRect().height);
+      if (h && h !== last) { last = h; window.parent.postMessage({ hydraulneHauteur: h }, "*"); }
+    }
+    if (window.ResizeObserver) new ResizeObserver(envoyer).observe(document.body);
+    window.addEventListener("load", envoyer);
+    setTimeout(envoyer, 500); setTimeout(envoyer, 2000);
+  })();
+</script>
+</body></html>
