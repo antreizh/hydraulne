@@ -318,11 +318,12 @@
       { id: "mwv-lanveoc", nom: "Lanvéoc",     station: "29120001", lat: 48.2792, lon: -4.4392 },  // station Météo-France LANVEOC
       { id: "mwv-segal",   nom: "Saint-Ségal", station: "29263002", lat: 48.2256, lon: -4.0897 }   // station Météo-France ST-SEGAL S A
     ],
-    // Option « mesures des stations » : clé API du portail https://portail-api.meteofrance.fr
-    // (API « Données d'observation », valeurs toutes les 6 minutes). Laisser vide = modèle AROME.
-    // Si l'appel échoue (clé, réseau, navigateur), le widget repasse automatiquement sur le modèle.
-    cleApiMeteoFrance: "",
-    urlObsMeteoFrance: "https://public-api.meteofrance.fr/public/DPObs/v1/station/infrahoraire-6m",
+    // Mesures des stations : clé API du portail https://portail-api.meteofrance.fr
+    // (API « Paquet Observations » v2, valeurs toutes les 6 minutes ; clé valable jusqu'en octobre 2027).
+    // Si l'appel échoue (clé expirée, réseau), la ligne repasse sur le modèle AROME, marquée « estim. ».
+    cleApiMeteoFrance: "eyJ4NXQiOiJZV0kxTTJZNE1qWTNOemsyTkRZeU5XTTRPV014TXpjek1UVmhNbU14T1RSa09ETXlOVEE0Tnc9PSIsImtpZCI6ImdhdGV3YXlfY2VydGlmaWNhdGVfYWxpYXMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhbnRyZWl6aEBjYXJib24uc3VwZXIiLCJhcHBsaWNhdGlvbiI6eyJvd25lciI6ImFudHJlaXpoIiwidGllclF1b3RhVHlwZSI6bnVsbCwidGllciI6IlVubGltaXRlZCIsIm5hbWUiOiJEZWZhdWx0QXBwbGljYXRpb24iLCJpZCI6NTExMTQsInV1aWQiOiI2M2EwYjc3ZS0zYTJmLTRmMjgtOGJkMS02MzEyOTcyYTEwNmMifSwiaXNzIjoiaHR0cHM6XC9cL3BvcnRhaWwtYXBpLm1ldGVvZnJhbmNlLmZyOjQ0M1wvb2F1dGgyXC90b2tlbiIsInRpZXJJbmZvIjp7IjEwMFJlcVBlck1pbiI6eyJ0aWVyUXVvdGFUeXBlIjoicmVxdWVzdENvdW50IiwiZ3JhcGhRTE1heENvbXBsZXhpdHkiOjAsImdyYXBoUUxNYXhEZXB0aCI6MCwic3RvcE9uUXVvdGFSZWFjaCI6dHJ1ZSwic3Bpa2VBcnJlc3RMaW1pdCI6MCwic3Bpa2VBcnJlc3RVbml0Ijoic2VjIn19LCJrZXl0eXBlIjoiUFJPRFVDVElPTiIsInN1YnNjcmliZWRBUElzIjpbeyJzdWJzY3JpYmVyVGVuYW50RG9tYWluIjoiY2FyYm9uLnN1cGVyIiwibmFtZSI6IkRvbm5lZXNQdWJsaXF1ZXNQYXF1ZXRPYnNlcnZhdGlvbiIsImNvbnRleHQiOiJcL3B1YmxpY1wvRFBQYXF1ZXRPYnNcL3YyIiwicHVibGlzaGVyIjoiYmFzdGllbmciLCJ2ZXJzaW9uIjoidjIiLCJzdWJzY3JpcHRpb25UaWVyIjoiMTAwUmVxUGVyTWluIn1dLCJleHAiOjE4MjQzOTQ3NjEsInRva2VuX3R5cGUiOiJhcGlLZXkiLCJpYXQiOjE3OTI4NTg3NjEsImp0aSI6IjZiMzJiY2UzLTYyYTUtNGZhNy05MjMyLTA1M2VkMGU0NGIyZCJ9.m4G3jgL3LOmI4ci45zND4OYAyrj9U0-YcWiSFfSdwNv4vx3AGH-SaklMVr_tFyjFPJPchmawjGIhIl1DdWrDZlPl5Uy-Ox7zdDVBxwewU_ek8XKpshvf7H5tdGI90n7fdDSjRn1G5Z6E-32fjtoP2_wvQCCUoo9QPtygRqJY882jxk3QyWzzX4V_pHRk6KW-G4mokch4B1YljKyv0l5TmGY5xOWa6N67AQAIL9i6EVsuIUdq2O9MR0rx_aOLf7Y4Pq31R3RylH7EBTn81kVVW5fSO8sK_5Hbbccs_IyfcQPnbWjDVyr94wVdTFUsapYXdVlsEOtHuXS2xcFUGYo4EA==",
+    urlObsMeteoFrance: "https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m",
+    ageMaxMinutes: 90,      // au-delà, la dernière mesure est jugée trop ancienne
     refreshMinutes: 5
   };
   /* ============================================================== */
@@ -361,7 +362,15 @@
       c[0].innerHTML = ""; c[2].innerHTML = '<span class="mwv-na">indisponible</span>'; c[3].textContent = ""; c[4].textContent = "";
       return;
     }
-    var r = rose(v.dd), f = force(v.raf);
+    var f = force(v.raf);
+    if (v.dd == null) {                     // vent calme : pas de provenance
+      c[0].innerHTML = ""; c[0].title = "Vent calme";
+      c[2].innerHTML = 'moyen <b>' + Math.round(v.moy) + '</b> · <span class="mwv-raf mwv-f' + f + '">rafales <b>' + Math.round(v.raf) + '</b></span> km/h';
+      c[3].textContent = "calme"; c[4].textContent = nd(v.moy) + " / " + nd(v.raf) + " nœuds";
+      c[1].innerHTML = site.nom + (v.estime && v.mixte ? ' <small class="mwv-est" title="Estimation du modèle AROME de Météo-France (pas de mesure)">estim.</small>' : "");
+      return;
+    }
+    var r = rose(v.dd);
     c[0].innerHTML = fleche(v.dd);
     c[0].title = "Vent de " + ROSE_LONG[r] + " (" + Math.round(v.dd) + "°)";
     c[2].innerHTML = 'moyen <b>' + Math.round(v.moy) + '</b> · <span class="mwv-raf mwv-f' + f + '">rafales <b>' + Math.round(v.raf) + '</b></span> km/h';
@@ -405,21 +414,30 @@
       .then(function (j) { var arr = Array.isArray(j) ? j : [j]; return CFG.sites.map(function (s, i) { return lireModele(arr[i]); }); });
   }
 
-  /* ---------- Option : mesures des stations Météo-France (toutes les 6 min), avec clé API ---------- */
+  /* ---------- Mesures des stations Météo-France (pas de 6 min, 24 dernières heures), avec clé API ---------- */
+  function num(x) { if (x == null) return null; x = String(x).trim().replace(",", "."); if (x === "") return null; var n = +x; return isFinite(n) ? n : null; }
+  function premier(p, noms) { for (var i = 0; i < noms.length; i++) { var n = num(p[noms[i]]); if (n != null) return n; } return null; }
   function chargerStation(site) {
-    return fetch(CFG.urlObsMeteoFrance + "?id_station=" + site.station + "&format=json", { headers: { apikey: CFG.cleApiMeteoFrance, accept: "application/json" } })
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function (j) {
-        var rows = (Array.isArray(j) ? j : (j.features || []).map(function (f) { return f.properties; }))
-          .filter(function (p) { return p && p.ff != null && p.dd != null; })
-          .map(function (p) { return { t: new Date(p.validity_time || p.reference_time), ff: +p.ff, fx: p.fxi10 != null ? +p.fxi10 : p.fxi != null ? +p.fxi : +p.ff, dd: +p.dd }; })
+    return fetch(CFG.urlObsMeteoFrance + "?id_station=" + site.station + "&format=csv", { headers: { apikey: CFG.cleApiMeteoFrance, accept: "*/*" } })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+      .then(function (txt) {
+        var lignes = txt.trim().split(/\r?\n/); if (lignes.length < 2) throw new Error("vide");
+        var tete = lignes[0].split(";").map(function (s) { return s.trim(); });
+        var rows = lignes.slice(1).map(function (l) {
+          var c = l.split(";"), p = {}; tete.forEach(function (h, k) { p[h] = c[k]; }); return p;
+        }).map(function (p) {
+          var dd = num(p.dd); if (!dd) dd = premier(p, ["ddraf10", "ddraf", "dxi10"]);   // dd = 0 : calme, pas le nord
+          return { t: new Date(String(p.validity_time || p.reference_time || "").trim()), ff: num(p.ff), fx: premier(p, ["raf10", "fxi10", "raf"]), dd: dd };
+        }).filter(function (p) { return !isNaN(p.t) && p.ff != null; })
           .sort(function (a, b) { return a.t - b.t; });
         if (!rows.length) throw new Error("vide");
-        var fin = rows[rows.length - 1].t, deb = fin.getTime() - 15 * 60000;
-        var w = rows.filter(function (p) { return p.t.getTime() > deb; });
+        var fin = rows[rows.length - 1].t;
+        if (Date.now() - fin.getTime() > CFG.ageMaxMinutes * 60000) throw new Error("mesure trop ancienne");
+        var w = rows.filter(function (p) { return p.t.getTime() > fin.getTime() - 15 * 60000; });
         var moy = w.reduce(function (s, p) { return s + p.ff; }, 0) / w.length;
-        var raf = Math.max.apply(null, w.map(function (p) { return p.fx; }));
-        return { moy: moy * 3.6, raf: raf * 3.6, dd: w[w.length - 1].dd, t: fin };    // m/s → km/h
+        var raf = Math.max.apply(null, w.map(function (p) { return p.fx != null ? p.fx : p.ff; }));
+        var dd = null; for (var k = w.length - 1; k >= 0; k--) if (w[k].dd != null) { dd = w[k].dd; break; }
+        return { moy: moy * 3.6, raf: Math.max(raf, moy) * 3.6, dd: dd, t: fin, mesure: true };    // m/s → km/h
       });
   }
 
