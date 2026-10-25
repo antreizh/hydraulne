@@ -366,7 +366,7 @@
     if (v.dd == null) {                     // vent calme : pas de provenance
       c[0].innerHTML = ""; c[0].title = "Vent calme";
       c[2].innerHTML = 'moyen <b>' + Math.round(v.moy) + '</b> · <span class="mwv-raf mwv-f' + f + '">rafales <b>' + Math.round(v.raf) + '</b></span> km/h';
-      c[3].textContent = "calme"; c[4].textContent = nd(v.moy) + " / " + nd(v.raf) + " nœuds";
+      c[3].textContent = "calme"; c[4].textContent = nd(v.moy) + " / " + nd(v.raf) + " nd";
       c[1].innerHTML = site.nom + (v.estime && v.mixte ? ' <small class="mwv-est" title="Estimation du modèle AROME de Météo-France (pas de mesure)">estim.</small>' : "");
       return;
     }
@@ -375,7 +375,7 @@
     c[0].title = "Vent de " + ROSE_LONG[r] + " (" + Math.round(v.dd) + "°)";
     c[2].innerHTML = 'moyen <b>' + Math.round(v.moy) + '</b> · <span class="mwv-raf mwv-f' + f + '">rafales <b>' + Math.round(v.raf) + '</b></span> km/h';
     c[3].innerHTML = 'de <span class="mwv-dir">' + ROSE[r] + "</span> · " + Math.round(v.dd) + "°";
-    c[4].textContent = nd(v.moy) + " / " + nd(v.raf) + " nœuds";
+    c[4].textContent = nd(v.moy) + " / " + nd(v.raf) + " nd";
     c[1].innerHTML = site.nom + (v.estime && v.mixte ? ' <small class="mwv-est" title="Estimation du modèle AROME de Météo-France (pas de mesure)">estim.</small>' : "");
   }
 
