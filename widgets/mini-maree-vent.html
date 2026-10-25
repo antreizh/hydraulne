@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Widget mini Marée Vent · antreizh.fr</title>
+<style>html,body{margin:0;background:transparent}body{padding:1px}</style>
+</head>
+<body>
+<!-- Widget servi depuis https://appli.antreizh.fr/widgets/ : toujours à jour sur le site -->
+<!-- =====================================================================
+     Widget mini Marée Vent — marée au Pont de Térénez, puis vent des 15 dernières minutes
+     à Lanvéoc et Saint-Ségal (moyen, rafales, direction).
+     À coller dans un bloc « Code HTML » de WebAcappella (≈ 340 × 260 px).
+     Indépendant des autres widgets : ils peuvent être sur la même page.
+     Sources : SHOM (Brest, port de référence) + corrections du port rattaché ;
+     vent : modèle AROME de Météo-France via Open-Meteo (ou mesures Météo-France avec une clé API)
+     ===================================================================== -->
+<div id="mwt-widget">
+  <div class="mwt-row">
+    <span class="mwt-ico" style="background:#e1effa">⚓</span>
+    <span class="mwt-l1">Marée</span>
+    <span class="mwt-r1" id="mwt-tide"><i class="mwt-wait"></i></span>
+    <span class="mwt-l2">Pont de Térénez <a class="mwt-zoom" href="https://www.antreizh.fr/mareeguilyglas.html" target="_blank" rel="noopener" title="Marée à Guily Glaz : courbe détaillée">zoom</a></span>
+    <span class="mwt-r2" id="mwt-next"></span>
+  </div>
+
+  <!-- ===== Vent ===== -->
+  <div id="mwv-widget">
+    <div class="mwv-head"><span class="mwv-t">Vent</span> <a class="mwv-zoom" href="https://www.antreizh.fr/livemareevent.html" target="_blank" rel="noopener" title="Marée et vent en direct">zoom</a><span class="mwv-per">15 dernières minutes</span></div>
+  <div class="mwv-row" id="mwv-lanveoc">
+    <span class="mwv-ico" aria-hidden="true"></span>
+    <span class="mwv-l1">Lanvéoc</span>
+    <span class="mwv-r1"><i class="mwv-wait"></i></span>
+    <span class="mwv-l2"></span>
+    <span class="mwv-r2"></span>
+  </div>
+  <div class="mwv-row" id="mwv-segal">
+    <span class="mwv-ico" aria-hidden="true"></span>
+    <span class="mwv-l1">Saint-Ségal</span>
+    <span class="mwv-r1"><i class="mwv-wait"></i></span>
+    <span class="mwv-l2"></span>
+    <span class="mwv-r2"></span>
+  </div>
+
+  </div>
+
+  <div class="mwt-foot" id="mwt-foot">
+    <span class="mwt-time" id="mwt-time"></span>
+    <span id="mwt-sources">Sources : <a href="https://maree.shom.fr/harbor/BREST" target="_blank" rel="noopener" title="Marées SHOM – Brest, port de référence du Pont de Térénez">SHOM</a> · <a id="mwv-src" href="https://open-meteo.com/en/docs/meteofrance-api" target="_blank" rel="noopener" title="Vent : modèle AROME de Météo-France, données Open-Meteo">Météo-France</a></span>
+    <span class="mwt-copy">© <a href="https://www.antreizh.fr" target="_blank" rel="noopener" title="www.antreizh.fr">antreizh.fr</a></span>
+  </div>
+  <div id="mwt-shom-host" class="mwt-shom-host"></div>
+</div>
+
+<style>
+/* Toutes les tailles sont multipliées par --k, calculé selon la largeur allouée au widget */
+#mwt-widget{
+  --mwt-navy:#0b3c5d; --mwt-muted:#5f7180; --mwt-line:#e8edf1;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:#1d2b36; background:#fff; border-radius:calc(18px*var(--k)); padding:calc(14px*var(--k)) calc(14px*var(--k)) calc(10px*var(--k));
+  box-shadow:0 2px calc(12px*var(--k)) rgba(11,60,93,.10); width:100%; --k:1;
+  border:1px solid #d5dde4;                                             /* cadre gris très fin */
+  box-sizing:border-box; line-height:1.3;
+}
+#mwt-widget *,#mwt-widget *::before,#mwt-widget *::after{box-sizing:border-box}
+#mwt-widget a{color:#1f7bb6}
+#mwt-widget .mwt-time{text-align:left;white-space:nowrap}
+/* Rangée marée sur 2 lignes : « Marée » et « Coef. … » sur la même ligne, puis le lieu et la prochaine marée */
+#mwt-widget .mwt-row{display:grid;grid-template-columns:auto auto 1fr;align-items:baseline;column-gap:calc(10px*var(--k));row-gap:calc(2px*var(--k));padding:0 0 calc(9px*var(--k))}
+#mwt-widget .mwt-ico{grid-row:1 / 3;align-self:center;width:calc(30px*var(--k));height:calc(30px*var(--k));border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:calc(15px*var(--k))}
+#mwt-widget .mwt-l1{font-size:calc(13.5px*var(--k));font-weight:600;white-space:nowrap}
+#mwt-widget .mwt-r1{font-size:calc(12px*var(--k));text-align:right;white-space:nowrap}
+#mwt-widget .mwt-l2,#mwt-widget .mwt-r2{font-size:calc(11.5px*var(--k));color:var(--mwt-muted);white-space:nowrap}
+#mwt-widget .mwt-r2{text-align:right}
+#mwt-widget .mwt-zoom{font-size:calc(10px*var(--k));margin-left:calc(4px*var(--k));color:#1f7bb6;text-decoration:underline;text-underline-offset:2px}
+#mwt-widget .mwt-coef{font-weight:800;color:var(--mwt-navy)}
+#mwt-widget .mwt-up{color:#1f7bb6;font-weight:700}
+#mwt-widget .mwt-down{color:#c56a1c;font-weight:700}
+#mwt-widget .mwt-na{color:var(--mwt-muted);font-size:calc(12px*var(--k))}
+#mwt-widget .mwt-foot{border-top:1px solid var(--mwt-line);padding-top:calc(3px*var(--k));font-size:calc(10.5px*var(--k));color:var(--mwt-muted)}
+#mwt-widget .mwt-foot a{color:var(--mwt-muted);text-decoration:underline;text-underline-offset:2px}
+#mwt-widget .mwt-foot a:hover{color:#1f7bb6}
+#mwt-widget .mwt-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:calc(2px*var(--k)) calc(8px*var(--k))}
+#mwt-widget #mwt-sources{text-align:center;white-space:nowrap}
+#mwt-widget .mwt-foot .mwt-copy{text-align:right;white-space:nowrap}
+#mwt-widget .mwt-wait{display:inline-block;width:calc(46px*var(--k));height:calc(10px*var(--k));border-radius:calc(6px*var(--k));background:linear-gradient(90deg,#eef2f5,#dde5ec,#eef2f5);background-size:200% 100%;animation:mwt-sh 1.2s linear infinite}
+#mwt-widget .mwt-shom-host iframe{position:absolute;left:-10000px;top:0;width:420px;height:700px;border:0;visibility:hidden}
+@keyframes mwt-sh{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){#mwt-widget *{animation:none!important}}
+
+/* ===== Vent ===== */
+/* Toutes les tailles sont multipliées par --k, calculé selon la largeur allouée au widget */
+#mwv-widget{
+  --mwv-navy:#0b3c5d; --mwv-muted:#5f7180; --mwv-line:#e8edf1;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:#1d2b36; background:#fff; border-radius:calc(18px*var(--k)); padding:calc(14px*var(--k)) calc(14px*var(--k)) calc(10px*var(--k));
+  box-shadow:0 2px calc(12px*var(--k)) rgba(11,60,93,.10); width:100%; --k:1;
+  border:1px solid #d5dde4;                                             /* cadre gris très fin */
+  box-sizing:border-box; line-height:1.3;
+}
+#mwv-widget *,#mwv-widget *::before,#mwv-widget *::after{box-sizing:border-box}
+#mwv-widget a{color:#1f7bb6}
+/* Une rangée par site, sur 2 lignes : lieu + vent moyen / rafales, puis direction + valeurs en nœuds */
+#mwv-widget .mwv-head{font-size:calc(11px*var(--k));font-weight:600;color:var(--mwv-muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 calc(8px*var(--k))}
+#mwv-widget .mwv-row{display:grid;grid-template-columns:auto auto 1fr;align-items:baseline;column-gap:calc(10px*var(--k));row-gap:calc(2px*var(--k));padding:0 0 calc(9px*var(--k))}
+#mwv-widget .mwv-row + .mwv-row{border-top:1px solid var(--mwv-line);padding-top:calc(9px*var(--k))}
+#mwv-widget .mwv-ico{grid-row:1 / 3;align-self:center;width:calc(30px*var(--k));height:calc(30px*var(--k));border-radius:50%;background:#e1effa;display:inline-flex;align-items:center;justify-content:center}
+#mwv-widget .mwv-ico svg{width:calc(20px*var(--k));height:calc(20px*var(--k));transition:transform .4s}
+#mwv-widget .mwv-l1{font-size:calc(13.5px*var(--k));font-weight:600;white-space:nowrap}
+#mwv-widget .mwv-r1{font-size:calc(12px*var(--k));text-align:right;white-space:nowrap}
+#mwv-widget .mwv-r1 b{font-size:calc(14px*var(--k));font-weight:800;color:var(--mwv-navy)}
+#mwv-widget .mwv-r1 .mwv-raf b{color:inherit}
+#mwv-widget .mwv-l2,#mwv-widget .mwv-r2{font-size:calc(11.5px*var(--k));color:var(--mwv-muted);white-space:nowrap}
+#mwv-widget .mwv-r2{text-align:right}
+#mwv-widget .mwv-dir{font-weight:600;color:#1d2b36}
+#mwv-widget .mwv-na{color:var(--mwv-muted);font-size:calc(12px*var(--k))}
+/* Couleur des rafales selon leur force (km/h) */
+#mwv-widget .mwv-f0{color:var(--mwv-navy)}        /* < 29 : faible à modéré */
+#mwv-widget .mwv-f1{color:#a0700a}                /* 29 à 49 : vent frais */
+#mwv-widget .mwv-f2{color:#c56a1c}                /* 50 à 74 : fort, coup de vent */
+#mwv-widget .mwv-f3{color:#b4372a}                /* 75 et plus : tempête */
+#mwv-widget .mwv-foot{border-top:1px solid var(--mwv-line);padding-top:calc(7px*var(--k));font-size:calc(10.5px*var(--k));color:var(--mwv-muted);
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:baseline;gap:calc(8px*var(--k))}
+#mwv-widget .mwv-foot a{color:var(--mwv-muted);text-decoration:underline;text-underline-offset:2px}
+#mwv-widget .mwv-foot a:hover{color:#1f7bb6}
+#mwv-widget .mwv-time{text-align:left;white-space:nowrap}
+#mwv-widget #mwv-sources{text-align:center;white-space:nowrap}
+#mwv-widget .mwv-copy{text-align:right;white-space:nowrap}
+#mwv-widget .mwv-wait{display:inline-block;width:calc(90px*var(--k));height:calc(10px*var(--k));border-radius:calc(6px*var(--k));background:linear-gradient(90deg,#eef2f5,#dde5ec,#eef2f5);background-size:200% 100%;animation:mwv-sh 1.2s linear infinite}
+@keyframes mwv-sh{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){#mwv-widget *{animation:none!important;transition:none!important}}
+
+/* ---- Vent, intégré sous la marée ---- */
+#mwt-widget #mwv-widget{background:none;border:0;box-shadow:none;border-radius:0;padding:calc(9px*var(--k)) 0 0;border-top:1px solid var(--mwt-line)}
+#mwt-widget #mwv-widget .mwv-head{display:flex;align-items:baseline;gap:calc(6px*var(--k));margin:0 0 calc(6px*var(--k));text-transform:none;letter-spacing:0}
+#mwt-widget #mwv-widget .mwv-t{font-size:calc(13.5px*var(--k));font-weight:600;color:#1d2b36}
+#mwt-widget #mwv-widget .mwv-zoom{font-size:calc(10px*var(--k));font-weight:400;color:#1f7bb6;text-decoration:underline;text-underline-offset:2px}
+#mwt-widget #mwv-widget .mwv-per{margin-left:auto;font-size:calc(11px*var(--k));font-weight:400;color:var(--mwv-muted)}
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================== PARAMÈTRES (modifiables) ================== */
+  var CFG = {
+    shomPort: "BREST",
+    portRattache: {                      // Pont de Térénez, rattaché à Brest (null = Brest)
+      pm: { ve: { dt: 5,  dh: 0.40 }, me: { dt: 5, dh: 0.35 } },
+      bm: { ve: { dt: 10, dh: 0.15 }, me: { dt: 5, dh: 0.20 } }
+    },
+    lienDetail: "",                      // ex. "/eau.html" : ajoute un lien « Voir le détail »
+    refreshMinutes: 30
+  };
+  /* ============================================================== */
+
+  var root = document.getElementById("mwt-widget");
+  if (!root || root.getAttribute("data-init")) return;
+  root.setAttribute("data-init", "1");
+
+  /* ---- Taille de police auto-adaptative : selon la largeur réellement allouée au widget ---- */
+  function fit() {
+    var w = root.clientWidth; if (!w) return;
+    var k = Math.max(0.75, Math.min(2.2, w / 340));                 // 340 px de large = taille de référence
+    root.style.setProperty("--k", k.toFixed(3));
+  }
+  fit();
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(root);
+  window.addEventListener("resize", fit);
+
+  function $(id) { return document.getElementById(id); }
+  function hm(d) { return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
+  function na(id) { $(id).innerHTML = '<span class="mwt-na">indisponible</span>'; }
+
+  /* ---------------- Marée ---------------- */
+  var MOIS = { janvier: 0, "février": 1, fevrier: 1, mars: 2, avril: 3, mai: 4, juin: 5, juillet: 6,
+    "août": 7, aout: 7, septembre: 8, octobre: 9, novembre: 10, "décembre": 11, decembre: 11 };
+  var DAY_RE = /(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+(\d{1,2})(?:er)?\s+([a-zéû]+)\s+(\d{4})/i;
+  // Les jours suivants de la vignette SHOM sont notés « 20/10/2026 » (et non « Mardi 20 octobre 2026 »)
+  var DMY_RE = /(?:^|[^\d\/])(\d{1,2})\/(\d{1,2})\/(\d{4})(?![\d\/])/;
+  var tides = null;
+
+  function docsOf(doc) {
+    var out = [doc], fr = doc.querySelectorAll("iframe");
+    for (var i = 0; i < fr.length; i++) {
+      try { var d = fr[i].contentDocument; if (d && d !== doc) out = out.concat(docsOf(d)); } catch (e) {}
+    }
+    return out;
+  }
+  function parseShom(rootDoc) {
+    var ev = [], seen = {};
+    docsOf(rootDoc).forEach(function (doc) {
+      if (!doc || !doc.body) return;
+      var cur = null, els = doc.body.querySelectorAll("*");
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.tagName === "SCRIPT" || el.tagName === "STYLE") continue;
+        if (el.tagName === "TR") {
+          var type = null, time = null, h = null, coef = null, cells = el.querySelectorAll("td,th");
+          for (var c = 0; c < cells.length; c++) {
+            var t = cells[c].textContent.replace(/\s+/g, " ").trim();
+            if (/^(PM|BM)$/.test(t)) type = t;
+            else if (/^\d{1,2}[:h]\d{2}$/.test(t)) time = t;
+            else if (/^-?\d+[.,]\d+(\s?m)?$/.test(t)) h = parseFloat(t.replace(",", "."));
+            else if (/^\d{2,3}$/.test(t)) coef = +t;
+          }
+          if (type && time && cur) {
+            var p = time.split(/[:h]/), d = new Date(cur.y, cur.m, cur.d, +p[0], +p[1]), k = type + d.getTime();
+            if (!seen[k]) { seen[k] = 1; ev.push({ type: type, date: d, h: h, coef: type === "PM" ? coef : null }); }
+            continue;
+          }
+        }
+        var txt = (el.textContent || "").replace(/\s+/g, " ").trim();
+        if (txt.length > 60) continue;
+        var m = DAY_RE.exec(txt);
+        if (m && MOIS[m[3].toLowerCase()] != null) cur = { y: +m[4], m: MOIS[m[3].toLowerCase()], d: +m[2] };
+        else if ((m = DMY_RE.exec(txt))) cur = { y: +m[3], m: +m[2] - 1, d: +m[1] };
+      }
+    });
+    ev.sort(function (a, b) { return a.date - b.date; });
+    var out = [];                                   // une seule occurrence par marée
+    ev.forEach(function (e) {
+      var pr = out[out.length - 1];
+      if (pr) { var dh = (e.date - pr.date) / 3600e3; if (dh < 3 || (e.type === pr.type && dh < 9)) return; }
+      out.push(e);
+    });
+    return out;
+  }
+  function corrige(ev) {
+    var pr = CFG.portRattache; if (!pr) return ev;
+    return ev.map(function (e) {
+      var coef = e.coef;
+      if (coef == null) ev.forEach(function (x) {
+        if (x.type === "PM" && x.coef != null && (coef == null || Math.abs(x.date - e.date) < Math.abs(e._b - e.date))) { coef = x.coef; e._b = x.date; }
+      });
+      var c = pr[e.type === "PM" ? "pm" : "bm"], f = Math.max(0, Math.min(1, ((coef == null ? 70 : coef) - 45) / 50));
+      return { type: e.type, coef: e.coef,
+        date: new Date(e.date.getTime() + Math.round(c.me.dt + (c.ve.dt - c.me.dt) * f) * 60000),
+        h: e.h != null ? e.h + c.me.dh + (c.ve.dh - c.me.dh) * f : null };
+    });
+  }
+  // Règle « jour J d'abord » : coefficient = pleine mer du jour la plus proche de maintenant ;
+  // si aucune n'est disponible aujourd'hui, celle de la prochaine pleine mer (lendemain).
+  function choisirCoef(ev, now) {
+    var pm = null, jour = now.toDateString();
+    ev.forEach(function (e) {
+      if (e.type === "PM" && e.coef != null && e.date.toDateString() === jour &&
+          (!pm || Math.abs(e.date - now) < Math.abs(pm.date - now))) pm = e;
+    });
+    if (!pm) for (var i = 0; i < ev.length; i++) if (ev[i].type === "PM" && ev[i].coef != null && ev[i].date > now) { pm = ev[i]; break; }
+    return pm;
+  }
+  function estDemain(d, now) {
+    return d.toDateString() === new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
+  }
+  function renderTide() {
+    if (!tides) return;
+    var now = new Date(), prev = null, next = null;
+    for (var i = 0; i < tides.length; i++) { if (tides[i].date <= now) prev = tides[i]; else { next = tides[i]; break; } }
+    var pm = choisirCoef(tides, now);                // jour J d'abord, sinon lendemain
+    if (!next) return na("mwt-tide");
+    var rising = prev ? prev.type === "BM" : next.type === "PM";
+    $("mwt-tide").innerHTML =
+      (pm ? '<span class="mwt-coef">Coef. ' + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span> · " : "") +
+      '<span class="' + (rising ? "mwt-up" : "mwt-down") + '">' + (rising ? "↑ Montante" : "↓ Descendante") + "</span>";
+    $("mwt-next").textContent = (next.type === "PM" ? "Pleine mer" : "Basse mer") + (estDemain(next.date, now) ? " demain " : " ") + hm(next.date);
+  }
+  function loadTide() {
+    var host = $("mwt-shom-host"); host.innerHTML = "";
+    var f = document.createElement("iframe"), done = false, tries = 0;
+    f.title = "Marées SHOM";
+    f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"></head><body>' +
+      '<script src="https://services.data.shom.fr/hdm/vignette/grande/' + encodeURIComponent(CFG.shomPort) + '?locale=fr"><\/script></body></html>';
+    function attempt() {
+      if (done) return;
+      var ev = []; try { ev = parseShom(f.contentDocument); } catch (e) {}
+      if (ev.length >= 2) { done = true; tides = corrige(ev); renderTide(); }
+      else if (++tries > 24) { done = true; $("mwt-tide").innerHTML = '<a href="https://maree.shom.fr/harbor/BREST" target="_blank" rel="noopener">voir le SHOM</a>'; }
+      else setTimeout(attempt, 500);
+    }
+    f.onload = attempt; host.appendChild(f); setTimeout(attempt, 1500);
+  }
+
+  /* ---------------- Lancement ---------------- */
+  if (CFG.lienDetail) {
+    $("mwt-sources").innerHTML += ' · <a href="' + CFG.lienDetail + '">Voir le détail</a>';
+  }
+  function tick() { var d = new Date(); $("mwt-time").textContent = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + hm(d); }
+  function refreshAll() { loadTide(); }
+  tick(); refreshAll();
+  setInterval(refreshAll, CFG.refreshMinutes * 60000);
+  setInterval(function () { tick(); renderTide(); }, 60000);
+})();
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================== PARAMÈTRES (modifiables) ================== */
+  var CFG = {
+    sites: [
+      { id: "mwv-lanveoc", nom: "Lanvéoc",     station: "29120001", lat: 48.2792, lon: -4.4392 },  // station Météo-France LANVEOC
+      { id: "mwv-segal",   nom: "Saint-Ségal", station: "29263002", lat: 48.2256, lon: -4.0897 }   // station Météo-France ST-SEGAL S A
+    ],
+    // Option « mesures des stations » : clé API du portail https://portail-api.meteofrance.fr
+    // (API « Données d'observation », valeurs toutes les 6 minutes). Laisser vide = modèle AROME.
+    // Si l'appel échoue (clé, réseau, navigateur), le widget repasse automatiquement sur le modèle.
+    cleApiMeteoFrance: "",
+    urlObsMeteoFrance: "https://public-api.meteofrance.fr/public/DPObs/v1/station/infrahoraire-6m",
+    refreshMinutes: 5
+  };
+  /* ============================================================== */
+
+  var root = document.getElementById("mwv-widget");
+  if (!root || root.getAttribute("data-init")) return;
+  root.setAttribute("data-init", "1");
+
+  /* ---- Taille de police auto-adaptative : selon la largeur réellement allouée au widget ---- */
+  function fit() {
+    var w = (root.parentElement || root).clientWidth; if (!w) return;   // même échelle que la marée
+    root.style.setProperty("--k", Math.max(0.75, Math.min(2.2, w / 340)).toFixed(3));
+  }
+  fit();
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(root);
+  window.addEventListener("resize", fit);
+
+  function $(id) { return document.getElementById(id); }
+  function hm(d) { return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
+  var ROSE = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO"];
+  var ROSE_LONG = ["nord", "nord-nord-est", "nord-est", "est-nord-est", "est", "est-sud-est", "sud-est", "sud-sud-est",
+                   "sud", "sud-sud-ouest", "sud-ouest", "ouest-sud-ouest", "ouest", "ouest-nord-ouest", "nord-ouest", "nord-nord-ouest"];
+  function rose(dd) { return Math.round(((dd % 360) + 360) % 360 / 22.5) % 16; }
+  function force(kmh) { return kmh >= 75 ? 3 : kmh >= 50 ? 2 : kmh >= 29 ? 1 : 0; }
+  function nd(kmh) { return Math.round(kmh / 1.852); }
+
+  // Flèche : elle indique où va le vent (le vent « de l'ouest » souffle vers l'est)
+  function fleche(dd) {
+    return '<svg viewBox="0 0 24 24" style="transform:rotate(' + Math.round(dd + 180) + 'deg)"><path d="M12 3 L18 15 L12 12 L6 15 Z" fill="#0b3c5d"/>' +
+           '<line x1="12" y1="12" x2="12" y2="21" stroke="#0b3c5d" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  }
+
+  function afficher(site, v) {
+    var row = $(site.id), c = row.children;
+    if (!v) {
+      c[0].innerHTML = ""; c[2].innerHTML = '<span class="mwv-na">indisponible</span>'; c[3].textContent = ""; c[4].textContent = "";
+      return;
+    }
+    var r = rose(v.dd), f = force(v.raf);
+    c[0].innerHTML = fleche(v.dd);
+    c[0].title = "Vent de " + ROSE_LONG[r] + " (" + Math.round(v.dd) + "°)";
+    c[2].innerHTML = 'moyen <b>' + Math.round(v.moy) + '</b> · <span class="mwv-raf mwv-f' + f + '">rafales <b>' + Math.round(v.raf) + '</b></span> km/h';
+    c[3].innerHTML = 'de <span class="mwv-dir">' + ROSE[r] + "</span> · " + Math.round(v.dd) + "°";
+    c[4].textContent = nd(v.moy) + " / " + nd(v.raf) + " nœuds";
+  }
+
+  var dernier = null, source = "";
+  function pied() {
+    var d = new Date();
+    $("mwt-time").textContent = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + hm(d);
+    $("mwt-time").title = dernier ? "Vent des 15 minutes précédant " + hm(dernier) + " (" + source + ")" : "";
+  }
+
+  /* ---------- Modèle AROME de Météo-France (pas de 15 min) via Open-Meteo : sans clé ---------- */
+  function urlModele(avecModele) {
+    return "https://api.open-meteo.com/v1/forecast?latitude=" + CFG.sites.map(function (s) { return s.lat; }).join(",") +
+      "&longitude=" + CFG.sites.map(function (s) { return s.lon; }).join(",") +
+      "&minutely_15=wind_speed_10m,wind_gusts_10m,wind_direction_10m&past_minutely_15=8&forecast_minutely_15=2" +
+      "&hourly=wind_gusts_10m&past_hours=2&forecast_hours=2" +
+      "&wind_speed_unit=kmh&timeformat=unixtime&timezone=GMT" + (avecModele ? "&models=meteofrance_seamless" : "");
+  }
+  function lireModele(j) {
+    var m = j && j.minutely_15; if (!m || !m.time) return null;
+    var now = Date.now() / 1000, k = -1;
+    for (var i = 0; i < m.time.length; i++) {
+      if (m.time[i] <= now && m.wind_speed_10m[i] != null && m.wind_direction_10m[i] != null) k = i;
+    }
+    if (k < 0) return null;
+    var raf = m.wind_gusts_10m ? m.wind_gusts_10m[k] : null;
+    if (raf == null && j.hourly && j.hourly.time) {
+      // le modèle ne donne pas toujours les rafales au pas de 15 min : rafale maximale de l'heure en cours
+      for (var h = 0; h < j.hourly.time.length; h++) if (j.hourly.time[h] >= m.time[k] && j.hourly.wind_gusts_10m[h] != null) { raf = j.hourly.wind_gusts_10m[h]; break; }
+    }
+    if (raf == null) return null;
+    return { moy: m.wind_speed_10m[k], raf: Math.max(raf, m.wind_speed_10m[k]), dd: m.wind_direction_10m[k], t: new Date(m.time[k] * 1000) };
+  }
+  function chargerModele(avecModele) {
+    return fetch(urlModele(avecModele)).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) { var arr = Array.isArray(j) ? j : [j]; return CFG.sites.map(function (s, i) { return lireModele(arr[i]); }); });
+  }
+
+  /* ---------- Option : mesures des stations Météo-France (toutes les 6 min), avec clé API ---------- */
+  function chargerStation(site) {
+    return fetch(CFG.urlObsMeteoFrance + "?id_station=" + site.station + "&format=json", { headers: { apikey: CFG.cleApiMeteoFrance, accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var rows = (Array.isArray(j) ? j : (j.features || []).map(function (f) { return f.properties; }))
+          .filter(function (p) { return p && p.ff != null && p.dd != null; })
+          .map(function (p) { return { t: new Date(p.validity_time || p.reference_time), ff: +p.ff, fx: p.fxi10 != null ? +p.fxi10 : +p.ff, dd: +p.dd }; })
+          .sort(function (a, b) { return a.t - b.t; });
+        if (!rows.length) throw new Error("vide");
+        var fin = rows[rows.length - 1].t, deb = fin.getTime() - 15 * 60000;
+        var w = rows.filter(function (p) { return p.t.getTime() > deb; });
+        var moy = w.reduce(function (s, p) { return s + p.ff; }, 0) / w.length;
+        var raf = Math.max.apply(null, w.map(function (p) { return p.fx; }));
+        return { moy: moy * 3.6, raf: raf * 3.6, dd: w[w.length - 1].dd, t: fin };    // m/s → km/h
+      });
+  }
+
+  function charger() {
+    var viaStations = CFG.cleApiMeteoFrance
+      ? Promise.all(CFG.sites.map(chargerStation)).then(function (v) { source = "mesures Météo-France"; return v; })
+      : Promise.reject(new Error("pas de clé"));
+    viaStations
+      .catch(function () { return chargerModele(true).catch(function () { return chargerModele(false); }).then(function (v) { source = "modèle AROME"; return v; }); })
+      .then(function (vals) {
+        CFG.sites.forEach(function (s, i) { afficher(s, vals[i]); });
+        var t = vals.filter(Boolean).map(function (v) { return v.t; }).sort(function (a, b) { return b - a; })[0];
+        dernier = t || null;
+        var a = $("mwv-src");
+        if (source === "mesures Météo-France") {
+          a.textContent = "Météo-France"; a.href = "https://meteo.data.gouv.fr"; a.title = "Mesures des stations Météo-France (6 min)";
+        }
+        pied();
+      })
+      .catch(function () { CFG.sites.forEach(function (s) { afficher(s, null); }); pied(); });
+  }
+
+  charger();
+  setInterval(charger, CFG.refreshMinutes * 60000);
+  setInterval(pied, 60000);
+})();
+</script>
+<script>
+  // Signale la hauteur du widget à la page qui l'affiche (site antreizh.fr ou appli), pour ajuster le cadre
+  (function () {
+    if (window.parent === window) return;
+    var last = 0;
+    function envoyer() {
+      var h = Math.ceil(document.body.getBoundingClientRect().height);
+      if (h && h !== last) { last = h; window.parent.postMessage({ hydraulneHauteur: h }, "*"); }
+    }
+    if (window.ResizeObserver) new ResizeObserver(envoyer).observe(document.body);
+    window.addEventListener("load", envoyer);
+    setTimeout(envoyer, 500); setTimeout(envoyer, 2000); setTimeout(envoyer, 5000);
+  })();
+</script>
+</body>
+</html>
