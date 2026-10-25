@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vent · antreizh.fr</title>
+<style>html,body{margin:0;background:transparent}body{padding:1px}</style>
+</head>
+<body>
+<!-- Widget servi depuis https://appli.antreizh.fr/widgets/ : toujours à jour sur le site -->
+<!-- =====================================================================
+     Widget « Vent » — mini-widget dans le style du widget « Marée »
+     Vent moyen et rafales des 15 dernières minutes, avec la direction,
+     à Lanvéoc et à Saint-Ségal.
+     À coller dans un bloc « Code HTML » de WebAcappella (≈ 340 × 150 px).
+     Indépendant des autres widgets : ils peuvent être sur la même page.
+     Source par défaut : modèle AROME de Météo-France (pas de 15 min) via Open-Meteo,
+     au point exact de chaque station. Option : mesures des stations Météo-France
+     (Lanvéoc 29120001, Saint-Ségal 29263002) avec une clé API Météo-France.
+     ===================================================================== -->
+<div id="mwv-widget">
+  <div class="mwv-head">Vent des 15 dernières minutes</div>
+  <div class="mwv-row" id="mwv-lanveoc">
+    <span class="mwv-ico" aria-hidden="true"></span>
+    <span class="mwv-l1">Lanvéoc</span>
+    <span class="mwv-r1"><i class="mwv-wait"></i></span>
+    <span class="mwv-l2"></span>
+    <span class="mwv-r2"></span>
+  </div>
+  <div class="mwv-row" id="mwv-segal">
+    <span class="mwv-ico" aria-hidden="true"></span>
+    <span class="mwv-l1">Saint-Ségal</span>
+    <span class="mwv-r1"><i class="mwv-wait"></i></span>
+    <span class="mwv-l2"></span>
+    <span class="mwv-r2"></span>
+  </div>
+
+  <div class="mwv-foot">
+    <span class="mwv-time" id="mwv-time"></span>
+    <span id="mwv-sources">Source : <a id="mwv-src" href="https://open-meteo.com/en/docs/meteofrance-api" target="_blank" rel="noopener" title="Modèle AROME de Météo-France, données Open-Meteo">Météo-France AROME</a></span>
+    <span class="mwv-copy">© <a href="https://www.antreizh.fr" target="_blank" rel="noopener" title="www.antreizh.fr">antreizh.fr</a></span>
+  </div>
+</div>
+
+<style>
+/* Toutes les tailles sont multipliées par --k, calculé selon la largeur allouée au widget */
+#mwv-widget{
+  --mwv-navy:#0b3c5d; --mwv-muted:#5f7180; --mwv-line:#e8edf1;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:#1d2b36; background:#fff; border-radius:calc(18px*var(--k)); padding:calc(14px*var(--k)) calc(14px*var(--k)) calc(10px*var(--k));
+  box-shadow:0 2px calc(12px*var(--k)) rgba(11,60,93,.10); width:100%; --k:1;
+  border:1px solid #d5dde4;                                             /* cadre gris très fin */
+  box-sizing:border-box; line-height:1.3;
+}
+#mwv-widget *,#mwv-widget *::before,#mwv-widget *::after{box-sizing:border-box}
+#mwv-widget a{color:#1f7bb6}
+/* Une rangée par site, sur 2 lignes : lieu + vent moyen / rafales, puis direction + valeurs en nœuds */
+#mwv-widget .mwv-head{font-size:calc(11px*var(--k));font-weight:600;color:var(--mwv-muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 calc(8px*var(--k))}
+#mwv-widget .mwv-row{display:grid;grid-template-columns:auto auto 1fr;align-items:baseline;column-gap:calc(10px*var(--k));row-gap:calc(2px*var(--k));padding:0 0 calc(9px*var(--k))}
+#mwv-widget .mwv-row + .mwv-row{border-top:1px solid var(--mwv-line);padding-top:calc(9px*var(--k))}
+#mwv-widget .mwv-ico{grid-row:1 / 3;align-self:center;width:calc(30px*var(--k));height:calc(30px*var(--k));border-radius:50%;background:#e1effa;display:inline-flex;align-items:center;justify-content:center}
+#mwv-widget .mwv-ico svg{width:calc(20px*var(--k));height:calc(20px*var(--k));transition:transform .4s}
+#mwv-widget .mwv-l1{font-size:calc(13.5px*var(--k));font-weight:600;white-space:nowrap}
+#mwv-widget .mwv-r1{font-size:calc(12px*var(--k));text-align:right;white-space:nowrap}
+#mwv-widget .mwv-r1 b{font-size:calc(14px*var(--k));font-weight:800;color:var(--mwv-navy)}
+#mwv-widget .mwv-r1 .mwv-raf b{color:inherit}
+#mwv-widget .mwv-l2,#mwv-widget .mwv-r2{font-size:calc(11.5px*var(--k));color:var(--mwv-muted);white-space:nowrap}
+#mwv-widget .mwv-r2{text-align:right}
+#mwv-widget .mwv-dir{font-weight:600;color:#1d2b36}
+#mwv-widget .mwv-na{color:var(--mwv-muted);font-size:calc(12px*var(--k))}
+/* Couleur des rafales selon leur force (km/h) */
+#mwv-widget .mwv-f0{color:var(--mwv-navy)}        /* < 29 : faible à modéré */
+#mwv-widget .mwv-f1{color:#a0700a}                /* 29 à 49 : vent frais */
+#mwv-widget .mwv-f2{color:#c56a1c}                /* 50 à 74 : fort, coup de vent */
+#mwv-widget .mwv-f3{color:#b4372a}                /* 75 et plus : tempête */
+#mwv-widget .mwv-foot{border-top:1px solid var(--mwv-line);padding-top:calc(7px*var(--k));font-size:calc(10.5px*var(--k));color:var(--mwv-muted);
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:baseline;gap:calc(8px*var(--k))}
+#mwv-widget .mwv-foot a{color:var(--mwv-muted);text-decoration:underline;text-underline-offset:2px}
+#mwv-widget .mwv-foot a:hover{color:#1f7bb6}
+#mwv-widget .mwv-time{text-align:left;white-space:nowrap}
+#mwv-widget #mwv-sources{text-align:center;white-space:nowrap}
+#mwv-widget .mwv-copy{text-align:right;white-space:nowrap}
+#mwv-widget .mwv-wait{display:inline-block;width:calc(90px*var(--k));height:calc(10px*var(--k));border-radius:calc(6px*var(--k));background:linear-gradient(90deg,#eef2f5,#dde5ec,#eef2f5);background-size:200% 100%;animation:mwv-sh 1.2s linear infinite}
+@keyframes mwv-sh{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){#mwv-widget *{animation:none!important;transition:none!important}}
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================== PARAMÈTRES (modifiables) ================== */
+  var CFG = {
+    sites: [
+      { id: "mwv-lanveoc", nom: "Lanvéoc",     station: "29120001", lat: 48.2792, lon: -4.4392 },  // station Météo-France LANVEOC
+      { id: "mwv-segal",   nom: "Saint-Ségal", station: "29263002", lat: 48.2256, lon: -4.0897 }   // station Météo-France ST-SEGAL S A
+    ],
+    // Option « mesures des stations » : clé API du portail https://portail-api.meteofrance.fr
+    // (API « Données d'observation », valeurs toutes les 6 minutes). Laisser vide = modèle AROME.
+    // Si l'appel échoue (clé, réseau, navigateur), le widget repasse automatiquement sur le modèle.
+    cleApiMeteoFrance: "",
+    urlObsMeteoFrance: "https://public-api.meteofrance.fr/public/DPObs/v1/station/infrahoraire-6m",
+    refreshMinutes: 5
+  };
+  /* ============================================================== */
+
+  var root = document.getElementById("mwv-widget");
+  if (!root || root.getAttribute("data-init")) return;
+  root.setAttribute("data-init", "1");
+
+  /* ---- Taille de police auto-adaptative : selon la largeur réellement allouée au widget ---- */
+  function fit() {
+    var w = root.clientWidth; if (!w) return;
+    root.style.setProperty("--k", Math.max(0.75, Math.min(2.2, w / 340)).toFixed(3));
+  }
+  fit();
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(root);
+  window.addEventListener("resize", fit);
+
+  function $(id) { return document.getElementById(id); }
+  function hm(d) { return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
+  var ROSE = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO"];
+  var ROSE_LONG = ["nord", "nord-nord-est", "nord-est", "est-nord-est", "est", "est-sud-est", "sud-est", "sud-sud-est",
+                   "sud", "sud-sud-ouest", "sud-ouest", "ouest-sud-ouest", "ouest", "ouest-nord-ouest", "nord-ouest", "nord-nord-ouest"];
+  function rose(dd) { return Math.round(((dd % 360) + 360) % 360 / 22.5) % 16; }
+  function force(kmh) { return kmh >= 75 ? 3 : kmh >= 50 ? 2 : kmh >= 29 ? 1 : 0; }
+  function nd(kmh) { return Math.round(kmh / 1.852); }
+
+  // Flèche : elle indique où va le vent (le vent « de l'ouest » souffle vers l'est)
+  function fleche(dd) {
+    return '<svg viewBox="0 0 24 24" style="transform:rotate(' + Math.round(dd + 180) + 'deg)"><path d="M12 3 L18 15 L12 12 L6 15 Z" fill="#0b3c5d"/>' +
+           '<line x1="12" y1="12" x2="12" y2="21" stroke="#0b3c5d" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  }
+
+  function afficher(site, v) {
+    var row = $(site.id), c = row.children;
+    if (!v) {
+      c[0].innerHTML = ""; c[2].innerHTML = '<span class="mwv-na">indisponible</span>'; c[3].textContent = ""; c[4].textContent = "";
+      return;
+    }
+    var r = rose(v.dd), f = force(v.raf);
+    c[0].innerHTML = fleche(v.dd);
+    c[0].title = "Vent de " + ROSE_LONG[r] + " (" + Math.round(v.dd) + "°)";
+    c[2].innerHTML = 'moyen <b>' + Math.round(v.moy) + '</b> · <span class="mwv-raf mwv-f' + f + '">rafales <b>' + Math.round(v.raf) + '</b></span> km/h';
+    c[3].innerHTML = 'de <span class="mwv-dir">' + ROSE[r] + "</span> · " + Math.round(v.dd) + "°";
+    c[4].textContent = nd(v.moy) + " / " + nd(v.raf) + " nœuds";
+  }
+
+  var dernier = null, source = "";
+  function pied() {
+    var d = new Date();
+    $("mwv-time").textContent = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + hm(d);
+    $("mwv-time").title = dernier ? "Vent des 15 minutes précédant " + hm(dernier) + " (" + source + ")" : "";
+  }
+
+  /* ---------- Modèle AROME de Météo-France (pas de 15 min) via Open-Meteo : sans clé ---------- */
+  function urlModele(avecModele) {
+    return "https://api.open-meteo.com/v1/forecast?latitude=" + CFG.sites.map(function (s) { return s.lat; }).join(",") +
+      "&longitude=" + CFG.sites.map(function (s) { return s.lon; }).join(",") +
+      "&minutely_15=wind_speed_10m,wind_gusts_10m,wind_direction_10m&past_minutely_15=8&forecast_minutely_15=2" +
+      "&hourly=wind_gusts_10m&past_hours=2&forecast_hours=2" +
+      "&wind_speed_unit=kmh&timeformat=unixtime&timezone=GMT" + (avecModele ? "&models=meteofrance_seamless" : "");
+  }
+  function lireModele(j) {
+    var m = j && j.minutely_15; if (!m || !m.time) return null;
+    var now = Date.now() / 1000, k = -1;
+    for (var i = 0; i < m.time.length; i++) {
+      if (m.time[i] <= now && m.wind_speed_10m[i] != null && m.wind_direction_10m[i] != null) k = i;
+    }
+    if (k < 0) return null;
+    var raf = m.wind_gusts_10m ? m.wind_gusts_10m[k] : null;
+    if (raf == null && j.hourly && j.hourly.time) {
+      // le modèle ne donne pas toujours les rafales au pas de 15 min : rafale maximale de l'heure en cours
+      for (var h = 0; h < j.hourly.time.length; h++) if (j.hourly.time[h] >= m.time[k] && j.hourly.wind_gusts_10m[h] != null) { raf = j.hourly.wind_gusts_10m[h]; break; }
+    }
+    if (raf == null) return null;
+    return { moy: m.wind_speed_10m[k], raf: Math.max(raf, m.wind_speed_10m[k]), dd: m.wind_direction_10m[k], t: new Date(m.time[k] * 1000) };
+  }
+  function chargerModele(avecModele) {
+    return fetch(urlModele(avecModele)).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) { var arr = Array.isArray(j) ? j : [j]; return CFG.sites.map(function (s, i) { return lireModele(arr[i]); }); });
+  }
+
+  /* ---------- Option : mesures des stations Météo-France (toutes les 6 min), avec clé API ---------- */
+  function chargerStation(site) {
+    return fetch(CFG.urlObsMeteoFrance + "?id_station=" + site.station + "&format=json", { headers: { apikey: CFG.cleApiMeteoFrance, accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var rows = (Array.isArray(j) ? j : (j.features || []).map(function (f) { return f.properties; }))
+          .filter(function (p) { return p && p.ff != null && p.dd != null; })
+          .map(function (p) { return { t: new Date(p.validity_time || p.reference_time), ff: +p.ff, fx: p.fxi10 != null ? +p.fxi10 : +p.ff, dd: +p.dd }; })
+          .sort(function (a, b) { return a.t - b.t; });
+        if (!rows.length) throw new Error("vide");
+        var fin = rows[rows.length - 1].t, deb = fin.getTime() - 15 * 60000;
+        var w = rows.filter(function (p) { return p.t.getTime() > deb; });
+        var moy = w.reduce(function (s, p) { return s + p.ff; }, 0) / w.length;
+        var raf = Math.max.apply(null, w.map(function (p) { return p.fx; }));
+        return { moy: moy * 3.6, raf: raf * 3.6, dd: w[w.length - 1].dd, t: fin };    // m/s → km/h
+      });
+  }
+
+  function charger() {
+    var viaStations = CFG.cleApiMeteoFrance
+      ? Promise.all(CFG.sites.map(chargerStation)).then(function (v) { source = "mesures Météo-France"; return v; })
+      : Promise.reject(new Error("pas de clé"));
+    viaStations
+      .catch(function () { return chargerModele(true).catch(function () { return chargerModele(false); }).then(function (v) { source = "modèle AROME"; return v; }); })
+      .then(function (vals) {
+        CFG.sites.forEach(function (s, i) { afficher(s, vals[i]); });
+        var t = vals.filter(Boolean).map(function (v) { return v.t; }).sort(function (a, b) { return b - a; })[0];
+        dernier = t || null;
+        var a = $("mwv-src");
+        if (source === "mesures Météo-France") {
+          a.textContent = "Météo-France"; a.href = "https://meteo.data.gouv.fr"; a.title = "Mesures des stations Météo-France (6 min)";
+        }
+        pied();
+      })
+      .catch(function () { CFG.sites.forEach(function (s) { afficher(s, null); }); pied(); });
+  }
+
+  charger();
+  setInterval(charger, CFG.refreshMinutes * 60000);
+  setInterval(pied, 60000);
+})();
+</script>
+<script>
+  // Signale la hauteur du widget à la page qui l'affiche (site antreizh.fr ou appli), pour ajuster le cadre
+  (function () {
+    if (window.parent === window) return;
+    var last = 0;
+    function envoyer() {
+      var h = Math.ceil(document.body.getBoundingClientRect().height);
+      if (h && h !== last) { last = h; window.parent.postMessage({ hydraulneHauteur: h }, "*"); }
+    }
+    if (window.ResizeObserver) new ResizeObserver(envoyer).observe(document.body);
+    window.addEventListener("load", envoyer);
+    setTimeout(envoyer, 500); setTimeout(envoyer, 2000); setTimeout(envoyer, 5000);
+  })();
+</script>
+</body>
+</html>
