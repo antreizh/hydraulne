@@ -187,8 +187,10 @@ const SNAP = [66.84,66.79,66.73,66.77,66.83,66.88,66.88,67.11,67.37,67.51,67.52,
   (async () => {
     const note = document.getElementById('w-maj');
     try {
-      const Y = new Date().getUTCFullYear();
-      const r = await fetch('https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques?code_bss=03103X0047/PZ&date_debut_mesure=' + REF_START + '-01-01&size=20000');
+      // Seules les valeurs récentes sont demandées : depuis 30 jours avant la fin des relevés enregistrés
+      // (les dernières données, encore provisoires, peuvent être corrigées), date et niveau uniquement.
+      const depuis = addDays([...series.keys()].sort().at(-1), -30);
+      const r = await fetch('https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques?code_bss=03103X0047/PZ&date_debut_mesure=' + depuis + '&fields=date_mesure,niveau_nappe_eau&size=20000');
       if (!r.ok) throw new Error(r.status);
       const j = await r.json();
       let n = 0;
