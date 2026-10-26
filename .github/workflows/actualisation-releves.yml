@@ -1,12 +1,14 @@
 # Actualise chaque jour les relevés intégrés aux pages de l'appli HYDRAULNE
 # (pluie et température Météo-France, niveau de la nappe Hub'Eau), puis republie le site.
-# Les heures sont en UTC : 6 h 17 et 16 h 17 UTC = 7 h 17 et 17 h 17 en hiver à Paris.
+# Les heures sont en UTC : 6 h 17, 10 h 57 et 16 h 17 UTC = 7 h 17, 11 h 57 et 17 h 17 en hiver à Paris
+# (une heure de plus en été : GitHub ne tient pas compte du changement d'heure).
 # Lancement manuel possible : onglet « Actions » du dépôt > « Actualisation des relevés » > « Run workflow ».
 name: Actualisation des relevés
 
 on:
   schedule:
     - cron: "17 6 * * *"
+    - cron: "57 10 * * *"
     - cron: "17 16 * * *"
   workflow_dispatch:
 
