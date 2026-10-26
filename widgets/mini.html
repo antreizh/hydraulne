@@ -421,7 +421,10 @@
       $("mwm-aulne-debit").textContent = debit.join(" · ");        // ligne débit : valeur + variations en %
       $("mwm-aulne-debit").title = "Dernière mesure à " + hm(new Date(q[0].t)) + " · moyenne sur 24 h : " +
         num(qNow / 1000, qNow >= 10000 ? 0 : 2) + " m³/s (base des variations en %)";
+      // hauteur à l'échelle (dernière mesure, mm -> m) puis variations en cm
+      if (h.length) parts.unshift(num(h[0].v / 1000, 2) + " m");
       $("mwm-aulne-var").textContent = parts.length ? "hauteur " + parts.join(" · ") : "";   // ligne pleine largeur, en italique
+      $("mwm-aulne-var").title = h.length ? "Hauteur d'eau à l'échelle de la station, mesure de " + hm(new Date(h[0].t)) : "";
     }).catch(function () { na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = ""; });
   }
 
