@@ -1,0 +1,46 @@
+# Actualise chaque jour les relevés intégrés aux pages de l'appli HYDRAULNE
+# (pluie et température Météo-France, niveau de la nappe Hub'Eau), puis republie le site.
+# Les heures sont en UTC : 6 h 17 et 16 h 17 UTC = 7 h 17 et 17 h 17 en hiver à Paris.
+# Lancement manuel possible : onglet « Actions » du dépôt > « Actualisation des relevés » > « Run workflow ».
+name: Actualisation des relevés
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+    - cron: "17 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: actualisation-releves
+  cancel-in-progress: false
+
+jobs:
+  releves:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Actualiser les relevés
+        run: python3 .github/scripts/actualiser_releves.py .
+
+      - name: Publier les pages modifiées
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- 'meteo-*.html'; then
+            echo "Aucune page modifiée."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add meteo-*.html
+          git commit -m "Actualisation automatique des relevés ($(date -u +%Y-%m-%d))"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          # demande la republication du site (au cas où l'envoi ci-dessus ne la déclenche pas)
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" >/dev/null || echo "Republication : demande refusée, elle se fera au prochain envoi."
