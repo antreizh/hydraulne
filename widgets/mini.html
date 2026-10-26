@@ -350,7 +350,7 @@
       }
       $("mwm-nappe").innerHTML = pill(c.crit, c.col) +
         '<small class="mwm-date">' + quand + "</small>" +
-        (prof != null ? "<small>eau à " + num(prof, 2) + " m sous la surface</small>" : "");
+        (prof != null ? "<small><i>eau à " + num(prof, 2) + " m sous la surface</i></small>" : "");
       $("mwm-nappe-var").textContent = parts.join(" · ");          // ligne pleine largeur, en italique
     }).catch(function () { na("mwm-nappe"); $("mwm-nappe-var").textContent = ""; });
   }
