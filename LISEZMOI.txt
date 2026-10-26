@@ -8,6 +8,7 @@ Play Store. Elle est organisée en onglets (barre en haut, à faire défiler
 du doigt) ; l'onglet choisi est retenu pour la prochaine ouverture :
   Synthèse                   mini-widget (marée, vigilance eau, Aulne, nappe)
   Cycle de marée             Guily Glaz (Port-Launay)
+  Vent & Pression            Lanvéoc-Poulmic (page du site : antreizh.fr/widgets/vent/widget-vent.html)
   Hydro                      vigilance eau, niveau de l'Aulne, nappe en détail
   Pluie et température       secteur de Châteaulin
   Pluviométrie               secteur de Châteaulin
@@ -17,7 +18,7 @@ du doigt) ; l'onglet choisi est retenu pour la prochaine ouverture :
   Corrélation nappe & pluie  courbe de la nappe et pluie journalière 2026, puis réponse
                              de la nappe à 10 mm de pluie jour par jour (courbes par mois)
 Un onglet s'ouvre directement avec son adresse, par exemple
-https://www.antreizh.fr/appli/#correlation
+https://appli.antreizh.fr/#correlation
 
 Contenu du dossier
 ------------------
@@ -67,10 +68,10 @@ Mettre à jour l'application
   - Remplacez index.html sur l'hébergement : l'application installée prendra
     la nouvelle version à sa prochaine ouverture avec du réseau.
   - Si vous modifiez les icônes ou le nom, changez aussi la ligne
-    const CACHE = "situation-hydro-v43"  dans sw.js (v44, v45…).
+    const CACHE = "situation-hydro-v44"  dans sw.js (v45, v46…).
 
   - À chaque nouvelle version, l'appli passe aussi un numéro aux tableaux
-    (adresse « meteo-….html?v=43 » dans index.html) : le téléphone recharge
+    (adresse « meteo-….html?v=44 » dans index.html) : le téléphone recharge
     alors forcément les nouveaux tableaux.
   - Si un téléphone affiche encore une ancienne version : fermez complètement
     l'application puis rouvrez-la deux fois (la 1re ouverture installe la mise
