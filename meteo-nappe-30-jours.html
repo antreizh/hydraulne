@@ -34,6 +34,7 @@ body{margin:0;background:var(--color-bg);color:var(--color-fg);font:14px/1.5 var
 #dash-root .w-big.bad { color: var(--color-bad); }
 #dash-root .w-sub { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
 #dash-root .w-alt { color: var(--color-fg); }
+#dash-root .w-chart-title { margin: var(--cds-gap-sm) 0 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); color: var(--color-fg); }
 #dash-root .w-chart { position: relative; min-height: 300px; }
 #dash-root .w-chart svg { display: block; }
 #dash-root .w-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm) var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin-bottom: var(--cds-gap-lg); }
@@ -60,6 +61,7 @@ body{margin:0;background:var(--color-bg);color:var(--color-fg);font:14px/1.5 var
       <div class="w-fig"><span class="w-lab">Évolution sur 7 jours</span><span class="w-big" id="f-var7">—</span><span class="w-sub" id="f-var7-moy">—</span></div>
       <div class="w-fig"><span class="w-lab">Évolution sur 30 jours</span><span class="w-big" id="f-var">—</span><span class="w-sub" id="f-var-moy">—</span></div>
     </div>
+    <h3 class="w-chart-title">Nappe St Ségal</h3>
     <div class="w-chart" id="w-chart"></div>
     <div class="w-legend">
       <span><i class="w-sw" style="background:var(--s1)"></i>Niveau 2026</span>
