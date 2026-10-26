@@ -413,11 +413,15 @@
       var d0 = new Date(q[0].t), jourN1 = Date.UTC(d0.getUTCFullYear() - 1, d0.getUTCMonth(), d0.getUTCDate());
       hist.sort(function (a, b) { return a.t - b.t; });
       var mN1 = mesureA(hist, jourN1, 3);                         // débit moyen journalier, même jour N-1
-      var debit = ["débit " + (qNow >= 10000 ? num(qNow / 1000, 0) : num(qNow / 1000, 2)) + " m³/s"]
+      // Débit affiché : dernière mesure (comme Vigicrues) ; les variations en % comparent des moyennes sur 24 h
+      var qLast = q[0].v;
+      var debit = ["débit " + (qLast >= 10000 ? num(qLast / 1000, 0) : num(qLast / 1000, 2)) + " m³/s"]
         .concat([pctVs(q7, "J-7"), pctVs(mN1 && mN1.v, "N-1")].filter(Boolean));
       $("mwm-aulne").innerHTML = pill(c.crit, c.col) +
         '<small class="mwm-date">mesure du ' + jourCourt(new Date(q[0].t)) + " à " + hm(new Date(q[0].t)) + "</small>";
       $("mwm-aulne-debit").textContent = debit.join(" · ");        // ligne débit : valeur + variations en %
+      $("mwm-aulne-debit").title = "Dernière mesure à " + hm(new Date(q[0].t)) + " · moyenne sur 24 h : " +
+        num(qNow / 1000, qNow >= 10000 ? 0 : 2) + " m³/s (base des variations en %)";
       $("mwm-aulne-var").textContent = parts.length ? "hauteur " + parts.join(" · ") : "";   // ligne pleine largeur, en italique
     }).catch(function () { na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = ""; });
   }

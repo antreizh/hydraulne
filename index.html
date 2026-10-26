@@ -460,11 +460,15 @@
       var d0 = new Date(q[0].t), jourN1 = Date.UTC(d0.getUTCFullYear() - 1, d0.getUTCMonth(), d0.getUTCDate());
       hist.sort(function (a, b) { return a.t - b.t; });
       var mN1 = mesureA(hist, jourN1, 3);                         // débit moyen journalier, même jour N-1
-      var debit = ["débit " + (qNow >= 10000 ? num(qNow / 1000, 0) : num(qNow / 1000, 2)) + " m³/s"]
+      // Débit affiché : dernière mesure (comme Vigicrues) ; les variations en % comparent des moyennes sur 24 h
+      var qLast = q[0].v;
+      var debit = ["débit " + (qLast >= 10000 ? num(qLast / 1000, 0) : num(qLast / 1000, 2)) + " m³/s"]
         .concat([pctVs(q7, "J-7"), pctVs(mN1 && mN1.v, "N-1")].filter(Boolean));
       $("mwm-aulne").innerHTML = pill(c.crit, c.col) +
         '<small class="mwm-date">mesure du ' + jourCourt(new Date(q[0].t)) + " à " + hm(new Date(q[0].t)) + "</small>";
       $("mwm-aulne-debit").textContent = debit.join(" · ");        // ligne débit : valeur + variations en %
+      $("mwm-aulne-debit").title = "Dernière mesure à " + hm(new Date(q[0].t)) + " · moyenne sur 24 h : " +
+        num(qNow / 1000, qNow >= 10000 ? 0 : 2) + " m³/s (base des variations en %)";
       $("mwm-aulne-var").textContent = parts.length ? "hauteur " + parts.join(" · ") : "";   // ligne pleine largeur, en italique
     }).catch(function () { na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = ""; });
   }
@@ -480,7 +484,6 @@
   setInterval(function () { tick(); renderTide(); }, 60000);
 })();
 </script>
-
 <!-- ===== fin du mini-widget ===== -->
 </section>
 
@@ -1571,21 +1574,21 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=38" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=39" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=38" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=39" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=38" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=39" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=38" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=38" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=39" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=39" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=38" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=38" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=39" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=39" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 </main>
