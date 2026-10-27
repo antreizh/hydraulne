@@ -372,19 +372,22 @@
       // hauteur d'eau à l'échelle (mm) sur 8 jours : sert aux variations en cm
       getJSON(b + "observations_tr?code_entite=" + st + "&grandeur_hydro=H&date_debut_obs=" +
         encodeURIComponent(new Date(Date.now() - 8.5 * 864e5).toISOString().slice(0, 19) + "Z") +
-        "&size=5000&sort=desc&format=json").catch(function () { return { data: [] }; })
+        "&size=5000&sort=desc&format=json").catch(function () { return { data: [] }; }),
+      // hauteur maximale de chaque jour depuis 2010 (mm) : sert à situer la hauteur actuelle par rapport aux mêmes dates
+      getJSON(b + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=HIXnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json")
+        .catch(function () { return { data: [] }; })
     ]).then(function (res) {
       var q = (res[0].data || []).filter(function (r) { return r.resultat_obs != null; })
         .map(function (r) { return { t: new Date(r.date_obs).getTime(), v: r.resultat_obs }; });
       if (!q.length) throw 0;
       var day = q.filter(function (r) { return r.t > q[0].t - 864e5; });
       var qNow = day.reduce(function (s, r) { return s + r.v; }, 0) / day.length;
-      var hist = (res[1].data || []).filter(function (r) { return r.resultat_obs_elab != null; }).map(function (r) {
-        var p = r.date_obs_elab.split("-"); return { t: Date.UTC(+p[0], +p[1] - 1, +p[2]), y: +p[0], v: r.resultat_obs_elab };
-      });
-      var p = rangSaison(hist, q[0].t, qNow, 5);
-      if (p == null) throw 0;
-      var c = classe(AULNE, p);
+      function elab(r) {
+        return (r.data || []).filter(function (x) { return x.resultat_obs_elab != null; }).map(function (x) {
+          var p = x.date_obs_elab.split("-"); return { t: Date.UTC(+p[0], +p[1] - 1, +p[2]), y: +p[0], v: x.resultat_obs_elab };
+        });
+      }
+      var hist = elab(res[1]), histH = elab(res[3]);
       // Variation de la hauteur d'eau (en cm) : dernière mesure comparée à J-1 et J-7 à la même heure environ
       var h = (res[2].data || []).filter(function (r) { return r.resultat_obs != null; })
         .map(function (r) { return { t: new Date(r.date_obs).getTime(), v: r.resultat_obs }; })
@@ -401,6 +404,18 @@
         return fl + " " + (cm === 0 ? "stable" : signed(cm, 0, " cm")) + " vs " + lbl;
       }
       var parts = [cmVs(1, 1, "J-1"), cmVs(7, 3, "J-7")].filter(Boolean);
+      // Situation (étiage … crue) selon la HAUTEUR d'eau : hauteur maximale des 24 dernières heures,
+      // classée parmi les hauteurs maximales journalières des mêmes dates (± 10 jours) des années précédentes.
+      // Repli sur le débit si la hauteur n'est pas disponible.
+      var p = null, base = "";
+      if (h.length && histH.length) {
+        var hMax = Math.max.apply(null, h.filter(function (r) { return r.t > h[0].t - 864e5; }).map(function (r) { return r.v; }));
+        p = rangSaison(histH, h[0].t, hMax, 5);
+        if (p != null) base = "hauteur maximale des 24 dernières heures (" + num(hMax / 1000, 2) + " m)";
+      }
+      if (p == null) { p = rangSaison(hist, q[0].t, qNow, 5); if (p != null) base = "débit moyen des 24 dernières heures"; }
+      if (p == null) throw 0;
+      var c = classe(AULNE, p);
       // Variation du débit du jour (moyenne 24 h) en % : vs J-7 et vs le même jour de l'année N-1
       function pctVs(ref, lbl) {
         if (!ref) return null;
@@ -416,6 +431,8 @@
       var qLast = q[0].v;
       var debit = ["débit " + (qLast >= 10000 ? num(qLast / 1000, 0) : num(qLast / 1000, 2)) + " m³/s"]
         .concat([pctVs(q7, "J-7"), pctVs(mN1 && mN1.v, "N-1")].filter(Boolean));
+      $("mwm-aulne").title = "Situation selon la " + base + ", comparée aux mêmes dates des années précédentes : " +
+        Math.round(p * 100) + " % des années étaient plus basses.";
       $("mwm-aulne").innerHTML = pill(c.crit, c.col) +
         '<small class="mwm-date">mesure du ' + jourCourt(new Date(q[0].t)) + " à " + hm(new Date(q[0].t)) + "</small>";
       $("mwm-aulne-debit").textContent = debit.join(" · ");        // ligne débit : valeur + variations en %
