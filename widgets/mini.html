@@ -92,6 +92,22 @@
 #mwm-widget .mwm-coef{font-weight:800;color:var(--mwm-navy)}
 #mwm-widget .mwm-up{color:#1f7bb6;font-weight:700}
 #mwm-widget .mwm-down{color:#c56a1c;font-weight:700}
+/* Icône ⓘ devant chaque situation et cadre des échelles */
+#mwm-widget{position:relative}
+#mwm-widget .mwm-info{all:unset;cursor:pointer;display:inline-block;vertical-align:middle;font-size:calc(10px*var(--k));line-height:1;color:var(--mwm-muted);
+  padding:calc(2px*var(--k));margin-right:calc(3px*var(--k));border-radius:50%}
+#mwm-widget .mwm-info:hover,#mwm-widget .mwm-info:focus-visible{color:#1f7bb6;outline:1px solid #9cc3e0}
+#mwm-widget .mwm-ov{position:absolute;inset:0;z-index:5;background:#fff;border-radius:inherit;padding:calc(12px*var(--k)) calc(14px*var(--k));
+  overflow:auto;box-shadow:0 0 0 1px #d5dde4 inset}
+#mwm-widget .mwm-ov[hidden]{display:none}
+#mwm-widget .mwm-ov h4{margin:0 calc(22px*var(--k)) calc(4px*var(--k)) 0;font-size:calc(13.5px*var(--k));color:#1d2b36}
+#mwm-widget .mwm-ov p{margin:0 0 calc(8px*var(--k));font-size:calc(10.5px*var(--k));color:var(--mwm-muted);line-height:1.35}
+#mwm-widget .mwm-ov table{border-collapse:collapse;width:100%;font-size:calc(11px*var(--k))}
+#mwm-widget .mwm-ov td{padding:calc(2.5px*var(--k)) 0;vertical-align:middle}
+#mwm-widget .mwm-ov td + td{padding-left:calc(8px*var(--k));color:#1d2b36}
+#mwm-widget .mwm-ov .mwm-pill{font-size:calc(10.5px*var(--k));padding:calc(2px*var(--k)) calc(8px*var(--k))}
+#mwm-widget .mwm-ov-x{all:unset;cursor:pointer;position:absolute;top:calc(8px*var(--k));right:calc(10px*var(--k));font-size:calc(18px*var(--k));line-height:1;color:var(--mwm-muted)}
+#mwm-widget .mwm-ov-x:hover,#mwm-widget .mwm-ov-x:focus-visible{color:#1d2b36}
 #mwm-widget .mwm-na{color:var(--mwm-muted);font-size:calc(12px*var(--k))}
 #mwm-widget .mwm-foot{border-top:1px solid var(--mwm-line);padding-top:calc(7px*var(--k));font-size:calc(10.5px*var(--k));color:var(--mwm-muted)}
 #mwm-widget .mwm-foot a{color:var(--mwm-muted);text-decoration:underline;text-underline-offset:2px}
@@ -141,7 +157,10 @@
   function $(id) { return document.getElementById(id); }
   function hm(d) { return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
   function num(x, n) { return x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n }); }
-  function pill(txt, col) { return '<span class="mwm-pill" style="background:' + col + '">' + txt + "</span>"; }
+  function pill(txt, col, echelle) {
+    return (echelle ? '<button type="button" class="mwm-info" data-echelle="' + echelle + '" aria-label="Échelle de situation" title="Échelle de situation">ⓘ</button>' : "") +
+      '<span class="mwm-pill" style="background:' + col + '">' + txt + "</span>";
+  }
   function na(id) { $(id).innerHTML = '<span class="mwm-na">indisponible</span>'; }
   function getJSON(url) {
     return fetch(url, { headers: { Accept: "application/json" } }).then(function (r) {
@@ -299,10 +318,10 @@
     getJSON("https://api.vigieau.gouv.fr/api/zones?lon=" + CFG.vigieauLon + "&lat=" + CFG.vigieauLat +
       "&commune=" + CFG.vigieauInsee + "&profil=" + CFG.vigieauProfil).then(function (z) {
       z = (Array.isArray(z) ? z : z ? [z] : []).filter(function (x) { return x && GRAV[x.niveauGravite]; });
-      if (!z.length) { $("mwm-vigi").innerHTML = pill("Aucune restriction", "#2e9e6a"); return; }
+      if (!z.length) { $("mwm-vigi").innerHTML = pill("Aucune restriction", "#2e9e6a", "vigi"); return; }
       z.sort(function (a, b) { return GRAV[b.niveauGravite].o - GRAV[a.niveauGravite].o; });
       var g = GRAV[z[0].niveauGravite];
-      $("mwm-vigi").innerHTML = pill(g.lbl, g.col);
+      $("mwm-vigi").innerHTML = pill(g.lbl, g.col, "vigi");
     }).catch(function () { na("mwm-vigi"); });
   }
 
@@ -348,7 +367,7 @@
         quand = "mesure du " + jourCourt(ttr) + (/T\d/.test(dtr.date_mesure) ? " à " + hm(ttr) : "");
         if (dtr.profondeur_nappe != null) prof = dtr.profondeur_nappe;
       }
-      $("mwm-nappe").innerHTML = pill(c.crit, c.col) +
+      $("mwm-nappe").innerHTML = pill(c.crit, c.col, "nappe") +
         '<small class="mwm-date">' + quand + "</small>" +
         (prof != null ? "<small><i>eau à " + num(prof, 2) + " m sous la surface</i></small>" : "");
       $("mwm-nappe-var").textContent = parts.join(" · ");          // ligne pleine largeur, en italique
@@ -433,7 +452,7 @@
         .concat([pctVs(q7, "J-7"), pctVs(mN1 && mN1.v, "N-1")].filter(Boolean));
       $("mwm-aulne").title = "Situation selon la " + base + ", comparée aux mêmes dates des années précédentes : " +
         Math.round(p * 100) + " % des années étaient plus basses.";
-      $("mwm-aulne").innerHTML = pill(c.crit, c.col) +
+      $("mwm-aulne").innerHTML = pill(c.crit, c.col, "aulne") +
         '<small class="mwm-date">mesure du ' + jourCourt(new Date(q[0].t)) + " à " + hm(new Date(q[0].t)) + "</small>";
       $("mwm-aulne-debit").textContent = debit.join(" · ");        // ligne débit : valeur + variations en %
       $("mwm-aulne-debit").title = "Dernière mesure à " + hm(new Date(q[0].t)) + " · moyenne sur 24 h : " +
@@ -444,6 +463,54 @@
       $("mwm-aulne-var").title = h.length ? "Hauteur d'eau à l'échelle de la station, mesure de " + hm(new Date(h[0].t)) : "";
     }).catch(function () { na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = ""; });
   }
+
+  /* ---------------- Échelles de situation (icône ⓘ) ---------------- */
+  function lignesRang(list) {
+    var prev = 0;
+    return list.map(function (c) {
+      var hi = Math.round(c.max * 100), lo = Math.round(prev * 100); prev = c.max;
+      var txt = lo === 0 ? "moins de " + hi + " %" : hi > 100 ? lo + " % et plus" : lo + " à " + hi + " %";
+      return [pill(c.crit, c.col), txt];
+    });
+  }
+  var ECHELLES = {
+    vigi: { titre: "Vigilance eau · Châteaulin",
+      texte: "Niveau de restriction officiel en vigueur (arrêté préfectoral publié sur VigiEau). Le plus grave des zones s'applique : rivières, nappes, eau potable.",
+      lignes: function () {
+        return [[pill("Aucune restriction", "#2e9e6a"), "pas d'arrêté de restriction"]].concat(Object.keys(GRAV).map(function (k) {
+          var m = { vigilance: "économies d'eau conseillées", alerte: "premières restrictions d'usage",
+            alerte_renforcee: "restrictions renforcées", crise: "usages limités aux besoins prioritaires" }[k];
+          return [pill(GRAV[k].lbl, GRAV[k].col), m];
+        }));
+      } },
+    aulne: { titre: "Niveau de l'Aulne · Châteaulin",
+      texte: "Hauteur d'eau maximale des 24 dernières heures, comparée aux mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
+      lignes: function () { return lignesRang(AULNE); } },
+    nappe: { titre: "Nappe · Saint-Ségal",
+      texte: "Dernier niveau journalier de la nappe, comparé aux mêmes dates (± 10 jours) des années précédentes (depuis 2004). Le pourcentage est la part des années où le niveau était plus bas.",
+      lignes: function () { return lignesRang(NAPPE); } }
+  };
+  var ov = document.createElement("div");
+  ov.className = "mwm-ov"; ov.hidden = true; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "false");
+  root.appendChild(ov);
+  var ouvertePar = null;
+  function fermer() { ov.hidden = true; if (ouvertePar) { try { ouvertePar.focus(); } catch (e) {} } ouvertePar = null; }
+  function ouvrir(cle, btn) {
+    var e = ECHELLES[cle]; if (!e) return;
+    ov.setAttribute("aria-label", "Échelle de situation : " + e.titre);
+    ov.innerHTML = '<button type="button" class="mwm-ov-x" aria-label="Fermer">×</button><h4>' + e.titre + "</h4><p>" + e.texte + "</p><table>" +
+      e.lignes().map(function (l) { return "<tr><td>" + l[0] + "</td><td>" + l[1] + "</td></tr>"; }).join("") + "</table>";
+    ov.hidden = false; ov.scrollTop = 0; ouvertePar = btn;
+    ov.querySelector(".mwm-ov-x").focus();
+  }
+  root.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest(".mwm-info, .mwm-ov-x");
+    if (!b) return;
+    if (b.classList.contains("mwm-ov-x")) { fermer(); return; }
+    if (!ov.hidden && ouvertePar === b) { fermer(); return; }
+    ouvrir(b.getAttribute("data-echelle"), b);
+  });
+  root.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !ov.hidden) fermer(); });
 
   /* ---------------- Lancement ---------------- */
   if (CFG.lienDetail) {
