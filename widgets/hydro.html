@@ -339,7 +339,7 @@
   /* ------------------------------------------------------------------ */
   /* ------------------------------------------------------------------
      3) AULNE — hauteur d'eau à Châteaulin comparée aux mêmes dates depuis 2010
-        (hauteur maximale des 24 dernières heures vs hauteurs maximales journalières HIXnJ ;
+        (dernière hauteur mesurée vs hauteurs maximales journalières HIXnJ ;
          repli sur le débit moyen des 24 h vs débits moyens journaliers QmnJ si la hauteur manque)
      ------------------------------------------------------------------ */
   var CLASSES_RIV = [
@@ -400,7 +400,8 @@
       var qNow = qDay.length ? qDay.reduce(function (s, r) { return s + r.v; }, 0) / qDay.length : null;
 
       // Situation : selon la hauteur, sinon selon le débit
-      var refs = h.length ? refsSaison(elab(res[2]), h[0].t) : [], vNow = hMax, surH = true;
+      // situation calculée sur la hauteur du moment (dernière mesure, toutes les 5 min)
+      var refs = h.length ? refsSaison(elab(res[2]), h[0].t) : [], vNow = h.length ? h[0].v : null, surH = true;
       if (refs.length < 5) { refs = q.length ? refsSaison(elab(res[3]), q[0].t) : []; vNow = qNow; surH = false; }
       if (refs.length < 5 || vNow == null) throw new Error("historique insuffisant");
       var below = 0, eq = 0;
@@ -411,7 +412,7 @@
 
       var m = function (mm) { return num(mm / 1000, 2) + " m"; };
       var m3 = function (ls) { return (ls >= 10000 ? num(ls / 1000, 0) : num(ls / 1000, 2)) + " m³/s"; };
-      var quoi = surH ? "Hauteur maximale des 24 dernières heures" : "Débit des 24 dernières heures";
+      var quoi = surH ? "Hauteur actuelle" : "Débit des 24 dernières heures";
       var plus = surH ? "plus haute" : "plus fort", moins = surH ? "plus basse" : "plus faible";
 
       // Tendance de la hauteur : dernière mesure vs la plus proche de 24 h plus tôt (± 1 h)
@@ -439,7 +440,7 @@
           '<div class="mwh-gauge-legend"><span>Étiage</span><span>Normal</span><span>Crue</span></div></div>' +
         '<dl class="mwh-kv">' +
           (h.length ? "<dt>Hauteur à l'échelle</dt><dd>" + m(h[0].v) + "</dd>" : "") +
-          (surH ? "<dt>Hauteur max. 24 h</dt><dd>" + m(hMax) + "</dd><dt>Normale de saison</dt><dd>≈ " + m(med) + "</dd>"
+          (surH ? "<dt>Normale de saison</dt><dd>≈ " + m(med) + "</dd><dt>Hauteur max. 24 h</dt><dd>" + m(hMax) + "</dd>"
                 : "<dt>Débit (moy. 24 h)</dt><dd>" + m3(qNow) + "</dd><dt>Normale de saison</dt><dd>≈ " + m3(med) + "</dd>") +
           (trend ? "<dt>Hauteur sur 24 h</dt><dd>" + trend + "</dd>" : "") +
           (surH && q.length ? "<dt>Débit</dt><dd>" + m3(q[0].v) + "</dd>" : "") +
@@ -476,7 +477,7 @@
         }));
       } },
     aulne: { titre: "Niveau de l'Aulne · Châteaulin",
-      texte: "Hauteur d'eau maximale des 24 dernières heures, comparée aux mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
+      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières des mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
       lignes: function () { return lignesRang(CLASSES_RIV); } },
     nappe: { titre: "Nappe · Saint-Ségal",
       texte: "Dernier niveau journalier de la nappe, comparé aux mêmes dates (± 10 jours) des années précédentes (depuis 2004). Le pourcentage est la part des années où le niveau était plus bas.",
