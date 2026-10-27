@@ -137,7 +137,7 @@
 #mwm-widget .mwm-varline{flex:0 0 100%;text-align:right;font-style:italic;font-size:calc(11.5px*var(--k));color:var(--mwm-muted);white-space:nowrap;margin-top:calc(-6px*var(--k))}
 #mwm-widget .mwm-varline:empty{display:none}
 #mwm-widget .mwm-varline + .mwm-varline{margin-top:calc(-8px*var(--k))}
-#mwm-widget #mwm-aulne-var{white-space:normal}
+#mwm-widget #mwm-aulne-var,#mwm-widget #mwm-aulne-debit{white-space:normal}
 /* Mesures de l'Aulne et de la nappe : en plus petit */
 #mwm-widget .mwm-varline{font-size:calc(10px*var(--k))}
 #mwm-widget #mwm-aulne small,#mwm-widget #mwm-nappe small{font-size:calc(10px*var(--k))}
@@ -496,20 +496,24 @@
       }
       var old = q.filter(function (r) { return r.t <= q[0].t - 7 * 864e5 && r.t > q[0].t - 8 * 864e5; });
       var q7 = old.length ? old.reduce(function (s, r) { return s + r.v; }, 0) / old.length : null;
+      // J-1 : moyenne des 24 h précédentes (de 48 h à 24 h avant la dernière mesure)
+      var veille = q.filter(function (r) { return r.t <= q[0].t - 864e5 && r.t > q[0].t - 2 * 864e5; });
+      var q1 = veille.length ? veille.reduce(function (s, r) { return s + r.v; }, 0) / veille.length : null;
       var d0 = new Date(q[0].t), jourN1 = Date.UTC(d0.getUTCFullYear() - 1, d0.getUTCMonth(), d0.getUTCDate());
       hist.sort(function (a, b) { return a.t - b.t; });
       var mN1 = mesureA(hist, jourN1, 3);                         // débit moyen journalier, même jour N-1
       // Débit affiché : dernière mesure (comme Vigicrues) ; les variations en % comparent des moyennes sur 24 h
       var qLast = q[0].v;
-      var debit = ["débit " + (qLast >= 10000 ? num(qLast / 1000, 0) : num(qLast / 1000, 2)) + " m³/s"]
-        .concat([pctVs(q7, "J-7"), pctVs(mN1 && mN1.v, "N-1")].filter(Boolean));
+      var debit = ["débit " + num(qLast / 1000, 1) + " m³/s"]                 // une seule décimale
+        .concat([pctVs(q1, "J-1"), pctVs(q7, "J-7"), pctVs(mN1 && mN1.v, "N-1")].filter(Boolean));
       $("mwm-aulne").title = "Situation selon la " + base + ", comparée aux mêmes dates des années précédentes : " +
         Math.round(p * 100) + " % des années étaient plus basses.";
       $("mwm-aulne").innerHTML = pill(c.crit, c.col, "aulne") +
         '<small class="mwm-date">mesure du ' + jourCourt(new Date(q[0].t)) + " à " + hm(new Date(q[0].t)) + "</small>";
-      $("mwm-aulne-debit").textContent = debit.join(" · ");        // ligne débit : valeur + variations en %
+      // ligne débit : valeur + variations en % ; elle peut passer sur 2 lignes, sans couper une variation
+      $("mwm-aulne-debit").innerHTML = debit.map(function (s) { return '<span class="mwm-nw">' + s + "</span>"; }).join(" · ");
       $("mwm-aulne-debit").title = "Dernière mesure à " + hm(new Date(q[0].t)) + " · moyenne sur 24 h : " +
-        num(qNow / 1000, qNow >= 10000 ? 0 : 2) + " m³/s (base des variations en %)";
+        num(qNow / 1000, 1) + " m³/s (base des variations en %)";
       // hauteur à l'échelle (dernière mesure, mm -> m) puis variations en cm
       if (h.length) parts.unshift(num(h[0].v / 1000, 2) + " m");
       // Variation vs N-1 : seules les hauteurs maximales journalières sont conservées d'une année sur l'autre ;
@@ -1788,21 +1792,21 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=54" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=55" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=54" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=55" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=54" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=55" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=54" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=54" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=55" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=55" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=54" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=54" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=55" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=55" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 </main>
