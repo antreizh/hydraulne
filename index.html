@@ -472,14 +472,13 @@
         return fl + " " + (cm === 0 ? "stable" : signed(cm, 0, " cm")) + " vs " + lbl;
       }
       var parts = [cmVs(1, 1, "J-1"), cmVs(7, 3, "J-7")].filter(Boolean);
-      // Situation (étiage … crue) selon la HAUTEUR d'eau : hauteur maximale des 24 dernières heures,
+      // Situation (étiage … crue) selon la HAUTEUR d'eau du moment (dernière mesure),
       // classée parmi les hauteurs maximales journalières des mêmes dates (± 10 jours) des années précédentes.
       // Repli sur le débit si la hauteur n'est pas disponible.
       var p = null, base = "";
       if (h.length && histH.length) {
-        var hMax = Math.max.apply(null, h.filter(function (r) { return r.t > h[0].t - 864e5; }).map(function (r) { return r.v; }));
-        p = rangSaison(histH, h[0].t, hMax, 5);
-        if (p != null) base = "hauteur maximale des 24 dernières heures (" + num(hMax / 1000, 2) + " m)";
+        p = rangSaison(histH, h[0].t, h[0].v, 5);            // hauteur du moment (dernière mesure), comme le widget Hydro
+        if (p != null) base = "hauteur du moment (" + num(h[0].v / 1000, 2) + " m à " + hm(new Date(h[0].t)) + ")";
       }
       if (p == null) { p = rangSaison(hist, q[0].t, qNow, 5); if (p != null) base = "débit moyen des 24 dernières heures"; }
       if (p == null) throw 0;
@@ -533,7 +532,7 @@
         }));
       } },
     aulne: { titre: "Niveau de l'Aulne · Châteaulin",
-      texte: "Hauteur d'eau maximale des 24 dernières heures, comparée aux mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
+      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières des mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
       lignes: function () { return lignesRang(AULNE); } },
     nappe: { titre: "Nappe · Saint-Ségal",
       texte: "Dernier niveau journalier de la nappe, comparé aux mêmes dates (± 10 jours) des années précédentes (depuis 2004). Le pourcentage est la part des années où le niveau était plus bas.",
@@ -1768,21 +1767,21 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=50" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=51" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=50" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=51" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=50" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=51" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=50" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=50" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=51" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=51" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=50" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=50" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=51" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=51" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 </main>

@@ -1,7 +1,7 @@
 /* Service worker de l'application « Situation hydrologique »
    - garde en cache la page et les icônes (ouverture rapide, affichage hors connexion) ;
    - ne touche jamais aux données (SHOM, VigiEau, Hub'Eau, Météo-France) : elles sont toujours lues en direct. */
-const CACHE = "situation-hydro-v50";
+const CACHE = "situation-hydro-v51";
 const FICHIERS = ["./", "index.html", "manifest.webmanifest",
   "meteo-pluie-temperature.html", "meteo-pluviometrie.html", "meteo-temperature.html",
   "meteo-nappe-30-jours.html", "meteo-correlation-nappe-pluie.html", "meteo-graphique-nappe-pluie.html", "meteo-reponse-nappe-10mm.html", "d3.min.js",
