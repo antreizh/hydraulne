@@ -321,85 +321,112 @@
 
   /* ------------------------------------------------------------------ */
   /* ------------------------------------------------------------------
-     3) AULNE — débit actuel à Châteaulin comparé à l'historique (depuis 2010)
+     3) AULNE — hauteur d'eau à Châteaulin comparée aux mêmes dates depuis 2010
+        (hauteur maximale des 24 dernières heures vs hauteurs maximales journalières HIXnJ ;
+         repli sur le débit moyen des 24 h vs débits moyens journaliers QmnJ si la hauteur manque)
      ------------------------------------------------------------------ */
   var CLASSES_RIV = [
     // Couleurs inversées : basses eaux en violet/bleu, hautes eaux (crue) en orange/rouge
     { max: 0.10, lbl: "Très basses eaux", crit: "Critique (étiage)", col: "#5b2a86", ico: "🟣", msg: "Rivière à un niveau exceptionnellement bas pour la saison." },
-    { max: 0.25, lbl: "Basses eaux",      crit: "Préoccupante",      col: "#2f80c9", ico: "🔵", msg: "Débit nettement inférieur à la normale de saison." },
-    { max: 0.40, lbl: "Plutôt bas",       crit: "Vigilance",         col: "#1aa39a", ico: "🟢", msg: "Débit un peu en dessous de la normale de saison." },
-    { max: 0.60, lbl: "Normal",           crit: "Normale",           col: "#2e9e6a", ico: "🟢", msg: "Débit habituel pour la saison." },
-    { max: 0.75, lbl: "Plutôt haut",      crit: "Normale",           col: "#e0b100", ico: "🟡", msg: "Débit un peu au-dessus de la normale de saison." },
+    { max: 0.25, lbl: "Basses eaux",      crit: "Préoccupant",       col: "#2f80c9", ico: "🔵", msg: "Niveau nettement inférieur à la normale de saison." },
+    { max: 0.40, lbl: "Plutôt bas",       crit: "Vigilance",         col: "#1aa39a", ico: "🟢", msg: "Niveau un peu en dessous de la normale de saison." },
+    { max: 0.60, lbl: "Normal",           crit: "Normal",            col: "#2e9e6a", ico: "🟢", msg: "Niveau habituel pour la saison." },
+    { max: 0.75, lbl: "Plutôt haut",      crit: "Normal",            col: "#e0b100", ico: "🟡", msg: "Niveau un peu au-dessus de la normale de saison." },
     { max: 0.90, lbl: "Hautes eaux",      crit: "Vigilance",         col: "#e67e22", ico: "🟠", msg: "Rivière haute : restez attentifs aux bulletins de crue." },
     { max: 1.01, lbl: "Très hautes eaux", crit: "Critique (crue)",   col: "#c0392b", ico: "🔴", msg: "Niveau exceptionnellement haut : consultez Vigicrues." }
   ];
 
+  // Valeurs journalières Hub'Eau (obs_elab) -> [{t, y, v}]
+  function elab(r) {
+    return (r.data || []).filter(function (x) { return x.resultat_obs_elab != null; }).map(function (x) {
+      var p = x.date_obs_elab.split("-"); return { t: Date.UTC(+p[0], +p[1] - 1, +p[2]), y: +p[0], v: x.resultat_obs_elab };
+    });
+  }
+  // Moyennes par année des valeurs des mêmes dates (± fenêtre), hors année en cours
+  function refsSaison(hist, tRef) {
+    var d = new Date(tRef), win = CFG.nappeFenetreJours * 864e5, byYear = {};
+    hist.forEach(function (r) {
+      var yr = null;
+      [r.y - 1, r.y, r.y + 1].forEach(function (y) {
+        if (Math.abs(r.t - Date.UTC(y, d.getUTCMonth(), d.getUTCDate())) <= win) yr = y;
+      });
+      if (yr == null || yr === d.getUTCFullYear()) return;
+      (byYear[yr] = byYear[yr] || []).push(r.v);
+    });
+    return Object.keys(byYear).filter(function (y) { return byYear[y].length >= 5; }).map(function (y) {
+      var a = byYear[y]; return a.reduce(function (s, x) { return s + x; }, 0) / a.length;
+    });
+  }
+  function obs(r) {
+    return (r.data || []).filter(function (x) { return x.resultat_obs != null; })
+      .map(function (x) { return { t: new Date(x.date_obs).getTime(), v: x.resultat_obs }; })
+      .sort(function (a, b) { return b.t - a.t; });
+  }
+
   function loadAulne() {
     var base = "https://hubeau.eaufrance.fr/api/v2/hydrometrie/";
     var st = encodeURIComponent(CFG.stationAulne);
+    var depuis = encodeURIComponent(new Date(Date.now() - 1.5 * 864e5).toISOString().slice(0, 19) + "Z");
+    var vide = function () { return { data: [] }; };
     Promise.all([
-      getJSON(base + "observations_tr?code_entite=" + st + "&grandeur_hydro=Q&size=400&sort=desc&format=json"),
-      getJSON(base + "observations_tr?code_entite=" + st + "&grandeur_hydro=H&size=1&sort=desc&format=json").catch(function () { return { data: [] }; }),
-      getJSON(base + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=QmnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json")
+      getJSON(base + "observations_tr?code_entite=" + st + "&grandeur_hydro=Q&date_debut_obs=" + depuis + "&size=1000&sort=desc&format=json").catch(vide),
+      getJSON(base + "observations_tr?code_entite=" + st + "&grandeur_hydro=H&date_debut_obs=" + depuis + "&size=1000&sort=desc&format=json").catch(vide),
+      getJSON(base + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=HIXnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json").catch(vide),
+      getJSON(base + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=QmnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json").catch(vide)
     ]).then(function (res) {
-      var q = (res[0].data || []).filter(function (r) { return r.resultat_obs != null; })
-        .map(function (r) { return { t: new Date(r.date_obs).getTime(), v: r.resultat_obs }; });
-      if (!q.length) throw new Error("pas de mesure récente");
-      var last = q[0];
-      // débit moyen des dernières 24 h (lisse les variations de court terme)
-      var day = q.filter(function (r) { return r.t > last.t - 864e5; });
-      var qNow = day.reduce(function (s, r) { return s + r.v; }, 0) / day.length;   // en l/s
+      var q = obs(res[0]), h = obs(res[1]);
+      if (!q.length && !h.length) throw new Error("pas de mesure récente");
 
-      var hist = (res[2].data || []).filter(function (r) { return r.resultat_obs_elab != null; }).map(function (r) {
-        var p = r.date_obs_elab.split("-");
-        return { t: Date.UTC(+p[0], +p[1] - 1, +p[2]), y: +p[0], v: r.resultat_obs_elab };
-      });
-      var lastD = new Date(last.t), win = CFG.nappeFenetreJours * 864e5, byYear = {};
-      hist.forEach(function (r) {
-        var yr = null;
-        [r.y - 1, r.y, r.y + 1].forEach(function (y) {
-          if (Math.abs(r.t - Date.UTC(y, lastD.getUTCMonth(), lastD.getUTCDate())) <= win) yr = y;
-        });
-        if (yr == null || yr === lastD.getUTCFullYear()) return;
-        (byYear[yr] = byYear[yr] || []).push(r.v);
-      });
-      var refs = Object.keys(byYear).filter(function (y) { return byYear[y].length >= 5; }).map(function (y) {
-        var a = byYear[y]; return a.reduce(function (s, x) { return s + x; }, 0) / a.length;
-      });
-      if (refs.length < 5) throw new Error("historique insuffisant");
+      // Hauteur maximale des 24 dernières heures (mm) et débit moyen des 24 dernières heures (l/s)
+      var hMax = h.length ? Math.max.apply(null, h.filter(function (r) { return r.t > h[0].t - 864e5; }).map(function (r) { return r.v; })) : null;
+      var qDay = q.length ? q.filter(function (r) { return r.t > q[0].t - 864e5; }) : [];
+      var qNow = qDay.length ? qDay.reduce(function (s, r) { return s + r.v; }, 0) / qDay.length : null;
 
+      // Situation : selon la hauteur, sinon selon le débit
+      var refs = h.length ? refsSaison(elab(res[2]), h[0].t) : [], vNow = hMax, surH = true;
+      if (refs.length < 5) { refs = q.length ? refsSaison(elab(res[3]), q[0].t) : []; vNow = qNow; surH = false; }
+      if (refs.length < 5 || vNow == null) throw new Error("historique insuffisant");
       var below = 0, eq = 0;
-      refs.forEach(function (x) { if (x < qNow) below++; else if (x === qNow) eq++; });
+      refs.forEach(function (x) { if (x < vNow) below++; else if (x === vNow) eq++; });
       var p = (below + eq / 2) / refs.length;
       var cls = CLASSES_RIV.filter(function (c) { return p < c.max; })[0] || CLASSES_RIV[CLASSES_RIV.length - 1];
       var med = refs.slice().sort(function (a, b) { return a - b; })[Math.floor(refs.length / 2)];
 
-      // tendance : dernier débit vs ~24 h plus tôt
-      var old = day[day.length - 1], trend = "";
-      if (old && old !== last && old.v > 0) {
-        var r = (last.v - old.v) / old.v;
-        trend = Math.abs(r) < 0.05 ? "→ stable" : (r > 0 ? "↗ en hausse" : "↘ en baisse");
+      var m = function (mm) { return num(mm / 1000, 2) + " m"; };
+      var m3 = function (ls) { return (ls >= 10000 ? num(ls / 1000, 0) : num(ls / 1000, 2)) + " m³/s"; };
+      var quoi = surH ? "Hauteur maximale des 24 dernières heures" : "Débit des 24 dernières heures";
+      var plus = surH ? "plus haute" : "plus fort", moins = surH ? "plus basse" : "plus faible";
+
+      // Tendance de la hauteur : dernière mesure vs la plus proche de 24 h plus tôt (± 1 h)
+      var trend = "";
+      if (h.length) {
+        var ref = null;
+        h.forEach(function (r) { var d = Math.abs(r.t - (h[0].t - 864e5)); if (d <= 3600e3 && (!ref || d < ref.d)) ref = { r: r, d: d }; });
+        if (ref) {
+          var cm = Math.round((h[0].v - ref.r.v) / 10);
+          trend = cm === 0 ? "→ stable" : (cm > 0 ? "↗ +" : "↘ −") + (cm === 0 ? "" : Math.abs(cm) + " cm");
+        }
       }
-      var h = (res[1].data || [])[0];
-      var m3 = function (ls) { return ls >= 10000 ? num(ls / 1000, 0) : num(ls / 1000, 2); };
+      var lastT = new Date(h.length ? h[0].t : q[0].t);
 
       var bar = CLASSES_RIV.map(function (c) { return '<span style="background:' + c.col + '"></span>'; }).join("");
       $("mwh-aulne").innerHTML =
         '<div class="mwh-badge" style="background:' + cls.col + '"><div class="mwh-badge-ico">' + cls.ico + "</div><div>" +
         '<div class="mwh-badge-lbl">Criticité · ' + esc(cls.lbl) + '</div><div class="mwh-badge-val">' + cls.crit + "</div></div></div>" +
         '<p class="mwh-msg">' + cls.msg + " " +
-        (below === 0 ? "Débit plus faible que toutes les " + refs.length + " années mesurées à la même période."
-          : below === refs.length ? "Débit plus fort que toutes les " + refs.length + " années mesurées à la même période."
-          : "Débit plus élevé que " + Math.round(p * 100) + " % des " + refs.length + " années mesurées à la même période.") + "</p>" +
-        '<div class="mwh-gauge" role="img" aria-label="Position du débit : ' + esc(cls.lbl) + '">' +
+        (below === 0 ? quoi + " " + moins + " que toutes les " + refs.length + " années mesurées à la même période."
+          : below === refs.length ? quoi + " " + plus + " que toutes les " + refs.length + " années mesurées à la même période."
+          : quoi + " " + plus + " que " + Math.round(p * 100) + " % des " + refs.length + " années mesurées à la même période.") + "</p>" +
+        '<div class="mwh-gauge" role="img" aria-label="Position ' + (surH ? "de la hauteur" : "du débit") + " : " + esc(cls.lbl) + '">' +
           '<div class="mwh-gauge-bar">' + bar + '</div><div class="mwh-gauge-pin" style="left:' + Math.max(2, Math.min(98, p * 100)) + '%"></div>' +
           '<div class="mwh-gauge-legend"><span>Étiage</span><span>Normal</span><span>Crue</span></div></div>' +
         '<dl class="mwh-kv">' +
-          "<dt>Débit (moy. 24 h)</dt><dd>" + m3(qNow) + " m³/s</dd>" +
-          "<dt>Normale de saison</dt><dd>≈ " + m3(med) + " m³/s</dd>" +
-          (h && h.resultat_obs != null ? "<dt>Hauteur à l'échelle</dt><dd>" + num(h.resultat_obs / 1000, 2) + " m</dd>" : "") +
-          (trend ? "<dt>Sur 24 h</dt><dd>" + trend + "</dd>" : "") +
-          "<dt>Dernière mesure</dt><dd>" + dmy(lastD) + " " + hm(lastD) + "</dd>" +
+          (h.length ? "<dt>Hauteur à l'échelle</dt><dd>" + m(h[0].v) + "</dd>" : "") +
+          (surH ? "<dt>Hauteur max. 24 h</dt><dd>" + m(hMax) + "</dd><dt>Normale de saison</dt><dd>≈ " + m(med) + "</dd>"
+                : "<dt>Débit (moy. 24 h)</dt><dd>" + m3(qNow) + "</dd><dt>Normale de saison</dt><dd>≈ " + m3(med) + "</dd>") +
+          (trend ? "<dt>Hauteur sur 24 h</dt><dd>" + trend + "</dd>" : "") +
+          (surH && q.length ? "<dt>Débit</dt><dd>" + m3(q[0].v) + "</dd>" : "") +
+          "<dt>Dernière mesure</dt><dd>" + dmy(lastT) + " " + hm(lastT) + "</dd>" +
         "</dl>";
     }).catch(function () {
       fail("mwh-aulne", "Impossible de récupérer le niveau de l'Aulne pour le moment.",
