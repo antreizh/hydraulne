@@ -1334,6 +1334,23 @@
 #mwh-widget .mwh-loading span:nth-child(3){animation-delay:.4s}
 
 /* ---- Pastilles de niveau ---- */
+/* Icône ⓘ devant chaque situation et cadre des échelles (dans la carte de la rubrique) */
+#mwh-widget .mwh-card{position:relative}
+#mwh-widget .mwh-info{all:unset;cursor:pointer;display:inline-block;vertical-align:middle;font-size:calc(14px*var(--k));line-height:1;font-weight:400;
+  color:#fff;opacity:.85;padding:calc(2px*var(--k));margin:0 calc(6px*var(--k)) calc(2px*var(--k)) 0;border-radius:50%}
+#mwh-widget .mwh-info:hover,#mwh-widget .mwh-info:focus-visible{opacity:1;outline:1px solid rgba(255,255,255,.8)}
+#mwh-widget .mwh-ov{position:absolute;inset:0;z-index:5;background:#fff;border-radius:inherit;padding:calc(16px*var(--k));overflow:auto;box-shadow:0 0 0 1px #d5dde4 inset}
+#mwh-widget .mwh-ov[hidden]{display:none}
+#mwh-widget .mwh-ov h4{margin:0 calc(26px*var(--k)) calc(6px*var(--k)) 0;font-size:calc(16px*var(--k));color:var(--mwh-navy)}
+#mwh-widget .mwh-ov p{margin:0 0 calc(10px*var(--k));font-size:calc(12.5px*var(--k));color:var(--mwh-muted);line-height:1.4}
+#mwh-widget .mwh-ov table{border-collapse:collapse;font-size:calc(13px*var(--k))}
+#mwh-widget .mwh-ov td:nth-child(2){white-space:nowrap}
+#mwh-widget .mwh-ov td{padding:calc(3px*var(--k)) 0;vertical-align:middle}
+#mwh-widget .mwh-ov td + td{padding-left:calc(10px*var(--k))}
+#mwh-widget .mwh-ov td.mwh-ov-l{color:var(--mwh-muted)}
+#mwh-widget .mwh-ov-pill{display:inline-block;white-space:nowrap;color:#fff;font-weight:700;font-size:calc(12px*var(--k));border-radius:999px;padding:calc(2px*var(--k)) calc(9px*var(--k))}
+#mwh-widget .mwh-ov-x{all:unset;cursor:pointer;position:absolute;top:calc(10px*var(--k));right:calc(12px*var(--k));font-size:calc(22px*var(--k));line-height:1;color:var(--mwh-muted)}
+#mwh-widget .mwh-ov-x:hover,#mwh-widget .mwh-ov-x:focus-visible{color:var(--mwh-ink)}
 #mwh-widget .mwh-badge{display:flex;align-items:center;gap:calc(12px*var(--k));border-radius:calc(14px*var(--k));padding:calc(12px*var(--k)) calc(14px*var(--k));color:#fff}
 #mwh-widget .mwh-badge-ico{font-size:calc(26px*var(--k));line-height:1}
 #mwh-widget .mwh-badge-lbl{font-size:calc(12px*var(--k));opacity:.9;text-transform:uppercase;letter-spacing:.04em}
@@ -1449,7 +1466,7 @@
       if (!zones.length) {
         $("mwh-vigi").innerHTML =
           '<div class="mwh-badge" style="background:#2e9e6a"><div class="mwh-badge-ico">😊</div><div>' +
-          '<div class="mwh-badge-lbl">Situation</div><div class="mwh-badge-val">Aucune restriction</div></div></div>' +
+          '<div class="mwh-badge-lbl">Situation</div><div class="mwh-badge-val">' + info("vigi") + 'Aucune restriction</div></div></div>' +
           '<p class="mwh-msg">Aucun arrêté sécheresse en vigueur à Châteaulin. Les bons gestes restent de mise !</p>';
         return;
       }
@@ -1472,7 +1489,7 @@
 
       $("mwh-vigi").innerHTML =
         '<div class="mwh-badge" style="background:' + g.col + '"><div class="mwh-badge-ico">' + g.ico + "</div><div>" +
-        '<div class="mwh-badge-lbl">Niveau en vigueur · ' + esc(worst.nom || "") + '</div><div class="mwh-badge-val">' + g.lbl + "</div></div></div>" +
+        '<div class="mwh-badge-lbl">Niveau en vigueur · ' + esc(worst.nom || "") + '</div><div class="mwh-badge-val">' + info("vigi") + g.lbl + "</div></div></div>" +
         '<p class="mwh-msg">' + g.msg + "</p>" +
         '<div class="mwh-chips">' + chips + "</div>" +
         (fin ? '<div class="mwh-muted">Arrêté valable jusqu\'au ' + fin +
@@ -1546,7 +1563,7 @@
 
       $("mwh-nappe").innerHTML =
         '<div class="mwh-badge" style="background:' + cls.col + '"><div class="mwh-badge-ico">' + cls.ico + "</div><div>" +
-        '<div class="mwh-badge-lbl">Criticité</div><div class="mwh-badge-val">' + cls.crit + "</div></div></div>" +
+        '<div class="mwh-badge-lbl">Criticité</div><div class="mwh-badge-val">' + info("nappe") + cls.crit + "</div></div></div>" +
         '<p class="mwh-msg">Niveau <b>' + cls.lbl.toLowerCase() + "</b> pour la saison : plus haut que " +
         Math.round(p * 100) + " % des " + refs.length + " années mesurées à la même période.</p>" +
         '<div class="mwh-gauge" role="img" aria-label="Position du niveau : ' + esc(cls.lbl) + '">' +
@@ -1656,7 +1673,7 @@
       var bar = CLASSES_RIV.map(function (c) { return '<span style="background:' + c.col + '"></span>'; }).join("");
       $("mwh-aulne").innerHTML =
         '<div class="mwh-badge" style="background:' + cls.col + '"><div class="mwh-badge-ico">' + cls.ico + "</div><div>" +
-        '<div class="mwh-badge-lbl">Criticité · ' + esc(cls.lbl) + '</div><div class="mwh-badge-val">' + cls.crit + "</div></div></div>" +
+        '<div class="mwh-badge-lbl">Criticité · ' + esc(cls.lbl) + '</div><div class="mwh-badge-val">' + info("aulne") + cls.crit + "</div></div></div>" +
         '<p class="mwh-msg">' + cls.msg + " " +
         (below === 0 ? quoi + " " + moins + " que toutes les " + refs.length + " années mesurées à la même période."
           : below === refs.length ? quoi + " " + plus + " que toutes les " + refs.length + " années mesurées à la même période."
@@ -1678,6 +1695,63 @@
     });
   }
 
+  /* ------------------------------------------------------------------
+     Échelles de situation : icône ⓘ devant chaque situation, cadre par rubrique
+     ------------------------------------------------------------------ */
+  function info(cle) {
+    return '<button type="button" class="mwh-info" data-echelle="' + cle + '" aria-label="Échelle de situation" title="Échelle de situation">ⓘ</button>';
+  }
+  function puce(txt, col) { return '<span class="mwh-ov-pill" style="background:' + col + '">' + txt + "</span>"; }
+  function lignesRang(list) {
+    var prev = 0;
+    return list.map(function (c) {
+      var hi = Math.round(c.max * 100), lo = Math.round(prev * 100); prev = c.max;
+      return [puce(c.crit, c.col), lo === 0 ? "moins de " + hi + " %" : hi > 100 ? lo + " % et plus" : lo + " à " + hi + " %", c.lbl];
+    });
+  }
+  var ECHELLES = {
+    vigi: { titre: "Vigilance eau · Châteaulin",
+      texte: "Niveau de restriction officiel en vigueur (arrêté préfectoral publié sur VigiEau). Le plus grave des zones s'applique : rivières, nappes, eau du robinet.",
+      lignes: function () {
+        var m = { vigilance: "économies d'eau conseillées", alerte: "premières restrictions d'usage",
+          alerte_renforcee: "restrictions renforcées", crise: "usages limités aux besoins prioritaires" };
+        return [[puce("Aucune restriction", "#2e9e6a"), "pas d'arrêté de restriction"]].concat(Object.keys(GRAV).map(function (k) {
+          return [puce(GRAV[k].lbl, GRAV[k].col), m[k]];
+        }));
+      } },
+    aulne: { titre: "Niveau de l'Aulne · Châteaulin",
+      texte: "Hauteur d'eau maximale des 24 dernières heures, comparée aux mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
+      lignes: function () { return lignesRang(CLASSES_RIV); } },
+    nappe: { titre: "Nappe · Saint-Ségal",
+      texte: "Dernier niveau journalier de la nappe, comparé aux mêmes dates (± 10 jours) des années précédentes (depuis 2004). Le pourcentage est la part des années où le niveau était plus bas.",
+      lignes: function () { return lignesRang(CLASSES); } }
+  };
+  var ouvert = null;   // { ov, btn }
+  function fermer() {
+    if (!ouvert) return;
+    ouvert.ov.hidden = true; try { ouvert.btn.focus(); } catch (e) {} ouvert = null;
+  }
+  function ouvrir(btn) {
+    var e = ECHELLES[btn.getAttribute("data-echelle")], carte = btn.closest(".mwh-card"); if (!e || !carte) return;
+    fermer();
+    var ov = carte.querySelector(".mwh-ov");
+    if (!ov) { ov = document.createElement("div"); ov.className = "mwh-ov"; ov.setAttribute("role", "dialog"); carte.appendChild(ov); }
+    ov.setAttribute("aria-label", "Échelle de situation : " + e.titre);
+    ov.innerHTML = '<button type="button" class="mwh-ov-x" aria-label="Fermer">×</button><h4>' + e.titre + "</h4><p>" + e.texte + "</p><table>" +
+      e.lignes().map(function (l) {
+        return "<tr><td>" + l[0] + "</td><td>" + l[1] + "</td>" + (l[2] ? '<td class="mwh-ov-l">' + l[2] + "</td>" : "") + "</tr>";
+      }).join("") + "</table>";
+    ov.hidden = false; ov.scrollTop = 0; ouvert = { ov: ov, btn: btn };
+    ov.querySelector(".mwh-ov-x").focus();
+  }
+  root.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest(".mwh-info, .mwh-ov-x");
+    if (!b) return;
+    if (b.classList.contains("mwh-ov-x") || (ouvert && ouvert.btn === b)) { fermer(); return; }
+    ouvrir(b);
+  });
+  root.addEventListener("keydown", function (ev) { if (ev.key === "Escape") fermer(); });
+
   /* ------------------------------------------------------------------ */
   function refreshAll() {
     loadVigieau(); loadNappe(); loadAulne();
@@ -1693,21 +1767,21 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=48" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=49" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=48" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=49" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=48" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=49" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=48" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=48" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=49" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=49" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=48" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=48" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=49" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=49" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 </main>
