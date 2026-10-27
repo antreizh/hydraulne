@@ -14,7 +14,8 @@
      Taille auto-adaptative : le widget remplit la largeur et la hauteur du bloc.
      À coller dans un bloc « Code HTML » de WebAcappella (toute taille ; ≈ 340 × 330 px minimum conseillé).
      Indépendant des autres widgets : ils peuvent être sur la même page.
-     Courbes superposées : Guily Glaz mesurée (trait plein) et Guily Glaz théorique extrapolée (tirets).
+     Courbes superposées : Guily Glaz mesurée (trait plein) et Guily Glaz théorique (tirets), construite
+     sur le profil réel des derniers cycles mesurés et les pleines mers SHOM de Brest.
      Sources : marégraphe de Guily Glaz (station J382183001) via Hub'Eau Hydrométrie ;
      coefficient et prédictions servant à la courbe théorique : SHOM (Brest, port de référence)
      ===================================================================== -->
@@ -136,8 +137,7 @@
     station: "J382183001",          // L'Aulne à Port-Launay – Guily Glaz [marégraphe]
     refreshMinutes: 5,              // le marégraphe de Guily Glaz mesure toutes les 5 minutes
     trouMinutes: 20,                // au-delà de cet écart entre deux mesures, la courbe est interrompue
-    shomPort: "BREST",              // port de référence SHOM (coefficient et prédictions)
-    decalageMaxMin: 240             // décalage horaire maximal recherché entre Brest et Guily Glaz (minutes)
+    shomPort: "BREST"               // port de référence SHOM (coefficient et prédictions)
   };
   /* ============================================================== */
 
@@ -209,14 +209,14 @@
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
   }
 
-  /* 1) Marégraphe de Guily Glaz (Hub'Eau) : depuis 0 h la veille, pour disposer d'assez de points d'ajustement */
+  /* 1) Marégraphe de Guily Glaz (Hub'Eau) : 4 derniers jours, pour établir le profil réel de la marée */
   function load() {
     var now = new Date();
     jour0 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    var debut = new Date(jour0.getTime() - JOUR);
+    var debut = new Date(jour0.getTime() - 4 * JOUR);          // 4 jours : profil type de la marée à Guily Glaz
     getJSON("https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=" + encodeURIComponent(CFG.station) +
       "&grandeur_hydro=H&date_debut_obs=" + encodeURIComponent(debut.toISOString().slice(0, 19) + "Z") +
-      "&size=2000&sort=asc&format=json")
+      "&size=5000&sort=asc&format=json")
       .then(function (j) {
         ptsFit = (j.data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
           .map(function (r) { return { t: new Date(r.date_obs), v: r.resultat_obs / 1000 }; })   // mm -> m
@@ -314,84 +314,125 @@
   function estDemain(d, now) {
     return d.toDateString() === new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
   }
-  /* ================== COURBE THÉORIQUE ==================
-     a) Courbe prédite de Brest : interpolation en cosinus entre pleines et basses mers SHOM
-        (méthode classique des annuaires de marée). Des extrémités « virtuelles » sont ajoutées avant
-        la première et après la dernière marée de la vignette, pour couvrir toute la journée.
-     b) Guily Glaz théorique = a × Brest prédite (t − τ) + b, où le décalage τ, l'amplitude a et le
-        niveau b sont ajustés (moindres carrés) sur les mesures réelles de Guily Glaz.
-     c) La courbe est ensuite tracée de 0 h à 24 h : au-delà de « maintenant », elle est extrapolée. */
-  var evPred = null;
-  function preparerPrediction() {
-    evPred = null;
-    if (!tides) return;
-    var ev = tides.filter(function (e) { return e.h != null; });
-    if (ev.length < 2) return;
-    // Demi-période moyenne entre pleine et basse mer (≈ 6 h 12) ; valeur type si une seule marée connue
-    var demi = ev.length >= 2 ? (ev[ev.length - 1].date - ev[0].date) / (ev.length - 1) : 372.5 * MIN;
-    if (!(demi > 5 * HEURE && demi < 7.5 * HEURE)) demi = 372.5 * MIN;
-    function oppose(t) { return t === "PM" ? "BM" : "PM"; }
-    // Extrémités « virtuelles » avant la première et après la dernière marée connue, pour couvrir
-    // toute la journée de 0 h à 24 h (et le décalage de Guily Glaz) même si le SHOM ne fournit
-    // que les marées du jour : on reprend en alternance les dernières hauteurs connues.
-    var premier = ev[0], second = ev[1];
-    var avant = [];
-    for (var i = 1; i <= 3; i++) {
-      var refAv = i % 2 ? second : premier;
-      avant.unshift({ type: i % 2 ? oppose(premier.type) : premier.type, date: new Date(premier.date - i * demi), h: refAv.h });
+  /* ================== COURBE THÉORIQUE (profil réel de Guily Glaz) ==================
+     À Guily Glaz, la marée n'a pas la forme sinusoïdale de Brest : la mer monte très vite (≈ 3 h 30 à 5 h),
+     redescend plus lentement avec un palier, puis l'eau reste à un niveau plancher (fond / débit de l'Aulne)
+     pendant plusieurs heures. La courbe théorique reproduit donc ce profil réel :
+     a) Profil type : moyenne (médiane) des derniers cycles mesurés à Guily Glaz (jusqu'à 4 jours), calés sur
+        leur pleine mer et ramenés entre le plancher (0) et la pleine mer (1).
+     b) Pleines mers à venir : heure = pleine mer SHOM de Brest + décalage τ ; hauteur = hauteur de Brest + c.
+        τ et c sont mesurés sur les dernières pleines mers observées à Guily Glaz.
+     c) Plancher : niveau des dernières basses mers observées (il varie avec le débit de l'Aulne).
+     d) Courbe = plancher + (pleine mer − plancher) × profil type, autour de chaque pleine mer. */
+  var PROFIL_PAS = 5, PROFIL_AV = 420, PROFIL_AP = 480;      // minutes avant / après la pleine mer
+  // Profil par défaut (relevé sur les cycles d'octobre 2026, vives-eaux), utilisé tant qu'il n'y a pas assez de mesures
+  var PROFIL_DEFAUT = [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.02, 0.02, 0.03, 0.05, 0.07, 0.1, 0.13, 0.17, 0.21, 0.25, 0.29, 0.32, 0.36, 0.39, 0.43, 0.46, 0.49, 0.52, 0.55, 0.58, 0.61, 0.64, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.84, 0.86, 0.88, 0.9, 0.91, 0.92, 0.94, 0.95, 0.96, 0.97, 0.97, 0.97, 0.98, 0.98, 0.98, 0.99, 0.99, 1, 1, 1, 1, 0.99, 0.99, 0.97, 0.96, 0.94, 0.92, 0.9, 0.89, 0.87, 0.85, 0.83, 0.81, 0.79, 0.77, 0.75, 0.72, 0.7, 0.67, 0.65, 0.63, 0.61, 0.59, 0.57, 0.54, 0.52, 0.5, 0.48, 0.46, 0.44, 0.42, 0.4, 0.38, 0.36, 0.34, 0.32, 0.3, 0.28, 0.26, 0.24, 0.22, 0.21, 0.19, 0.17, 0.16, 0.14, 0.13, 0.11, 0.1, 0.08, 0.07, 0.06, 0.05, 0.05, 0.04, 0.03, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01];
+  function lisse(v) { return v.map(function (_, i) { var s = 0, n = 0; for (var k = i - 2; k <= i + 2; k++) if (v[k] != null) { s += v[k]; n++; } return s / n; }); }
+  function mediane(a) { a = a.slice().sort(function (x, y) { return x - y; }); var n = a.length; return n ? (n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2) : null; }
+  function valeurA(serie, t, tol) {             // interpolation linéaire dans une série {t, v} triée
+    var lo = 0, hi = serie.length - 1;
+    if (!serie.length || t < serie[0].t - tol || t > serie[hi].t + tol) return null;
+    while (hi - lo > 1) { var m = (lo + hi) >> 1; if (serie[m].t <= t) lo = m; else hi = m; }
+    var a = serie[lo], b = serie[hi];
+    if (t <= a.t) return a.t - t <= tol ? a.v : null;
+    if (t >= b.t) return t - b.t <= tol ? b.v : null;
+    if (b.t - a.t > 20 * MIN) return null;
+    return a.v + (b.v - a.v) * (t - a.t) / (b.t - a.t);
+  }
+  // Pleines mers mesurées à Guily Glaz : maximum local sur ± 3 h, au moins 1 m au-dessus du plancher
+  function pleinesMesurees(serie) {
+    var v = lisse(serie.map(function (p) { return p.v; })), out = [];
+    var bas = mediane(v.slice().sort(function (a, b) { return a - b; }).slice(0, Math.max(1, Math.floor(v.length / 5))));
+    for (var i = 0; i < serie.length; i++) {
+      var t = +serie[i].t, ok = v[i] > bas + 1;
+      for (var k = i - 1; ok && k >= 0 && t - serie[k].t <= 3 * HEURE; k--) if (v[k] > v[i]) ok = false;
+      for (k = i + 1; ok && k < serie.length && serie[k].t - t <= 3 * HEURE; k++) if (v[k] >= v[i]) ok = false;
+      if (!ok) continue;
+      var avant = 0, apres = 0;                  // le maximum doit être entouré de mesures (pas en bord de série)
+      for (k = i; k >= 0 && t - serie[k].t <= 3 * HEURE; k--) avant = t - serie[k].t;
+      for (k = i; k < serie.length && serie[k].t - t <= 3 * HEURE; k++) apres = serie[k].t - t;
+      if (avant < 2 * HEURE || apres < 1 * HEURE) continue;
+      if (out.length && t - out[out.length - 1].t < 8 * HEURE) continue;
+      out.push({ t: t, h: v[i] });
     }
-    var dernier = ev[ev.length - 1], avantDernier = ev[ev.length - 2];
-    var apres = [];
-    for (i = 1; i <= 4; i++) {
-      var refAp = i % 2 ? avantDernier : dernier;
-      apres.push({ type: i % 2 ? oppose(dernier.type) : dernier.type, date: new Date(+dernier.date + i * demi), h: refAp.h });
+    return out;
+  }
+  // Plancher : niveau bas des dernières 14 heures mesurées (médiane des 15 % les plus basses)
+  function plancherMesure(serie) {
+    if (!serie.length) return null;
+    var fin = +serie[serie.length - 1].t;
+    var v = serie.filter(function (p) { return fin - p.t <= 14 * HEURE; }).map(function (p) { return p.v; }).sort(function (a, b) { return a - b; });
+    return v.length >= 20 ? mediane(v.slice(0, Math.max(3, Math.floor(v.length * 0.15)))) : null;
+  }
+  // Profil type à partir des cycles complets mesurés
+  function profilType(serie, pleines) {
+    var cycles = pleines.filter(function (p) { return p.t - PROFIL_AV * MIN >= +serie[0].t && p.t + PROFIL_AP * MIN <= +serie[serie.length - 1].t; });
+    if (cycles.length < 2) return null;
+    cycles = cycles.slice(-6);                   // les 6 derniers cycles : le profil suit l'évolution des coefficients
+    var prof = [];
+    for (var m = -PROFIL_AV; m <= PROFIL_AP; m += PROFIL_PAS) {
+      var vals = [];
+      cycles.forEach(function (c) {
+        var bas = Math.min.apply(null, serie.filter(function (p) { return Math.abs(p.t - c.t) <= 7 * HEURE; }).map(function (p) { return p.v; }));
+        var v = valeurA(serie, c.t + m * MIN, 10 * MIN);
+        if (v != null && c.h - bas > 0.5) vals.push(Math.max(0, Math.min(1.05, (v - bas) / (c.h - bas))));
+      });
+      prof.push(vals.length >= 2 ? mediane(vals) : null);
     }
-    evPred = avant.concat(ev, apres);
+    for (var k = 0; k < prof.length; k++) if (prof[k] == null) return null;
+    return lisse(prof);                          // léger lissage (± 10 min)
+  }
+  function profilA(prof, m) {                    // m : minutes depuis la pleine mer
+    if (m < -PROFIL_AV || m > PROFIL_AP) return 0;
+    var x = (m + PROFIL_AV) / PROFIL_PAS, i = Math.floor(x), f = x - i;
+    var a = prof[i], b = prof[Math.min(prof.length - 1, i + 1)];
+    return a + (b - a) * f;
   }
 
-  function brestPredite(t) {
-    if (!evPred) return null;
-    var tt = +t;
-    for (var i = 0; i < evPred.length - 1; i++) {
-      var a = evPred[i], b = evPred[i + 1];
-      if (tt >= +a.date && tt <= +b.date) {
-        var f = (tt - a.date) / (b.date - a.date);
-        return a.h + (b.h - a.h) * (1 - Math.cos(Math.PI * f)) / 2;
-      }
-    }
-    return null;
+  // Pleines mers de Brest (SHOM), complétées par des pleines mers « virtuelles » avant et après (≈ 12 h 25)
+  function pleinesBrest() {
+    if (!tides) return null;
+    var pm = tides.filter(function (e) { return e.type === "PM" && e.h != null; });
+    if (!pm.length) return null;
+    var per = pm.length >= 2 ? (pm[pm.length - 1].date - pm[0].date) / (pm.length - 1) : 745 * MIN;
+    if (!(per > 11.5 * HEURE && per < 13.5 * HEURE)) per = 745 * MIN;
+    var out = pm.map(function (e) { return { t: +e.date, h: e.h, virt: false }; });
+    for (var i = 1; i <= 8; i++) out.unshift({ t: out[0].t - per, h: out[0].h, virt: true });
+    for (i = 1; i <= 2; i++) out.push({ t: out[out.length - 1].t + per, h: out[out.length - 1].h, virt: true });
+    return out;
   }
+
   function ajuster() {
     theo = null;
-    preparerPrediction();
-    if (!evPred || ptsFit.length < 30) return;
-    var best = null;
-    for (var tau = -60; tau <= CFG.decalageMaxMin; tau += 5) {
-      var xs = [], ys = [];
-      ptsFit.forEach(function (p) {
-        var x = brestPredite(p.t.getTime() - tau * MIN);
-        if (x != null) { xs.push(x); ys.push(p.v); }
-      });
-      if (xs.length < 30) continue;
-      var n = xs.length, mx = 0, my = 0;
-      for (var i = 0; i < n; i++) { mx += xs[i]; my += ys[i]; }
-      mx /= n; my /= n;
-      var sxy = 0, sxx = 0;
-      for (i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) * (xs[i] - mx); }
-      if (sxx < 1e-6) continue;
-      var a = sxy / sxx, b = my - a * mx;
-      if (a <= 0) continue;
-      var sse = 0;
-      for (i = 0; i < n; i++) { var r = ys[i] - (a * xs[i] + b); sse += r * r; }
-      var rmse = Math.sqrt(sse / n);
-      if (!best || rmse < best.rmse) best = { a: a, b: b, tau: tau, rmse: rmse };
-    }
-    theo = best;
+    var pb = pleinesBrest();
+    if (!pb || ptsFit.length < 30) return;
+    var pleines = pleinesMesurees(ptsFit);
+    // décalage τ et écart de hauteur c : pleines mers mesurées associées à la pleine mer de Brest la plus proche
+    var taus = [], tausReels = [], cs = [], csReels = [];
+    pleines.forEach(function (g) {
+      var best = null;
+      pb.forEach(function (b) { var d = g.t - b.t; if (d > -2 * HEURE && d < 3 * HEURE && (!best || Math.abs(d) < Math.abs(best.d))) best = { d: d, b: b }; });
+      if (!best) return;
+      // les pleines mers SHOM du jour sont exactes ; les « virtuelles » (jours précédents) ne servent qu'à défaut
+      (best.b.virt ? taus : tausReels).push(best.d);
+      (best.b.virt ? cs : csReels).push(g.h - best.b.h);
+    });
+    var tau = tausReels.length ? mediane(tausReels.slice(-2)) : taus.length ? mediane(taus.slice(-2)) : 25 * MIN;   // ≈ 25 min après Brest
+    var c = csReels.length ? mediane(csReels.slice(-2)) : cs.length ? mediane(cs.slice(-2)) : -3;
+    var plancher = plancherMesure(ptsFit);
+    var prof = profilType(ptsFit, pleines) || PROFIL_DEFAUT;
+    if (plancher == null || !prof) return;
+    theo = { tau: tau, c: c, plancher: plancher, prof: prof,
+      pleines: pb.map(function (b) { return { t: b.t + tau, h: Math.max(plancher + 0.5, b.h + c) }; }) };
   }
   function theorique(t) {
     if (!theo) return null;
-    var x = brestPredite(t.getTime() - theo.tau * MIN);
-    return x == null ? null : theo.a * x + theo.b;
+    var tt = +t, v = theo.plancher;
+    theo.pleines.forEach(function (p) {
+      var m = (tt - p.t) / MIN;
+      if (m >= -PROFIL_AV && m <= PROFIL_AP) v = Math.max(v, theo.plancher + (p.h - theo.plancher) * profilA(theo.prof, m));
+    });
+    return v;
   }
 
   /* Séries à tracer, limitées à la journée en cours */
