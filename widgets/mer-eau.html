@@ -206,10 +206,17 @@
     $(id).innerHTML = '<div class="mw-err">' + esc(msg) +
       (link ? ' <a href="' + link + '" target="_blank" rel="noopener">Voir la source</a>' : "") + "</div>";
   }
-  function getJSON(url) {
-    return fetch(url, { headers: { Accept: "application/json" } }).then(function (r) {
+  // Requête JSON avec délai maximal (20 s) et une seconde tentative : Hub'Eau laisse parfois une requête sans réponse
+  function getJSON(url, essai) {
+    var ctl = window.AbortController ? new AbortController() : null;
+    var minuterie = ctl ? setTimeout(function () { ctl.abort(); }, 20000) : null;
+    return fetch(url, { headers: { Accept: "application/json" }, signal: ctl ? ctl.signal : undefined }).then(function (r) {
       if (!r.ok) { var e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
       return r.json();
+    }).then(function (j) { clearTimeout(minuterie); return j; }, function (e) {
+      clearTimeout(minuterie);
+      if (!essai && !(e && e.status >= 400 && e.status < 500)) return getJSON(url, 1);
+      throw e;
     });
   }
 

@@ -167,9 +167,17 @@
       '<span class="mwm-pill" style="background:' + col + '">' + txt + "</span>";
   }
   function na(id) { $(id).innerHTML = '<span class="mwm-na">indisponible</span>'; }
-  function getJSON(url) {
-    return fetch(url, { headers: { Accept: "application/json" } }).then(function (r) {
-      if (!r.ok) throw new Error("HTTP " + r.status); return r.json();
+  // Requête JSON avec délai maximal (20 s) et une seconde tentative : Hub'Eau laisse parfois une requête sans réponse
+  function getJSON(url, essai) {
+    var ctl = window.AbortController ? new AbortController() : null;
+    var minuterie = ctl ? setTimeout(function () { ctl.abort(); }, 20000) : null;
+    return fetch(url, { headers: { Accept: "application/json" }, signal: ctl ? ctl.signal : undefined }).then(function (r) {
+      if (!r.ok) { var e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
+      return r.json();
+    }).then(function (j) { clearTimeout(minuterie); return j; }, function (e) {
+      clearTimeout(minuterie);
+      if (!essai && !(e && e.status >= 400 && e.status < 500)) return getJSON(url, 1);
+      throw e;
     });
   }
   // Rang du niveau actuel parmi les années passées, à la même période (0 = le plus bas, 1 = le plus haut)
@@ -443,6 +451,8 @@
       function pctVs(ref, lbl) {
         if (!ref) return null;
         var pc = Math.round((qNow - ref) / ref * 100), fl = pc > 0 ? "↗" : pc < 0 ? "↘" : "→";
+        // au-delà de +199 % : coefficient multiplicateur à une décimale (ex. « x 2,5 » = débit multiplié par 2,5)
+        if (pc > 199) return fl + " x " + num(qNow / ref, 1) + " / " + lbl;
         return fl + " " + (Math.abs(pc) < 1 ? "stable" : signed(pc, 0, " %")) + " / " + lbl;
       }
       var old = q.filter(function (r) { return r.t <= q[0].t - 7 * 864e5 && r.t > q[0].t - 8 * 864e5; });
