@@ -88,6 +88,7 @@
 #mwm-widget .mwm-varline{flex:0 0 100%;text-align:right;font-style:italic;font-size:calc(11.5px*var(--k));color:var(--mwm-muted);white-space:nowrap;margin-top:calc(-6px*var(--k))}
 #mwm-widget .mwm-varline:empty{display:none}
 #mwm-widget .mwm-varline + .mwm-varline{margin-top:calc(-8px*var(--k))}
+#mwm-widget #mwm-aulne-var{white-space:normal}
 #mwm-widget .mwm-pill{display:inline-block;color:#fff;font-weight:700;font-size:calc(12px*var(--k));border-radius:calc(999px*var(--k));padding:calc(3px*var(--k)) calc(10px*var(--k))}
 #mwm-widget .mwm-coef{font-weight:800;color:var(--mwm-navy)}
 #mwm-widget .mwm-up{color:#1f7bb6;font-weight:700}
@@ -458,8 +459,24 @@
         num(qNow / 1000, qNow >= 10000 ? 0 : 2) + " m³/s (base des variations en %)";
       // hauteur à l'échelle (dernière mesure, mm -> m) puis variations en cm
       if (h.length) parts.unshift(num(h[0].v / 1000, 2) + " m");
-      $("mwm-aulne-var").textContent = parts.length ? "hauteur " + parts.join(" · ") : "";   // ligne pleine largeur, en italique
-      $("mwm-aulne-var").title = h.length ? "Hauteur d'eau à l'échelle de la station, mesure de " + hm(new Date(h[0].t)) : "";
+      // Variation vs N-1 : seules les hauteurs maximales journalières sont conservées d'une année sur l'autre ;
+      // on compare donc la hauteur maximale des 24 dernières heures à celle du même jour de l'année précédente (± 3 j).
+      var infoN1 = "";
+      if (h.length && histH.length) {
+        histH.sort(function (a, b) { return a.t - b.t; });
+        var d0 = new Date(h[0].t), refN1 = mesureA(histH, Date.UTC(d0.getUTCFullYear() - 1, d0.getUTCMonth(), d0.getUTCDate()), 3);
+        if (refN1) {
+          var hMax24 = Math.max.apply(null, h.filter(function (r) { return r.t > h[0].t - 864e5; }).map(function (r) { return r.v; }));
+          var cmN1 = Math.round((hMax24 - refN1.v) / 10), flN1 = cmN1 > 0 ? "↗" : cmN1 < 0 ? "↘" : "→";
+          parts.push(flN1 + " " + (cmN1 === 0 ? "stable" : signed(cmN1, 0, " cm")) + " vs N-1");
+          infoN1 = " · N-1 : hauteur maximale des 24 dernières heures (" + num(hMax24 / 1000, 2) + " m) comparée à celle du " +
+            new Date(refN1.t).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) +
+            " (" + num(refN1.v / 1000, 2) + " m)";
+        }
+      }
+      // ligne pleine largeur, en italique ; elle peut passer sur 2 lignes, sans couper une variation
+      $("mwm-aulne-var").innerHTML = parts.length ? "hauteur " + parts.map(function (s) { return '<span class="mwm-nw">' + s + "</span>"; }).join(" · ") : "";
+      $("mwm-aulne-var").title = h.length ? "Hauteur d'eau à l'échelle de la station, mesure de " + hm(new Date(h[0].t)) + infoN1 : "";
     }).catch(function () { na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = ""; });
   }
 
