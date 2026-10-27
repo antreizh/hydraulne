@@ -68,10 +68,10 @@ Mettre à jour l'application
   - Remplacez index.html sur l'hébergement : l'application installée prendra
     la nouvelle version à sa prochaine ouverture avec du réseau.
   - Si vous modifiez les icônes ou le nom, changez aussi la ligne
-    const CACHE = "situation-hydro-v58"  dans sw.js (v59, v60…).
+    const CACHE = "situation-hydro-v59"  dans sw.js (v60, v61…).
 
   - À chaque nouvelle version, l'appli passe aussi un numéro aux tableaux
-    (adresse « meteo-….html?v=58 » dans index.html) : le téléphone recharge
+    (adresse « meteo-….html?v=59 » dans index.html) : le téléphone recharge
     alors forcément les nouveaux tableaux.
   - Si un téléphone affiche encore une ancienne version : fermez complètement
     l'application puis rouvrez-la deux fois (la 1re ouverture installe la mise

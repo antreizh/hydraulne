@@ -367,7 +367,7 @@
       }
       function fmt(cm, ref) {
         var fl = cm > 0 ? "↗" : cm < 0 ? "↘" : "→";
-        return fl + " " + (cm === 0 ? "stable" : signed(cm / 100, 2, " m")) + " / " + ref;
+        return fl + " " + (cm === 0 ? "stable" : signed(cm, 0, " cm")) + " / " + ref;   // variations en cm
       }
       var cm1 = ecart(last.t - J, 0), cm7 = ecart(last.t - 7 * J), cmN1 = ecart(last.t - 365 * J);   // J-1 : la veille exactement
       var parts = [];
