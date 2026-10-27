@@ -88,7 +88,7 @@
 #mwm-widget .mwm-varline{flex:0 0 100%;text-align:right;font-style:italic;font-size:calc(11.5px*var(--k));color:var(--mwm-muted);white-space:nowrap;margin-top:calc(-6px*var(--k))}
 #mwm-widget .mwm-varline:empty{display:none}
 #mwm-widget .mwm-varline + .mwm-varline{margin-top:calc(-8px*var(--k))}
-#mwm-widget #mwm-aulne-var,#mwm-widget #mwm-aulne-debit{white-space:normal}
+#mwm-widget #mwm-aulne-var,#mwm-widget #mwm-aulne-debit,#mwm-widget #mwm-nappe-var{white-space:normal}
 /* Mesures de l'Aulne et de la nappe : en plus petit */
 #mwm-widget .mwm-varline{font-size:calc(10px*var(--k))}
 #mwm-widget #mwm-aulne small,#mwm-widget #mwm-nappe small{font-size:calc(10px*var(--k))}
@@ -361,16 +361,17 @@
       var c = classe(NAPPE, p);
       // Niveau du jour comparé à J-7 et au même jour de l'année N-1 (en m, + = la nappe est plus haute)
       var J = 864e5;
-      function ecart(tRef) {
-        var b = mesureA(d, tRef, 3);
+      function ecart(tRef, tol) {
+        var b = mesureA(d, tRef, tol == null ? 3 : tol);
         return b ? Math.round((last.v - b.v) * 100) : null;
       }
       function fmt(cm, ref) {
         var fl = cm > 0 ? "↗" : cm < 0 ? "↘" : "→";
         return fl + " " + (cm === 0 ? "stable" : signed(cm / 100, 2, " m")) + " / " + ref;
       }
-      var cm7 = ecart(last.t - 7 * J), cmN1 = ecart(last.t - 365 * J);
+      var cm1 = ecart(last.t - J, 0), cm7 = ecart(last.t - 7 * J), cmN1 = ecart(last.t - 365 * J);   // J-1 : la veille exactement
       var parts = [];
+      if (cm1 != null) parts.push(fmt(cm1, "J-1"));
       if (cm7 != null) parts.push(fmt(cm7, "J-7"));
       if (cmN1 != null) parts.push(fmt(cmN1, "N-1"));
       // Date et heure de la dernière mesure : celle de la mesure télétransmise si elle est au moins aussi récente
@@ -383,7 +384,8 @@
       $("mwm-nappe").innerHTML = pill(c.crit, c.col, "nappe") +
         '<small class="mwm-date">' + quand + "</small>" +
         (prof != null ? "<small><i>eau à " + num(prof, 2) + " m sous la surface</i></small>" : "");
-      $("mwm-nappe-var").textContent = parts.join(" · ");          // ligne pleine largeur, en italique
+      // ligne pleine largeur, en italique ; elle peut passer sur 2 lignes, sans couper une variation
+      $("mwm-nappe-var").innerHTML = parts.map(function (s) { return '<span class="mwm-nw">' + s + "</span>"; }).join(" · ");
     }).catch(function () { na("mwm-nappe"); $("mwm-nappe-var").textContent = ""; });
   }
 
