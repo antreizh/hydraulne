@@ -451,8 +451,8 @@
       function pctVs(ref, lbl) {
         if (!ref) return null;
         var pc = Math.round((qNow - ref) / ref * 100), fl = pc > 0 ? "↗" : pc < 0 ? "↘" : "→";
-        // au-delà de +199 % : coefficient multiplicateur à une décimale (ex. « x 2,5 » = débit multiplié par 2,5)
-        if (pc > 199) return fl + " x " + num(qNow / ref, 1) + " / " + lbl;
+        // au-delà de +199 % : coefficient multiplicateur arrondi à l'entier (ex. « x 8 » = débit multiplié par environ 8)
+        if (pc > 199) return fl + " x " + Math.round(qNow / ref) + " / " + lbl;
         return fl + " " + (Math.abs(pc) < 1 ? "stable" : signed(pc, 0, " %")) + " / " + lbl;
       }
       var old = q.filter(function (r) { return r.t <= q[0].t - 7 * 864e5 && r.t > q[0].t - 8 * 864e5; });
