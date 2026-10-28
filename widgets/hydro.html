@@ -220,6 +220,16 @@
   var TYPES = { SUP: "Rivières (eaux de surface)", SOU: "Eaux souterraines", AEP: "Eau du robinet" };
   var THEME_ICO = { Arroser: "🪴", Nettoyer: "🧽", "Remplir ou vidanger": "🏊", "Ouvrages hydrauliques": "🚧", Irriguer: "🌾", Prélever: "🪣" };
 
+  // Échelle de couleur : chaque couleur occupe la largeur de sa plage (ex. 10 à 25 % → 15 % de la barre),
+  // pour que le curseur, placé au rang (0 à 100 %), tombe toujours sur la couleur de la situation affichée.
+  function barre(list) {
+    var prev = 0;
+    return list.map(function (c) {
+      var w = Math.min(1, c.max) - prev; prev = Math.min(1, c.max);
+      return '<span style="background:' + c.col + ';flex:' + (Math.round(w * 1000) / 1000) + ' 1 0"></span>';
+    }).join("");
+  }
+
   function loadVigieau() {
     var url = "https://api.vigieau.gouv.fr/api/zones?lon=" + CFG.vigieauLon + "&lat=" + CFG.vigieauLat +
       "&commune=" + CFG.vigieauInsee + "&profil=" + CFG.vigieauProfil;
@@ -321,7 +331,7 @@
         trend = Math.abs(dcm) <= 2 ? "→ stable" : (dcm > 0 ? "↗ en hausse (+" + dcm + " cm)" : "↘ en baisse (" + dcm + " cm)");
       }
 
-      var bar = CLASSES.map(function (c) { return '<span style="background:' + c.col + '"></span>'; }).join("");
+      var bar = barre(CLASSES);
       var pinLeft = Math.max(2, Math.min(98, p * 100));
 
       $("mwh-nappe").innerHTML =
@@ -434,7 +444,7 @@
       }
       var lastT = new Date(h.length ? h[0].t : q[0].t);
 
-      var bar = CLASSES_RIV.map(function (c) { return '<span style="background:' + c.col + '"></span>'; }).join("");
+      var bar = barre(CLASSES_RIV);
       $("mwh-aulne").innerHTML =
         '<div class="mwh-badge" style="background:' + cls.col + '"><div class="mwh-badge-ico">' + cls.ico + "</div><div>" +
         '<div class="mwh-badge-lbl">Criticité · ' + esc(cls.lbl) + '</div><div class="mwh-badge-val">' + info("aulne") + cls.crit + "</div></div></div>" +
