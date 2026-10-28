@@ -582,7 +582,7 @@
     if (!tous.length) { showMsg(svg, W, H, msgVide); return; }
 
     var fs = 10.5 * k;
-    var fsE = fs * 1.8;                                   // hauteurs de pleine / basse mer et « maintenant » : grands
+    var fsE = fs * 1.26;                                  // hauteurs de pleine / basse mer et « maintenant » (+26 %)
     var padL = 38 * k, padR = 10 * k, padT = fsE * 1.35, padB = 20 * k;
     var x0 = padL, x1 = W - padR, y0 = H - padB, y1 = padT;
 
@@ -601,6 +601,11 @@
     }
     var span = Math.max(0.4, hi - vmin), step = Math.min(1, niceStep(span * 1.15, 5));   // pas qui divise 1 m
     var lo = Math.floor((vmin - span * 0.08) / step) * step;
+    // place sous la basse mer pour son étiquette : sinon on descend le bas de l'axe (au plus 2 pas)
+    for (hx = 0; hx < 2; hx++) {
+      if ((vmin - lo) * (y0 - y1) / (hi - lo) >= fsE * 1.45 + 4 * k) break;
+      lo -= step;
+    }
     var nGrad = Math.round((hi - lo) / step);
     var X = function (t) { return x0 + (t - jour0) / JOUR * (x1 - x0); };
     var Y = function (v) { return y0 - (v - lo) / (hi - lo) * (y0 - y1); };
@@ -668,9 +673,8 @@
         el("circle", { cx: px, cy: py, r: 3 * k, fill: SERIES.mes.col, stroke: "#fff", "stroke-width": 2 }, svg);
         var anchor = px < x0 + 70 * k ? "start" : px > x1 - 70 * k ? "end" : "middle";
         var lb = el("text", { "text-anchor": anchor, "font-size": fsE }, svg);
-        lb.style.fill = "#1d2b36";
-        // liseré blanc : l'étiquette reste lisible si elle passe sur une courbe
-        lb.setAttribute("stroke", "#fff"); lb.setAttribute("stroke-width", 3 * k); lb.setAttribute("paint-order", "stroke"); lb.setAttribute("stroke-linejoin", "round");
+        // couleur de la courbe mesurée, sans gras ni liseré : lisible sur fond clair comme sur fond sombre
+        lb.style.fill = SERIES.mes.col; lb.style.fontWeight = "400";
         lb.textContent = m2(p.v) + " m · " + hm(p.t);
         // positions essayées :
         //  - pleine mer : à droite puis à gauche du sommet, à la même hauteur (la courbe redescend de part et d'autre),
