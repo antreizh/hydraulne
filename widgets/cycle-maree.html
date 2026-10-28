@@ -660,10 +660,11 @@
         var p = a[0], sens = a[1], px = X(p.t), py = Y(p.v);
         el("circle", { cx: px, cy: py, r: 3 * k, fill: SERIES.mes.col, stroke: "#fff", "stroke-width": 2 }, svg);
         var anchor = px < x0 + 40 * k ? "start" : px > x1 - 40 * k ? "end" : "middle";
-        var lb = el("text", { "text-anchor": anchor, "font-size": fs }, svg);
+        var fsE = fs * 1.2;                                           // hauteurs de pleine / basse mer : un peu plus grandes
+        var lb = el("text", { "text-anchor": anchor, "font-size": fsE }, svg);
         lb.style.fill = "#1d2b36";
         lb.textContent = m2(p.v) + " m · " + hm(p.t);
-        var essais = sens < 0 ? [py - fs * 0.6 - 3 * k, py + fs * 1.1 + 3 * k] : [py + fs * 1.1 + 3 * k, py - fs * 0.6 - 3 * k];
+        var essais = sens < 0 ? [py - fsE * 0.6 - 3 * k, py + fsE * 1.1 + 3 * k] : [py + fsE * 1.1 + 3 * k, py - fsE * 0.6 - 3 * k];
         for (var i = 0; i < essais.length; i++) {
           lb.setAttribute("x", px); lb.setAttribute("y", essais[i]);
           var bb = lb.getBBox();

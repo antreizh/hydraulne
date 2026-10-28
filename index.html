@@ -1312,10 +1312,11 @@
         var p = a[0], sens = a[1], px = X(p.t), py = Y(p.v);
         el("circle", { cx: px, cy: py, r: 3 * k, fill: SERIES.mes.col, stroke: "#fff", "stroke-width": 2 }, svg);
         var anchor = px < x0 + 40 * k ? "start" : px > x1 - 40 * k ? "end" : "middle";
-        var lb = el("text", { "text-anchor": anchor, "font-size": fs }, svg);
+        var fsE = fs * 1.2;                                           // hauteurs de pleine / basse mer : un peu plus grandes
+        var lb = el("text", { "text-anchor": anchor, "font-size": fsE }, svg);
         lb.style.fill = "#1d2b36";
         lb.textContent = m2(p.v) + " m · " + hm(p.t);
-        var essais = sens < 0 ? [py - fs * 0.6 - 3 * k, py + fs * 1.1 + 3 * k] : [py + fs * 1.1 + 3 * k, py - fs * 0.6 - 3 * k];
+        var essais = sens < 0 ? [py - fsE * 0.6 - 3 * k, py + fsE * 1.1 + 3 * k] : [py + fsE * 1.1 + 3 * k, py - fsE * 0.6 - 3 * k];
         for (var i = 0; i < essais.length; i++) {
           lb.setAttribute("x", px); lb.setAttribute("y", essais[i]);
           var bb = lb.getBBox();
@@ -1940,21 +1941,21 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=69" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=70" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=69" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=70" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=69" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=70" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=69" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=69" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=70" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=70" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=69" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=69" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=70" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=70" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 </main>
