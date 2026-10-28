@@ -82,6 +82,7 @@
 #mwc-widget .mwc-h{font-weight:800;color:var(--mwc-navy)!important;font-variant-numeric:tabular-nums}
 #mwc-widget .mwc-sub{font-size:calc(11.5px*var(--kh));color:var(--mwc-muted);margin-top:calc(2px*var(--kh))}
 #mwc-widget .mwc-sub span{white-space:nowrap}
+#mwc-widget .mwc-sub .mwc-proch{display:block;font-weight:600;color:#1d2b36}
 #mwc-widget .mwc-coef{font-weight:800;color:var(--mwc-navy)!important}
 #mwc-widget .mwc-shom-host iframe{position:absolute;left:-10000px;top:0;width:420px;height:700px;border:0;visibility:hidden}
 #mwc-widget .mwc-up{color:var(--mwc-blue)!important;font-weight:700}
@@ -243,7 +244,7 @@
     function attempt() {
       if (done) return;
       var ev = []; try { ev = parseShom(f.contentDocument); } catch (e) {}
-      if (ev.length >= 2) { done = true; tides = ev; ajuster(); renderState(); table(); draw(); }
+      if (ev.length >= 2) { done = true; tides = ev; ajuster(); renderState(); table(); draw(); sousTitre(); }
       else if (++tries > 24) { done = true; renderState(); }
       else setTimeout(attempt, 500);
     }
@@ -459,8 +460,31 @@
   }
 
   // Sous-titre « Guily Glaz · Port-Launay, mesure à 09:10 » (la virgule reste en fin de ligne si le texte est coupé)
+  /* Prochaine pleine ou basse mer à Guily Glaz, d'après la courbe théorique :
+     pleine mer = sommet de la courbe ; basse mer = arrivée au niveau plancher (début du palier de basse mer). */
+  function prochaineMaree(now) {
+    if (!theo) return null;
+    var t0 = +now, cands = [];
+    theo.pleines.forEach(function (p) {
+      if (p.t > t0) cands.push({ type: "PM", t: p.t });
+      for (var m = 30; m <= PROFIL_AP; m += 5) {                          // descente : premier passage au plancher
+        var tt = p.t + m * MIN;
+        if (theorique(new Date(tt)) - theo.plancher <= Math.max(0.08, 0.04 * (p.h - theo.plancher))) { if (tt > t0) cands.push({ type: "BM", t: tt }); break; }
+      }
+    });
+    cands.sort(function (a, b) { return a.t - b.t; });
+    return cands[0] || null;
+  }
+  var dernierSous = "";
   function sousTitre(txt) {
-    $("mwc-sub").innerHTML = "<span>Guily Glaz · Port-Launay" + (txt ? "," : "") + "</span>" + (txt ? " <span>" + txt + "</span>" : "");
+    if (txt != null) dernierSous = txt; else txt = dernierSous;
+    var now = new Date(), pr = prochaineMaree(now), proch = "";
+    if (pr) {
+      var d = new Date(pr.t), demain = d.toDateString() !== now.toDateString();
+      proch = '<span class="mwc-proch" title="Heure estimée à Guily Glaz (courbe théorique)">Prochaine ' +
+        (pr.type === "PM" ? "pleine mer " : "basse mer ") + (demain ? "demain " : "") + "à " + hm(d) + "</span>";
+    }
+    $("mwc-sub").innerHTML = "<span>Guily Glaz · Port-Launay" + (txt ? "," : "") + "</span>" + (txt ? " <span>" + txt + "</span>" : "") + proch;
   }
 
   /* ---- Valeur actuelle + tendance mesurée à Guily Glaz (30 dernières minutes) ---- */
@@ -700,6 +724,7 @@
     if (jour0 && d.toDateString() !== jour0.toDateString()) load();   // passage à minuit : nouvelle journée
     else draw();                                                       // fait avancer le repère « maintenant »
     renderState();                                                     // le coefficient suit la marée en cours
+    sousTitre();                                                       // prochaine pleine / basse mer
   }
 
   tick(); load(); loadShom(); fit();
