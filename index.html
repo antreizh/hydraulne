@@ -675,9 +675,10 @@
   <div class="mwc-head">
     <span class="mwc-ico" aria-hidden="true">〰️</span>
     <div class="mwc-ttl">
+      <div class="mwc-sub mwc-sub1" id="mwc-sub"><span>Guily Glaz · Port-Launay</span></div>
       <div class="mwc-line1"><span class="mwc-t">Cycle de marée</span></div>
       <div class="mwc-info" id="mwc-info"><i class="mwc-wait"></i></div>
-      <div class="mwc-sub" id="mwc-sub"><span>Guily Glaz · Port-Launay</span></div>
+      <div class="mwc-sub" id="mwc-proch"></div>
     </div>
   </div>
 
@@ -735,6 +736,8 @@
 #mwc-widget .mwc-sub{font-size:calc(11.5px*var(--kh));color:var(--mwc-muted);margin-top:calc(2px*var(--kh))}
 #mwc-widget .mwc-sub span{white-space:nowrap}
 #mwc-widget .mwc-sub .mwc-proch{display:block;font-weight:600;color:#1d2b36}
+#mwc-widget .mwc-sub1{margin:0 0 calc(2px*var(--kh))}
+#mwc-widget #mwc-proch:empty{display:none}
 #mwc-widget .mwc-coef{font-weight:800;color:var(--mwc-navy)!important}
 #mwc-widget .mwc-shom-host iframe{position:absolute;left:-10000px;top:0;width:420px;height:700px;border:0;visibility:hidden}
 #mwc-widget .mwc-up{color:var(--mwc-blue)!important;font-weight:700}
@@ -1136,7 +1139,8 @@
       proch = '<span class="mwc-proch" title="Heure estimée à Guily Glaz (courbe théorique)">Prochaine ' +
         (pr.type === "PM" ? "pleine mer " : "basse mer ") + (demain ? "demain " : "") + "à " + hm(d) + "</span>";
     }
-    $("mwc-sub").innerHTML = "<span>Guily Glaz · Port-Launay" + (txt ? "," : "") + "</span>" + (txt ? " <span>" + txt + "</span>" : "") + proch;
+    $("mwc-sub").innerHTML = "<span>Guily Glaz · Port-Launay" + (txt ? "," : "") + "</span>" + (txt ? " <span>" + txt + "</span>" : "");
+    $("mwc-proch").innerHTML = proch;                                  // sous le coefficient
   }
 
   /* ---- Valeur actuelle + tendance mesurée à Guily Glaz (30 dernières minutes) ---- */
@@ -1933,21 +1937,21 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=64" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=65" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=64" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=65" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=64" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=65" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=64" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=64" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=65" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=65" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=64" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=64" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=65" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=65" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 </main>
