@@ -95,6 +95,7 @@
 #mwm-widget #mwm-aulne small.mwm-date,#mwm-widget #mwm-nappe small.mwm-date{font-size:calc(9.5px*var(--k))}
 #mwm-widget .mwm-pill{display:inline-block;color:#fff;font-weight:700;font-size:calc(12px*var(--k));border-radius:calc(999px*var(--k));padding:calc(3px*var(--k)) calc(10px*var(--k))}
 #mwm-widget .mwm-coef{font-weight:800;color:var(--mwm-navy)}
+#mwm-widget .mwm-vague{width:calc(22px*var(--k));height:calc(12px*var(--k));vertical-align:middle;margin:0 calc(3px*var(--k)) calc(2px*var(--k)) 0;overflow:visible}
 #mwm-widget .mwm-up{color:#1f7bb6;font-weight:700}
 #mwm-widget .mwm-down{color:#c56a1c;font-weight:700}
 /* Icône ⓘ devant chaque situation et cadre des échelles */
@@ -294,6 +295,20 @@
   function estDemain(d, now) {
     return d.toDateString() === new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
   }
+  // Mini symbole « vague et point » : position dans le cycle basse mer (0) → pleine mer (0,5) → basse mer (1)
+  function phaseMaree(prev, next, now) {
+    if (!prev) return next.type === "PM" ? 0.25 : 0.75;
+    var f = Math.max(0, Math.min(1, (now - prev.date) / (next.date - prev.date)));
+    return prev.type === "BM" ? f / 2 : 0.5 + f / 2;
+  }
+  function vague(ph, col, cls) {
+    var w = 22, h = 12, a = h / 2 - 1.5, pts = [];
+    for (var i = 0; i <= 22; i++) { var x = i / 22; pts.push((x * w).toFixed(1) + "," + (h / 2 + a * Math.cos(2 * Math.PI * x)).toFixed(1)); }
+    var cx = ph * w, cy = h / 2 + a * Math.cos(2 * Math.PI * ph);
+    return '<svg class="' + cls + '" viewBox="-1.5 -1.5 ' + (w + 3) + " " + (h + 3) + '" aria-hidden="true">' +
+      '<polyline points="' + pts.join(" ") + '" fill="none" stroke="#9cb8cc" stroke-width="1.4"/>' +
+      '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="2.6" fill="' + col + '" stroke="#fff" stroke-width="1"/></svg>';
+  }
   function renderTide() {
     if (!tides) return;
     var now = new Date(), prev = null, next = null;
@@ -303,7 +318,7 @@
     var rising = prev ? prev.type === "BM" : next.type === "PM";
     $("mwm-tide").innerHTML =
       (pm ? '<span class="mwm-coef">Coef. ' + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span>" : "") +
-      '<span class="' + (rising ? "mwm-up" : "mwm-down") + '">' + (rising ? "↑ Montante" : "↓ Descendante") + "</span>" +
+      '<span title="' + (prev ? (prev.type === "PM" ? "Pleine mer " : "Basse mer ") + hm(prev.date) + " → " : "") + (next.type === "PM" ? "pleine mer " : "basse mer ") + hm(next.date) + '" class="' + (rising ? "mwm-up" : "mwm-down") + '">' + vague(phaseMaree(prev, next, now), rising ? "#1f7bb6" : "#c56a1c", "mwm-vague") + (rising ? "Montante" : "Descendante") + "</span>" +
       "<small>" + (next.type === "PM" ? "Pleine mer" : "Basse mer") + (estDemain(next.date, now) ? " demain " : " ") + hm(next.date) + "</small>";
   }
   function loadTide() {
