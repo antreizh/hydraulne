@@ -596,7 +596,7 @@
     // place au-dessus de la pleine mer pour son étiquette (hauteur · heure) : sinon on monte le haut de l'axe d'1 m
     for (var hx = 0; hx < 2; hx++) {
       var loEst = Math.min(vmin, 0) - 0.5, ppm = (y0 - y1) / (hi - loEst);
-      if ((hi - vmax) * ppm >= fsE * 0.75 + 3 * k) break;
+      if ((hi - vmax) * ppm >= fsE * 1.05 + 3 * k) break;
       hi += 1;
     }
     var span = Math.max(0.4, hi - vmin), step = Math.min(1, niceStep(span * 1.15, 5));   // pas qui divise 1 m
@@ -676,7 +676,7 @@
         //  - pleine mer : à droite puis à gauche du sommet, à la même hauteur (la courbe redescend de part et d'autre),
         //    puis au-dessus, puis au-dessous ;
         //  - basse mer : au-dessous (centrée, puis décalée), puis au-dessus vers la droite (palier de basse mer).
-        var yA = py - fsE * 0.6 - 3 * k, yB = py + fsE * 1.1 + 3 * k, yM = py + fsE * 0.35, essais;
+        var yA = py - fsE * 0.6 - 3 * k, yB = py + fsE * 1.1 + 3 * k, yM = py - fsE * 0.2, essais;   // yM : un peu au-dessus du sommet
         if (sens < 0) essais = [[px + 9 * k, yM, "start"], [px - 9 * k, yM, "end"], [px, yA, anchor], [px, yB, anchor]];
         else essais = [[px, yB, anchor], [px + 6 * k, yB, "end"], [px - 6 * k, yB, "start"], [px - 6 * k, yA, "start"], [px + 6 * k, yA, "end"]];
         var ys = [essais[0][1]];
