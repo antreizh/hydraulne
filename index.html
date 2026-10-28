@@ -1234,7 +1234,8 @@
     if (!tous.length) { showMsg(svg, W, H, msgVide); return; }
 
     var fs = 10.5 * k;
-    var padL = 38 * k, padR = 10 * k, padT = fs * 1.6, padB = 20 * k;
+    var fsE = fs * 1.8;                                   // hauteurs de pleine / basse mer et « maintenant » : grands
+    var padL = 38 * k, padR = 10 * k, padT = fsE * 1.35, padB = 20 * k;
     var x0 = padL, x1 = W - padR, y0 = H - padB, y1 = padT;
 
     // domaine vertical commun aux courbes affichées sur les 24 h :
@@ -1244,6 +1245,12 @@
     var vmin = Infinity, vmax = -Infinity;
     tous.forEach(function (p) { vmin = Math.min(vmin, p.v); vmax = Math.max(vmax, p.v); });
     var hi = Math.floor(vmax) + 1;
+    // place au-dessus de la pleine mer pour son étiquette (hauteur · heure) : sinon on monte le haut de l'axe d'1 m
+    for (var hx = 0; hx < 2; hx++) {
+      var loEst = Math.min(vmin, 0) - 0.5, ppm = (y0 - y1) / (hi - loEst);
+      if ((hi - vmax) * ppm >= fsE * 0.75 + 3 * k) break;
+      hi += 1;
+    }
     var span = Math.max(0.4, hi - vmin), step = Math.min(1, niceStep(span * 1.15, 5));   // pas qui divise 1 m
     var lo = Math.floor((vmin - span * 0.08) / step) * step;
     var nGrad = Math.round((hi - lo) / step);
@@ -1295,7 +1302,7 @@
     var now = new Date(), xn = X(now), tn = null;
     if (xn >= x0 && xn <= x1) {
       el("line", { x1: xn, x2: xn, y1: fs * 1.2, y2: y0, stroke: "#9aa9b5", "stroke-width": 1, "stroke-dasharray": (3 * k) + " " + (3 * k) }, svg);
-      tn = el("text", { x: xn, y: fs * 0.9, "text-anchor": xn > x1 - 40 * k ? "end" : xn < x0 + 40 * k ? "start" : "middle", "font-size": fs * 0.95 }, svg);
+      tn = el("text", { x: xn, y: fsE * 0.95, "text-anchor": xn > x1 - 70 * k ? "end" : xn < x0 + 70 * k ? "start" : "middle", "font-size": fsE }, svg);
       tn.textContent = "maintenant";
     }
 
@@ -1311,17 +1318,26 @@
       if (pmax.v - pmin.v >= 0.05) [[pmax, -1], [pmin, 1]].forEach(function (a) {
         var p = a[0], sens = a[1], px = X(p.t), py = Y(p.v);
         el("circle", { cx: px, cy: py, r: 3 * k, fill: SERIES.mes.col, stroke: "#fff", "stroke-width": 2 }, svg);
-        var anchor = px < x0 + 40 * k ? "start" : px > x1 - 40 * k ? "end" : "middle";
-        var fsE = fs * 1.2;                                           // hauteurs de pleine / basse mer : un peu plus grandes
+        var anchor = px < x0 + 70 * k ? "start" : px > x1 - 70 * k ? "end" : "middle";
         var lb = el("text", { "text-anchor": anchor, "font-size": fsE }, svg);
         lb.style.fill = "#1d2b36";
+        // liseré blanc : l'étiquette reste lisible si elle passe sur une courbe
+        lb.setAttribute("stroke", "#fff"); lb.setAttribute("stroke-width", 3 * k); lb.setAttribute("paint-order", "stroke"); lb.setAttribute("stroke-linejoin", "round");
         lb.textContent = m2(p.v) + " m · " + hm(p.t);
-        var essais = sens < 0 ? [py - fsE * 0.6 - 3 * k, py + fsE * 1.1 + 3 * k] : [py + fsE * 1.1 + 3 * k, py - fsE * 0.6 - 3 * k];
+        // positions essayées :
+        //  - pleine mer : à droite puis à gauche du sommet, à la même hauteur (la courbe redescend de part et d'autre),
+        //    puis au-dessus, puis au-dessous ;
+        //  - basse mer : au-dessous (centrée, puis décalée), puis au-dessus vers la droite (palier de basse mer).
+        var yA = py - fsE * 0.6 - 3 * k, yB = py + fsE * 1.1 + 3 * k, yM = py + fsE * 0.35, essais;
+        if (sens < 0) essais = [[px + 9 * k, yM, "start"], [px - 9 * k, yM, "end"], [px, yA, anchor], [px, yB, anchor]];
+        else essais = [[px, yB, anchor], [px + 6 * k, yB, "end"], [px - 6 * k, yB, "start"], [px - 6 * k, yA, "start"], [px + 6 * k, yA, "end"]];
+        var ys = [essais[0][1]];
         for (var i = 0; i < essais.length; i++) {
-          lb.setAttribute("x", px); lb.setAttribute("y", essais[i]);
+          lb.setAttribute("x", essais[i][0]); lb.setAttribute("y", essais[i][1]); lb.setAttribute("text-anchor", essais[i][2]);
           var bb = lb.getBBox();
-          if (bb.y >= 0 && bb.y + bb.height <= y0 && !chevauche(lb, tn) && !etiquettes.some(function (e) { return chevauche(lb, e); })) break;
-          if (i === essais.length - 1) lb.remove();
+          if (bb.y >= 0 && bb.y + bb.height <= y0 && bb.x >= 0 && bb.x + bb.width <= W && !chevauche(lb, tn) &&
+              !etiquettes.some(function (e) { return chevauche(lb, e); })) break;
+          if (i === essais.length - 1) { lb.setAttribute("x", essais[0][0]); lb.setAttribute("y", essais[0][1]); lb.setAttribute("text-anchor", essais[0][2]); }   // à défaut : position principale
         }
         if (lb.parentNode) etiquettes.push(lb);
       });
@@ -1941,21 +1957,21 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=70" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=71" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=70" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=71" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=70" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=71" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=70" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=70" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=71" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=71" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=70" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=70" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=71" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=71" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 </main>
