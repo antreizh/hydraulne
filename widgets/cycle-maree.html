@@ -23,8 +23,7 @@
   <div class="mwc-head">
     <span class="mwc-ico" aria-hidden="true">〰️</span>
     <div class="mwc-ttl">
-      <div class="mwc-sub mwc-sub1" id="mwc-sub"><span>Guily Glaz · Port-Launay</span></div>
-      <div class="mwc-line1"><span class="mwc-t">Cycle de marée</span></div>
+      <div class="mwc-line1"><span class="mwc-t">Marée</span> <span class="mwc-sub mwc-sub1" id="mwc-sub"><span>Guily Glaz · Port-Launay</span></span></div>
       <div class="mwc-info" id="mwc-info"><i class="mwc-wait"></i></div>
       <div class="mwc-sub" id="mwc-proch"></div>
     </div>
@@ -81,10 +80,11 @@
 /* séparateur « · » placé en fin d'élément : une ligne coupée ne commence jamais par un point */
 #mwc-widget .mwc-info > span:not(:last-child)::after{content:" ·";color:var(--mwc-muted);font-weight:400}
 #mwc-widget .mwc-h{font-weight:800;color:var(--mwc-navy)!important;font-variant-numeric:tabular-nums}
+#mwc-widget .mwc-h .mwc-hh{font-size:.62em;font-weight:400;color:var(--mwc-muted)}
 #mwc-widget .mwc-sub{font-size:calc(11.5px*var(--kh));color:var(--mwc-muted);margin-top:calc(2px*var(--kh))}
 #mwc-widget .mwc-sub span{white-space:nowrap}
 #mwc-widget .mwc-sub .mwc-proch{display:block;font-weight:600;color:#1d2b36}
-#mwc-widget .mwc-sub1{margin:0 0 calc(2px*var(--kh))}
+#mwc-widget .mwc-sub1{display:inline;margin:0 0 0 calc(4px*var(--kh));font-weight:400}
 #mwc-widget #mwc-proch:empty{display:none}
 #mwc-widget .mwc-coef{font-weight:800;color:var(--mwc-navy)!important}
 #mwc-widget .mwc-shom-host iframe{position:absolute;left:-10000px;top:0;width:420px;height:700px;border:0;visibility:hidden}
@@ -502,8 +502,9 @@
       trendHTML = Math.abs(d) < 0.02 ? '<span>→ étale</span>'
         : d > 0 ? '<span class="mwc-up">↑ montante</span>' : '<span class="mwc-down">↓ descendante</span>';
     }
-    hauteurHTML = '<span class="mwc-h">' + m1(last.v) + " m</span>";        // arrondi au décimètre
-    sousTitre("mesure à " + hm(last.t));
+    // hauteur arrondie au décimètre, suivie de l'heure de la mesure
+    hauteurHTML = '<span class="mwc-h">' + m1(last.v) + ' m <small class="mwc-hh">à ' + hm(last.t) + "</small></span>";
+    sousTitre("");
     renderState();
   }
 
