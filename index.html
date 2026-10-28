@@ -163,6 +163,7 @@
 #mwm-widget .mwm-ov .mwm-pill{font-size:calc(10.5px*var(--k));padding:calc(2px*var(--k)) calc(8px*var(--k))}
 #mwm-widget .mwm-ov-x{all:unset;cursor:pointer;position:absolute;top:calc(8px*var(--k));right:calc(10px*var(--k));font-size:calc(18px*var(--k));line-height:1;color:var(--mwm-muted)}
 #mwm-widget .mwm-ov-x:hover,#mwm-widget .mwm-ov-x:focus-visible{color:#1d2b36}
+#mwm-widget .mwm-ancien{opacity:.55;transition:opacity .3s}
 #mwm-widget .mwm-na{color:var(--mwm-muted);font-size:calc(12px*var(--k))}
 #mwm-widget .mwm-foot{border-top:1px solid var(--mwm-line);padding-top:calc(7px*var(--k));font-size:calc(10.5px*var(--k));color:var(--mwm-muted)}
 #mwm-widget .mwm-foot a{color:var(--mwm-muted);text-decoration:underline;text-underline-offset:2px}
@@ -460,6 +461,29 @@
     { max: .75, crit: "Normal", col: "#e0b100" }, { max: .90, crit: "Vigilance", col: "#e67e22" },
     { max: 1.01, crit: "Critique (crue)", col: "#c0392b" }
   ];
+  /* Mémoire de la dernière mesure affichée (navigateur du visiteur) : le Niveau de l'Aulne s'affiche aussitôt
+     avec la mesure précédente, atténué, puis il est remplacé dès que la nouvelle mesure arrive. */
+  var CLE_AULNE = "antreizh-mwm-aulne", IDS_AULNE = ["mwm-aulne", "mwm-aulne-debit", "mwm-aulne-var"];
+  function memoriserAulne() {
+    try {
+      var m = { t: Date.now() };
+      IDS_AULNE.forEach(function (id) { m[id] = { h: $(id).innerHTML, ti: $(id).title || "" }; });
+      localStorage.setItem(CLE_AULNE, JSON.stringify(m));
+    } catch (e) {}
+  }
+  function prechargerAulne() {
+    try {
+      var m = JSON.parse(localStorage.getItem(CLE_AULNE) || "null");
+      if (!m || Date.now() - m.t > 7 * 864e5) return;           // au-delà de 7 jours, on n'affiche plus l'ancienne mesure
+      IDS_AULNE.forEach(function (id) {
+        if (!m[id]) return;
+        $(id).innerHTML = m[id].h; $(id).title = "Mesure précédente, actualisation en cours…";
+        $(id).classList.add("mwm-ancien");
+      });
+    } catch (e) {}
+  }
+  function finPrechargement() { IDS_AULNE.forEach(function (id) { $(id).classList.remove("mwm-ancien"); }); }
+
   function loadAulne() {
     var b = "https://hubeau.eaufrance.fr/api/v2/hydrometrie/", st = encodeURIComponent(CFG.stationAulne);
     Promise.all([
@@ -561,7 +585,15 @@
       // ligne pleine largeur, en italique ; elle peut passer sur 2 lignes, sans couper une variation
       $("mwm-aulne-var").innerHTML = parts.length ? "hauteur " + parts.map(function (s) { return '<span class="mwm-nw">' + s + "</span>"; }).join(" · ") : "";
       $("mwm-aulne-var").title = h.length ? "Hauteur d'eau à l'échelle de la station, mesure de " + hm(new Date(h[0].t)) + infoN1 : "";
-    }).catch(function () { na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = ""; });
+      finPrechargement(); memoriserAulne();
+    }).catch(function () {
+      // échec : on garde la mesure précédente si elle est affichée, sinon « indisponible »
+      if ($("mwm-aulne").classList.contains("mwm-ancien")) {
+        IDS_AULNE.forEach(function (id) { $(id).title = "Mesure précédente : actualisation impossible pour le moment"; });
+        return;
+      }
+      na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = "";
+    });
   }
 
   /* ---------------- Échelles de situation (icône ⓘ) ---------------- */
@@ -618,7 +650,7 @@
   }
   function tick() { var d = new Date(); $("mwm-time").textContent = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + hm(d); }
   function refreshAll() { loadTide(); loadVigi(); loadNappe(); loadAulne(); }
-  tick(); refreshAll();
+  tick(); prechargerAulne(); refreshAll();
   setInterval(refreshAll, CFG.refreshMinutes * 60000);
   setInterval(function () { tick(); renderTide(); }, 60000);
 })();
@@ -1876,21 +1908,21 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=62" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=63" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=62" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=63" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=62" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=63" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=62" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=62" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=63" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=63" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=62" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=62" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=63" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=63" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 </main>
