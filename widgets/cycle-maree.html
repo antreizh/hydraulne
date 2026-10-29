@@ -166,7 +166,7 @@
   /* ---- Les trois courbes : identité = couleur + style de trait (jamais la couleur seule) ---- */
   var SERIES = {
     mes:    { col: "#1f7bb6", dash: "",      lbl: "mesure" },
-    theo:   { col: "#2e9e6a", dash: "7 4",   lbl: "théorique" }
+    theo:   { col: "#2e9e6a", dash: "5 3",   lbl: "théorique" }
   };
   var visible = { mes: true, theo: true };
   try { var mem = JSON.parse(localStorage.getItem("mwc-visible-v2") || "null"); if (mem) for (var c in visible) if (c in mem) visible[c] = !!mem[c]; } catch (e) {}
@@ -518,7 +518,7 @@
       var s = SERIES[key];
       return '<button type="button" data-s="' + key + '" aria-pressed="' + visible[key] + '"' + (dispo[key] ? "" : " disabled") + '>' +
         '<svg viewBox="0 0 22 8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" stroke="' + s.col +
-        '" stroke-width="2.4" stroke-linecap="round"' + (s.dash ? ' stroke-dasharray="' + s.dash + '"' : "") + "/></svg>" +
+        '" stroke-width="' + (s.dash ? 1.4 : 2.4) + '" stroke-linecap="round"' + (s.dash ? ' stroke-dasharray="' + s.dash + '"' : "") + "/></svg>" +
         s.lbl + "</button>";
     }).join("");
   }
@@ -642,7 +642,8 @@
         var d = sg.map(function (p, i) { return (i ? "L" : "M") + X(p.t).toFixed(1) + " " + Y(p.v).toFixed(1); }).join(" ");
         if (aire) el("path", { d: d + " L" + X(sg[sg.length - 1].t).toFixed(1) + " " + y0 + " L" + X(sg[0].t).toFixed(1) + " " + y0 + " Z",
           fill: s.col, "fill-opacity": 0.10, stroke: "none" }, svg);
-        var attrs = { d: d, fill: "none", stroke: s.col, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" };
+        // courbe mesurée : trait de 2 px ; courbe théorique (pointillés) : trait fin de 1,2 px
+        var attrs = { d: d, fill: "none", stroke: s.col, "stroke-width": s.dash ? 1.2 : 2, "stroke-linejoin": "round", "stroke-linecap": "round" };
         if (s.dash) attrs["stroke-dasharray"] = s.dash.split(" ").map(function (x) { return (+x * k).toFixed(1); }).join(" ");
         el("path", attrs, svg);
       });
