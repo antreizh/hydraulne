@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Historique des marées réelles à Guily Glaz (Port-Launay) et à Brest, avec coefficient et météo de Brest.
+"""Historique des marées réelles à Guily Glaz (Port-Launay) et à Brest, avec coefficient, vent et pression.
 
 Objectif : pouvoir analyser plus tard la corrélation entre hauteur d'eau, coefficient de marée,
 surcote et vent (et pression atmosphérique, cause principale de la surcote avec le vent).
@@ -22,10 +22,11 @@ Fichiers produits (un fichier par mois, heures en UTC, séparateur « ; ») :
       vent_ms;vent_dir;pression_hpa;gg_date_utc;gg_hauteur_mm
       surcote = hauteur extrême mesurée − hauteur prédite (« surcote de pleine/basse mer ») ;
       gg_… = extrême correspondant mesuré à Guily Glaz (de 1 h avant à 3 h après l'heure prévue à Brest).
-  data/meteo-brest/AAAA-MM.csv        date_utc;vent_ms;vent_dir;rafale_ms;pression_hpa
-      Météo-France, station Brest-Guipavas (29075001), fichier horaire public du Finistère (sans clé,
-      publié chaque matin avec les observations jusqu'à la nuit) : FF vent moyen sur 10 min (m/s),
-      DD direction (degrés, d'où vient le vent), FXI rafale max de l'heure, PMER pression au niveau de la mer.
+  data/meteo/AAAA-MM.csv              date_utc;vent_ms;vent_dir;rafale_ms;pression_hpa
+      Météo-France, fichier horaire public du Finistère (sans clé, publié chaque matin avec les observations
+      jusqu'à la nuit). Vent : station de la pointe Saint-Mathieu (29190001, « PLOUGONVELIN », 22 m) :
+      FF vent moyen sur 10 min (m/s), DD direction (degrés, d'où vient le vent), FXI rafale max de l'heure.
+      Pression : Brest-Guipavas (29075001 ; la pointe Saint-Mathieu ne la mesure pas), PMER au niveau de la mer.
 
 Colonnes coef / vent / pression : coef = coefficient de la pleine mer de Brest la plus proche (à 6 h 13 près) ;
 vent et pression = observation horaire la plus proche. Vides tant qu'ils ne sont pas connus : ils sont
@@ -54,7 +55,8 @@ IOC = "https://www.ioc-sealevelmonitoring.org/service.php?query=data&code=bres&t
 VIGNETTE = "https://services.data.shom.fr/hdm/vignette/grande/BREST?locale=fr"
 S3 = "https://meteofrance.s3.sbg.io.cloud.ovh.net"
 MF_PREFIXE = "data/synchro_ftp/BASE/HOR/H_29_latest"
-MF_STATION = "29075001"                           # BREST-GUIPAVAS
+MF_VENT = "29190001"                              # pointe Saint-Mathieu (PLOUGONVELIN)
+MF_PRESSION = "29075001"                          # BREST-GUIPAVAS (pas de baromètre à Saint-Mathieu)
 
 COLS_MAREE = ["date_utc", "hauteur_mm", "coef", "vent_ms", "vent_dir", "pression_hpa"]
 COLS_METEO = ["date_utc", "vent_ms", "vent_dir", "rafale_ms", "pression_hpa"]
@@ -234,8 +236,8 @@ def brest(depuis, jusque):
     return out
 
 
-# ---------------------------------------------------------------- météo Brest-Guipavas (Météo-France)
-def meteo_brest(depuis):
+# ---------------------------------------------------------------- météo (Météo-France)
+def meteo_mf(depuis):
     xml = lire_url(f"{S3}/?list-type=2&prefix={MF_PREFIXE}", brut=True)
     cles = sorted(set(re.findall(r"<Key>(" + re.escape(MF_PREFIXE) + r"-\d{4}-(\d{4})\.csv\.gz)</Key>", xml)), key=lambda c: c[1])
     if not cles:
@@ -246,12 +248,17 @@ def meteo_brest(depuis):
     ix = {c: tete.index(c) for c in ("NUM_POSTE", "AAAAMMJJHH", "FF", "DD", "FXI", "PMER")}
     out, mini = {}, depuis.strftime("%Y%m%d%H")
     for l in lignes:
-        if len(l) > max(ix.values()) and l[ix["NUM_POSTE"]].strip() == MF_STATION and l[ix["AAAAMMJJHH"]].strip() >= mini:
-            h = l[ix["AAAAMMJJHH"]].strip()
-            t = dt.datetime(int(h[:4]), int(h[4:6]), int(h[6:8]), int(h[8:10]), tzinfo=UTC)
-            out[cle(t)] = {"vent_ms": l[ix["FF"]].strip(), "vent_dir": l[ix["DD"]].strip(),
-                           "rafale_ms": l[ix["FXI"]].strip(), "pression_hpa": l[ix["PMER"]].strip()}
-    print(f"Météo-France {url.rsplit('/', 1)[1]} : {len(out)} heures pour Brest-Guipavas, dernière {max(out) if out else '—'}")
+        if len(l) <= max(ix.values()) or l[ix["AAAAMMJJHH"]].strip() < mini:
+            continue
+        poste, h = l[ix["NUM_POSTE"]].strip(), l[ix["AAAAMMJJHH"]].strip()
+        k = cle(dt.datetime(int(h[:4]), int(h[4:6]), int(h[6:8]), int(h[8:10]), tzinfo=UTC))
+        if poste == MF_VENT:
+            out.setdefault(k, {}).update(vent_ms=l[ix["FF"]].strip(), vent_dir=l[ix["DD"]].strip(), rafale_ms=l[ix["FXI"]].strip())
+        elif poste == MF_PRESSION:
+            out.setdefault(k, {})["pression_hpa"] = l[ix["PMER"]].strip()
+    vent = [k for k, v in out.items() if v.get("vent_ms")]
+    print(f"Météo-France {url.rsplit('/', 1)[1]} : {len(vent)} heures de vent à la pointe Saint-Mathieu "
+          f"(dernière {max(vent) if vent else '—'}), {sum(1 for v in out.values() if v.get('pression_hpa'))} de pression à Brest-Guipavas")
     return out
 
 
@@ -304,18 +311,20 @@ def main(base):
     maintenant = dt.datetime.now(UTC)
     d_gg = os.path.join(base, "data", "maree-guily-glaz")
     d_br = os.path.join(base, "data", "maree-brest")
-    d_mt = os.path.join(base, "data", "meteo-brest")
+    d_mt = os.path.join(base, "data", "meteo")
+    ancien_mt = os.path.join(base, "data", "meteo-brest")   # ancien dossier (vent de Brest-Guipavas), remplacé
+    if os.path.isdir(ancien_mt):
+        import shutil; shutil.rmtree(ancien_mt)
 
     pred = maj_predictions(os.path.join(d_br, "predictions-shom.csv"), os.path.join(d_gg, "brest-shom.csv"))
     pm = [(t, c) for t, ty, h, c in pred if ty == "PM" and c]
 
-    # météo horaire de Brest-Guipavas
+    # météo horaire : vent de la pointe Saint-Mathieu, pression de Brest-Guipavas
     meteo = charger_mensuel(d_mt)
     try:
-        neuves = meteo_brest(depuis_archive(meteo, maintenant) - dt.timedelta(days=2))
+        neuves = meteo_mf(depuis_archive(meteo, maintenant) - dt.timedelta(days=2))
         for k, v in neuves.items():
-            if any(v.values()):
-                meteo[k] = v
+            meteo.setdefault(k, {}).update({c: x for c, x in v.items() if x})
     except Exception as e:
         print(f"::warning::Météo-France injoignable, vent non actualisé ({e})")
     mois_mt = ecrire_mensuel(d_mt, COLS_METEO, meteo)
