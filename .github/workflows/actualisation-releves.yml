@@ -1,6 +1,6 @@
 # Actualise chaque jour les relevés intégrés aux pages de l'appli HYDRAULNE
-# (pluie et température Météo-France, niveau de la nappe Hub'Eau), archive les mesures du marégraphe
-# de Guily Glaz (data/maree-guily-glaz/), puis republie le site.
+# (pluie et température Météo-France, niveau de la nappe Hub'Eau), archive les marées réelles de
+# Guily Glaz et de Brest avec coefficient, vent et pression de Brest (data/), puis republie le site.
 # Les heures sont en UTC : 6 h 17, 10 h 57 et 16 h 17 UTC = 7 h 17, 11 h 57 et 17 h 17 en hiver à Paris
 # (une heure de plus en été : GitHub ne tient pas compte du changement d'heure).
 # Lancement manuel possible : onglet « Actions » du dépôt > « Actualisation des relevés » > « Run workflow ».
@@ -31,7 +31,7 @@ jobs:
       - name: Actualiser les relevés
         run: python3 .github/scripts/actualiser_releves.py .
 
-      - name: Archiver les mesures du marégraphe de Guily Glaz
+      - name: Archiver les marées de Guily Glaz et de Brest (coefficient, vent, pression)
         run: python3 .github/scripts/archiver_maregraphe.py .
 
       - name: Publier les pages modifiées
