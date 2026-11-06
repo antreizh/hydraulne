@@ -1,0 +1,31 @@
+# Essai temporaire : stations Météo-France du Finistère (sera supprimé).
+name: Essai des sources
+on:
+  workflow_dispatch:
+jobs:
+  essai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Essai
+        run: |
+          python3 - <<'PY'
+          import urllib.request, gzip, csv, io
+          u = "https://meteofrance.s3.sbg.io.cloud.ovh.net/data/synchro_ftp/BASE/HOR/H_29_latest-2025-2026.csv.gz"
+          L = csv.reader(io.StringIO(gzip.decompress(urllib.request.urlopen(u, timeout=120).read()).decode("utf-8", "replace")), delimiter=";")
+          tete = [h.strip() for h in next(L)]
+          ix = {c: tete.index(c) for c in ("NUM_POSTE", "NOM_USUEL", "LAT", "LON", "ALTI", "AAAAMMJJHH", "FF", "DD", "FXI", "PMER")}
+          st = {}
+          for l in L:
+              p = l[ix["NUM_POSTE"]].strip()
+              s = st.setdefault(p, {"nom": l[ix["NOM_USUEL"]].strip(), "pos": (l[ix["LAT"]].strip(), l[ix["LON"]].strip(), l[ix["ALTI"]].strip()), "n": 0, "ff": 0, "pm": 0, "der": "", "ex": None})
+              s["n"] += 1
+              if l[ix["FF"]].strip(): s["ff"] += 1
+              if l[ix["PMER"]].strip(): s["pm"] += 1
+              h = l[ix["AAAAMMJJHH"]].strip()
+              if h >= "2026110100" and l[ix["FF"]].strip():
+                  s["der"] = max(s["der"], h); s["ex"] = (h, l[ix["FF"]].strip(), l[ix["DD"]].strip(), l[ix["FXI"]].strip(), l[ix["PMER"]].strip())
+          for p, s in sorted(st.items()):
+              if s["ff"]:
+                  print("STATION", p, s["nom"], s["pos"], "heures", s["n"], "avec vent", s["ff"], "avec pression", s["pm"], "dernière", s["der"], s["ex"])
+          PY
