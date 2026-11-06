@@ -11,30 +11,26 @@ jobs:
       - name: Essai
         run: |
           python3 - <<'PY'
-          import re, urllib.request, gzip, csv, io, json
+          import urllib.request, json, time
           UA = {"User-Agent": "hydraulne-archive (antreizh.fr)"}
-          S3 = "https://meteofrance.s3.sbg.io.cloud.ovh.net"
           def lire(u):
-              with urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=90) as r: return r.read()
-          for pre in ["data/synchro_ftp/BASE/HOR/H_29_", "data/synchro_ftp/BASE/MIN/MN_29_", "data/synchro_ftp/BASE/MIN/"]:
-              x = lire(f"{S3}/?list-type=2&prefix={pre}").decode()
-              print("===", pre, re.findall(r"<Key>([^<]+)</Key><LastModified>([^<]+)", x)[-8:])
-          x = lire(f"{S3}/?list-type=2&prefix=data/synchro_ftp/BASE/HOR/H_29_latest").decode()
-          cles = re.findall(r"<Key>([^<]+)</Key>", x)
-          print(cles)
-          for k in cles:
-              if "latest" in k:
-                  t = gzip.decompress(lire(f"{S3}/{k}")).decode("utf-8", "replace")
-                  L = list(csv.reader(io.StringIO(t), delimiter=";"))
-                  tete = [h.strip() for h in L[0]]
-                  print("ENTETE", tete)
-                  b = [l for l in L if l and l[0].strip() == "29075001"]
-                  print("Brest-Guipavas", len(b))
-                  for l in b[-3:]:
-                      print({tete[i]: l[i].strip() for i in range(len(tete)) if l[i].strip()})
-          for d in ["2026-09-30", "2026-01-01", "2020-01-01"]:
-              u = f"https://services.data.shom.fr/maregraphie/observation/json/3?sources=1&dtStart={d}T00:00:00Z&dtEnd={d}T23:59:00Z"
-              j = json.loads(lire(u))["data"]; print("REFMAR", d, len(j), j[:1], j[-1:])
-          u = "https://services.data.shom.fr/maregraphie/observation/json/3?sources=1&dtStart=2026-11-06T06:00:00Z&dtEnd=2026-11-06T23:59:00Z"
-          j = json.loads(lire(u))["data"]; print("REFMAR aujourd'hui", len(j), j[-2:])
+              with urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=120) as r: return r.read()
+          R = "https://services.data.shom.fr/maregraphie/observation/json/3?sources={s}&dtStart={a}&dtEnd={b}"
+          for s, a, b in [(1,"2026-11-05T00:00:00Z","2026-11-05T05:59:00Z"),(1,"2026-11-04T00:00:00Z","2026-11-04T23:59:00Z"),
+                          (2,"2026-10-01T00:00:00Z","2026-10-10T23:59:00Z"),(1,"2026-09-30T00:00:00Z","2026-09-30T23:59:00Z"),
+                          (1,"2026-11-06T00:00:00Z","2026-11-06T23:59:00Z"),(3,"2026-10-01T00:00:00Z","2026-10-01T23:59:00Z"),
+                          (5,"2026-10-01T00:00:00Z","2026-10-01T23:59:00Z"),(6,"2026-10-01T00:00:00Z","2026-10-01T23:59:00Z")]:
+              t0 = time.time()
+              try:
+                  d = json.loads(lire(R.format(s=s, a=a, b=b)))["data"]
+                  print(f"REFMAR s{s} {a[:10]} : {len(d)} valeurs en {time.time()-t0:.0f} s", d[:1], d[-1:])
+              except Exception as e:
+                  print(f"REFMAR s{s} {a[:10]} : ÉCHEC après {time.time()-t0:.0f} s ({e})")
+          for a, b in [("2026-09-30T00:00","2026-10-01T00:00"),("2026-11-06T00:00","2026-11-07T00:00")]:
+              t0 = time.time()
+              try:
+                  d = json.loads(lire(f"https://www.ioc-sealevelmonitoring.org/service.php?query=data&code=bres&timestart={a}&timestop={b}&format=json"))
+                  print(f"IOC {a[:10]} : {len(d)} valeurs en {time.time()-t0:.0f} s", d[:1], d[-1:], sorted(set(x['sensor'] for x in d)))
+              except Exception as e:
+                  print(f"IOC {a[:10]} : ÉCHEC après {time.time()-t0:.0f} s ({e})")
           PY
