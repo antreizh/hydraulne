@@ -1,0 +1,37 @@
+# Essai temporaire : vérifie quelles sources de données répondent depuis GitHub (sera supprimé).
+name: Essai des sources
+on:
+  workflow_dispatch:
+jobs:
+  essai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Essai
+        run: |
+          python3 - <<'PY'
+          import re, urllib.request, json
+          cle = re.search(r'cleApiMeteoFrance\s*:\s*"([^"]+)"', open("widgets/mini-maree-vent.html", encoding="utf-8").read()).group(1)
+          UA = {"User-Agent": "hydraulne-archive (antreizh.fr)"}
+          essais = {
+            "refmar_s1": "https://services.data.shom.fr/maregraphie/observation/json/3?sources=1&dtStart=2026-11-05T00:00:00Z&dtEnd=2026-11-05T00:30:00Z",
+            "refmar_s2": "https://services.data.shom.fr/maregraphie/observation/json/3?sources=2&dtStart=2026-11-05T00:00:00Z&dtEnd=2026-11-05T00:30:00Z",
+            "refmar_s4": "https://services.data.shom.fr/maregraphie/observation/json/3?sources=4&dtStart=2026-11-05T00:00:00Z&dtEnd=2026-11-05T03:00:00Z",
+            "refmar_info": "https://services.data.shom.fr/maregraphie/service/completetidegauge/3",
+            "ioc": "https://www.ioc-sealevelmonitoring.org/service.php?query=data&code=bres&timestart=2026-11-05T00:00&timestop=2026-11-05T00:30&format=json",
+            "shom_wl": "https://services.data.shom.fr/b2q8lrcdl4s04cbabsj4nhcb/hdm/spm/wl?harborName=BREST&duration=1&date=2026-11-05&utc=0&nbWaterLevels=288",
+            "shom_hlt": "https://services.data.shom.fr/b2q8lrcdl4s04cbabsj4nhcb/hdm/spm/hlt?harborName=BREST&duration=2&date=2026-11-05&utc=0&correlation=1",
+            "mf_horaire": "https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/horaire?id_station=29075001&format=json",
+            "mf_6m": "https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m?id_station=29075001&format=json",
+          }
+          for nom, url in essais.items():
+              h = dict(UA)
+              if "meteofrance" in url: h["apikey"] = cle
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=40) as r:
+                      t = r.read().decode("utf-8", "replace")
+                  print(f"=== {nom} OK {len(t)} car.\n{t[:1500]}\n")
+              except Exception as e:
+                  print(f"=== {nom} ÉCHEC {e}\n")
+          PY
