@@ -220,9 +220,11 @@
 
   function dessiner() {
     svg.textContent = "";
-    fin = new Date(); var debut = new Date(fin - JOUR);
-    var G = gg.filter(function (p) { return p.t >= debut; });
-    var V = vents.map(function (l) { return l.filter(function (v) { return v.t > debut && v.t <= new Date(+fin + H); }); });
+    // Fenêtre de 24 h calée sur les heures pleines : de (heure en cours + 1) − 24 h à maintenant.
+    // L'heure la plus ancienne et l'heure en cours ne tombent ainsi jamais au même endroit du cadran.
+    fin = new Date(); var hFin = Math.ceil(fin / H) * H, debut = new Date(hFin - JOUR);
+    var G = gg.filter(function (p) { return p.t > debut; });
+    var V = vents.map(function (l) { return l.filter(function (v) { return v.t > debut && v.t <= hFin; }); });
     var ink = css("--ink"), muted = css("--muted"), grid = css("--grid"), line = css("--line"), eau = css("--eau"), cardc = css("--card"), main = css("--main");
     var halo = { stroke: cardc, "stroke-width": 3, "paint-order": "stroke" };
     var an = ang(fin), aLab = an + 0.12, k, i;
