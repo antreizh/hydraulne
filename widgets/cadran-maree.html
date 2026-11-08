@@ -29,8 +29,15 @@
   <div class="mcd-lect" id="mcd-lect" aria-live="polite"></div>
   <svg id="mcd-svg" viewBox="-276 -276 552 552" role="img"
        aria-label="Cadran de 24 heures : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, jour et nuit"></svg>
+  <div class="mcd-ext-t">Vitesse du vent</div>
+  <div class="mcd-leg" id="mcd-leg"></div>
   <div class="mcd-ext-t">Rétrospective des marées</div>
   <div class="mcd-ext" id="mcd-ext"></div>
+  <div class="mcd-foot">
+    <span class="mcd-src">Sources : <a href="https://www.hydro.eaufrance.fr/stationhydro/J382183001/fiche" target="_blank" rel="noopener" title="L'Aulne à Port-Launay – Guily Glaz [marégraphe] – HydroPortail">HydroPortail</a> · <a href="https://meteo.data.gouv.fr" target="_blank" rel="noopener" title="Vent : mesures des stations Météo-France (toutes les 6 minutes)">Météo-France</a></span>
+    <span class="mcd-copy">© <a href="https://www.antreizh.fr" target="_blank" rel="noopener" title="www.antreizh.fr">antreizh.fr</a></span>
+    <span class="mcd-avert">Données et représentation indicatives non officielles</span>
+  </div>
   <details class="mcd-aide">
     <summary>Lire le cadran</summary>
     <ul>
@@ -38,15 +45,9 @@
       <li><b>1<sup>er</sup> cercle</b> : hauteur d'eau à Guily Glaz ; plus l'aire bleue s'éloigne du centre, plus l'eau est haute. Points : pleines (pleins) et basses mers (creux).</li>
       <li><b>Cercles suivants, par paires</b> : vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu. Pour chaque station, une barre par heure (vent moyen, rafale en trait), puis une flèche qui pointe vers où souffle le vent (nord en haut) ; un petit rond signale un vent calme.</li>
       <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre).</li>
-      <li>0 h en haut, sens des aiguilles d'une montre, heure de Paris ; les tracés pâlissent avec l'ancienneté. Touchez une heure pour lire ses valeurs.</li>
+      <li>0 h en haut, sens des aiguilles d'une montre, heure de Paris ; le trait orange marque le moment présent ; les tracés pâlissent avec l'ancienneté. Touchez une heure pour lire ses valeurs.</li>
     </ul>
   </details>
-  <div class="mcd-leg" id="mcd-leg"></div>
-  <div class="mcd-foot">
-    <span class="mcd-src">Sources : <a href="https://www.hydro.eaufrance.fr/stationhydro/J382183001/fiche" target="_blank" rel="noopener" title="L'Aulne à Port-Launay – Guily Glaz [marégraphe] – HydroPortail">HydroPortail</a> · <a href="https://meteo.data.gouv.fr" target="_blank" rel="noopener" title="Vent : mesures des stations Météo-France (toutes les 6 minutes)">Météo-France</a></span>
-    <span class="mcd-copy">© <a href="https://www.antreizh.fr" target="_blank" rel="noopener" title="www.antreizh.fr">antreizh.fr</a></span>
-    <span class="mcd-avert">Données et représentation indicatives non officielles</span>
-  </div>
 </div>
 
 <style>
@@ -84,7 +85,7 @@
 #mcd-widget .mcd-aide summary{cursor:pointer;color:var(--ink)}
 #mcd-widget .mcd-aide ul{margin:calc(4px*var(--k)) 0 0;padding-left:calc(16px*var(--k));display:grid;gap:calc(2px*var(--k))}
 #mcd-widget .mcd-aide b{color:var(--ink);font-weight:600}
-#mcd-widget .mcd-leg{display:flex;flex-wrap:wrap;gap:calc(4px*var(--k)) calc(12px*var(--k));font-size:calc(11px*var(--k));color:var(--muted);margin-top:calc(6px*var(--k));align-items:center}
+#mcd-widget .mcd-leg{display:flex;flex-wrap:wrap;gap:calc(4px*var(--k)) calc(12px*var(--k));font-size:calc(11px*var(--k));color:var(--muted);margin-top:calc(4px*var(--k));align-items:center}
 #mcd-widget .mcd-leg i{display:inline-block;width:calc(16px*var(--k));height:calc(4px*var(--k));border-radius:2px;vertical-align:middle;margin-right:calc(4px*var(--k))}
 #mcd-widget .mcd-foot{display:flex;flex-wrap:wrap;gap:calc(2px*var(--k)) calc(10px*var(--k));justify-content:space-between;
   border-top:1px solid var(--line);margin-top:calc(8px*var(--k));padding-top:calc(6px*var(--k));font-size:calc(10.5px*var(--k));color:var(--muted)}
@@ -340,7 +341,6 @@
   [["< 5 nd", 1], ["5–9", 2], ["10–15", 3], ["16–21", 4], ["≥ 22 nd", 5]].forEach(function (c) {
     var s = document.createElement("span"); s.innerHTML = '<i style="background:var(' + COUL[c[1]] + ')"></i>' + c[0]; lg.appendChild(s);
   });
-  var s2 = document.createElement("span"); s2.innerHTML = '<i style="background:var(--main);height:2px"></i>maintenant'; lg.appendChild(s2);
 
   dessiner();
   charger();
