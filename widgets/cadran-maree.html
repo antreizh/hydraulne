@@ -23,7 +23,7 @@
      ===================================================================== -->
 <div id="mcd-widget">
   <div class="mcd-head">
-    <div class="mcd-t">Marée et Vent <span>· Guily Glaz, 24 h</span></div>
+    <div class="mcd-t">Marée et Vent <span>· <b class="mcd-lieu">Guily Glaz</b>, 24 h</span></div>
     <div class="mcd-maj" id="mcd-maj">Chargement des mesures…</div>
   </div>
   <div class="mcd-lect" id="mcd-lect" aria-live="polite"></div>
@@ -64,6 +64,7 @@
 #mcd-widget a:hover{color:var(--eau)}
 #mcd-widget .mcd-t{font-size:calc(17px*var(--k));font-weight:700;color:var(--ink)}
 #mcd-widget .mcd-t span{font-weight:400;color:var(--muted);font-size:.82em}
+#mcd-widget .mcd-lieu{color:var(--eau);font-weight:700}   /* Guily Glaz en bleu */
 #mcd-widget .mcd-maj{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(2px*var(--k))}
 #mcd-widget .mcd-lect{display:flex;flex-wrap:wrap;gap:calc(2px*var(--k)) calc(12px*var(--k));margin-top:calc(6px*var(--k));
   font-size:calc(12px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums;min-height:calc(17px*var(--k))}
