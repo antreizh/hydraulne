@@ -29,6 +29,7 @@
   <div class="mcd-lect" id="mcd-lect" aria-live="polite"></div>
   <svg id="mcd-svg" viewBox="-276 -276 552 552" role="img"
        aria-label="Cadran de 24 heures : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, jour et nuit"></svg>
+  <div class="mcd-ext-t">Rétrospective des marées</div>
   <div class="mcd-ext" id="mcd-ext"></div>
   <details class="mcd-aide">
     <summary>Lire le cadran</summary>
@@ -74,9 +75,11 @@
 #mcd-widget .mcd-hit{fill:transparent;cursor:pointer}
 #mcd-widget .mcd-hit:focus{outline:none}
 #mcd-widget .mcd-hit:focus-visible{fill:var(--eau);fill-opacity:.08}
-#mcd-widget .mcd-ext{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(6px*var(--k));margin-top:calc(8px*var(--k))}
+#mcd-widget .mcd-ext-t{font-size:calc(12.5px*var(--k));font-weight:700;color:var(--ink);margin-top:calc(10px*var(--k))}
+#mcd-widget .mcd-ext{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(6px*var(--k));margin-top:calc(4px*var(--k))}
 #mcd-widget .mcd-ext div{border-top:2px solid var(--line);padding-top:calc(3px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
 #mcd-widget .mcd-ext b{display:block;color:var(--ink);font-size:calc(13.5px*var(--k))}
+#mcd-widget .mcd-ext .mcd-j{display:block;font-size:calc(10.5px*var(--k));font-weight:700;color:var(--eau)}   /* J (aujourd'hui) ou J-1 (hier) */
 #mcd-widget .mcd-aide{margin-top:calc(8px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted)}
 #mcd-widget .mcd-aide summary{cursor:pointer;color:var(--ink)}
 #mcd-widget .mcd-aide ul{margin:calc(4px*var(--k)) 0 0;padding-left:calc(16px*var(--k));display:grid;gap:calc(2px*var(--k))}
@@ -320,7 +323,13 @@
 
     // pleines et basses mers, actualisation
     var ex = document.getElementById("mcd-ext"); ex.innerHTML = "";
-    ext.slice(-4).forEach(function (e) { var d = document.createElement("div"); d.innerHTML = (e.type === "PM" ? "Pleine mer" : "Basse mer") + "<b>" + fmtH.format(e.t) + "</b>" + nf(e.h, 2) + " m"; ex.appendChild(d); });
+    var fmtD = new Intl.DateTimeFormat("fr-CA", { timeZone: TZ }), auj = fmtD.format(fin), hier = fmtD.format(new Date(fin - JOUR));
+    ext.slice(-4).forEach(function (e) {
+      var j = fmtD.format(e.t) === auj ? "J" : fmtD.format(e.t) === hier ? "J-1" : "";
+      var d = document.createElement("div");
+      d.innerHTML = (e.type === "PM" ? "Pleine mer" : "Basse mer") + '<span class="mcd-j">' + j + "</span><b>" + fmtH.format(e.t) + "</b>" + nf(e.h, 2) + " m";
+      ex.appendChild(d);
+    });
     var der = G.length ? G[G.length - 1].t : null;
     document.getElementById("mcd-maj").textContent = maj
       ? "Actualisé le " + fmtJ.format(maj) + " à " + fmtH.format(maj) + (der ? " · dernière mesure de marée " + fmtH.format(der) : "")
