@@ -1,0 +1,21 @@
+# Essai temporaire : vent horaire de Lanvéoc (sera supprimé).
+name: Essai des sources
+on:
+  workflow_dispatch:
+jobs:
+  essai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Essai
+        run: |
+          python3 - <<'PY'
+          import urllib.request, gzip, csv, io, json
+          u = "https://meteofrance.s3.sbg.io.cloud.ovh.net/data/synchro_ftp/BASE/HOR/H_29_latest-2025-2026.csv.gz"
+          L = csv.reader(io.StringIO(gzip.decompress(urllib.request.urlopen(u, timeout=120).read()).decode("utf-8", "replace")), delimiter=";")
+          tete = [h.strip() for h in next(L)]
+          ix = {c: tete.index(c) for c in ("NUM_POSTE", "AAAAMMJJHH", "FF", "DD", "FXI")}
+          out = [[l[ix["AAAAMMJJHH"]].strip(), l[ix["FF"]].strip(), l[ix["DD"]].strip(), l[ix["FXI"]].strip()]
+                 for l in L if l[ix["NUM_POSTE"]].strip() == "29120001" and l[ix["AAAAMMJJHH"]].strip() >= "2026110600"]
+          print("LANVEOC " + json.dumps(out, separators=(",", ":")))
+          PY
