@@ -19,6 +19,9 @@ du doigt) ; l'onglet choisi est retenu pour la prochaine ouverture :
                              à la pluie par mois (tableau et explication du calcul)
   Corrélation nappe & pluie  courbe de la nappe et pluie journalière 2026, puis réponse
                              de la nappe à 10 mm de pluie jour par jour (courbes par mois)
+  Pluviométrie et nappe à Spézet
+                             piézomètre du Fell (Spézet) et pluie du poste de Saint-Goazec,
+                             2026 comparé à 2005-2025, synthèse et rapport PDF (docs/)
 Un onglet s'ouvre directement avec son adresse, par exemple
 https://appli.antreizh.fr/#correlation
 
@@ -35,6 +38,10 @@ Contenu du dossier
                           réponse de la nappe à 10 mm de pluie tombés le jour J (onglet Corrélation)
   meteo-correlation-nappe-pluie.html
                           réponse de la nappe à la pluie, par mois (onglet Nappe et pluie)
+  meteo-spezet-nappe-pluie.html
+                          nappe et pluie à Spézet (onglet Pluviométrie et nappe à Spézet)
+  docs/Synthese_pluie_nappe_Spezet_2026.pdf
+                          synthèse pluie et nappe de Spézet, 9 novembre 2026
   d3.min.js               bibliothèque de graphiques des tableaux de la nappe
   manifest.webmanifest    nom, icône et couleurs de l'application
   sw.js                   service worker (installation, ouverture rapide)
@@ -70,10 +77,10 @@ Mettre à jour l'application
   - Remplacez index.html sur l'hébergement : l'application installée prendra
     la nouvelle version à sa prochaine ouverture avec du réseau.
   - Si vous modifiez les icônes ou le nom, changez aussi la ligne
-    const CACHE = "situation-hydro-v81"  dans sw.js (v82, v83…).
+    const CACHE = "situation-hydro-v82"  dans sw.js (v83, v84…).
 
   - À chaque nouvelle version, l'appli passe aussi un numéro aux tableaux
-    (adresse « meteo-….html?v=81 » dans index.html) : le téléphone recharge
+    (adresse « meteo-….html?v=82 » dans index.html) : le téléphone recharge
     alors forcément les nouveaux tableaux.
   - Si un téléphone affiche encore une ancienne version : fermez complètement
     l'application puis rouvrez-la deux fois (la 1re ouverture installe la mise
