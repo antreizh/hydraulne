@@ -45,7 +45,7 @@ h2{margin:0;font-size:22px;line-height:1.25;font-weight:600;text-wrap:balance}
     <span><i class="sw" style="background:var(--ss)"></i>Saint-Ségal (Kergadalen)</span>
     <span><i class="sw" style="background:var(--sp)"></i>Spézet (le Fell)</span>
     <span><i class="sw" style="background:var(--ss);opacity:.16"></i><i class="sw" style="background:var(--sp);opacity:.16;margin-left:-4px"></i>Min – max 2005-2025 relatifs</span>
-    <span><i class="sw" style="height:0;border-top:2px solid var(--ref);border-radius:0"></i>Moyenne du jour (0)</span>
+    <span><i class="sw" style="height:0;border-top:2px solid var(--ref);border-radius:0"></i>Moyenne depuis 2005 (0)</span>
   </div>
   <p class="src" id="maj">Mise à jour en cours…</p>
   <p class="src">Sources : <a href="https://ades.eaufrance.fr/Fiche/PtEau?code=03103X0047%2FPZ" target="_blank" rel="noopener">ADES / Hub'Eau, piézomètre de Kergadalen à Saint-Ségal (03103X0047/PZ)</a> · <a href="https://ades.eaufrance.fr/Fiche/PtEau?code=03113X0031%2FF" target="_blank" rel="noopener">piézomètre du Fell à Spézet (03113X0031/F)</a>. Moyennes et extrêmes calculés sur les mesures journalières 2005-2025 de chaque piézomètre.</p>
@@ -80,7 +80,7 @@ const SNAP = {"ss":{"clim":[["01-01",67.33,66.29,69.14],["01-02",67.42,66.26,69.
       const d = lastD[s.k], a = rel(s.k, d), c = data[s.k].clim.get(d.slice(5)), lo = c.a - c.m;
       const sous = a < lo;
       return `<div class="tile"><span class="lab"><i class="dot" style="background:${s.col}"></i>${s.nom}</span><span class="big">${sg(a)} m</span>
-        <span class="sub">par rapport à la moyenne du jour · niveau ${fr(data[s.k].niv.get(d))} m NGF</span>
+        <span class="sub">par rapport à la moyenne depuis 2005 · niveau ${fr(data[s.k].niv.get(d))} m NGF</span>
         <span class="sub${sous ? ' bad' : ''}">${sous ? sg(a - lo) + ' m sous le plus bas connu pour cette date' : sg(a - lo) + ' m au-dessus du plus bas connu (' + sg(lo) + ' m)'}</span></div>`;
     });
     const dc = [lastD.ss, lastD.sp].sort()[0];
@@ -116,7 +116,7 @@ const SNAP = {"ss":{"clim":[["01-01",67.33,66.29,69.14],["01-02",67.42,66.26,69.
     env.forEach(e => ['a', 'b'].forEach(k => svg.append('path').datum(e.pts).attr('d', d3.line().x(p => x(pd(p.d))).y(p => y(p.c[k] - p.c.m)).curve(d3.curveMonotoneX))
       .style('fill', 'none').style('stroke', e.s.col).style('stroke-width', 1).style('opacity', .45).style('stroke-dasharray', '2 3')));
     svg.append('line').attr('x1', ml).attr('x2', W - m.r).attr('y1', y(0)).attr('y2', y(0)).style('stroke', 'var(--ref)').style('stroke-width', 1.5);
-    svg.append('text').attr('x', W - m.r).attr('y', y(0) - 6).attr('text-anchor', 'end').style('fill', 'var(--muted)').style('font-size', '11px').text('moyenne du jour');
+    svg.append('text').attr('x', W - m.r).attr('y', y(0) - 6).attr('text-anchor', 'end').style('fill', 'var(--muted)').style('font-size', '11px').text('Moyenne depuis 2005');
     lines.forEach(l => {
       svg.append('path').datum(l.pts).attr('d', d3.line().defined((p, i, a) => i === 0 || (pd(p.d) - pd(a[i - 1].d)) <= 864e5 * 6).x(p => x(pd(p.d))).y(p => y(p.v)))
         .style('fill', 'none').style('stroke', l.s.col).style('stroke-width', 2).style('stroke-linejoin', 'round').style('stroke-linecap', 'round');
