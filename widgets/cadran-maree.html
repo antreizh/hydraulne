@@ -243,7 +243,8 @@
     var G = gg.filter(function (p) { return p.t > debut; });
     var V = vents.map(function (l) { return l.filter(function (v) { return v.t > debut && v.t <= hFin; }); });
     var ink = css("--ink"), muted = css("--muted"), grid = css("--grid"), line = css("--line"), eau = css("--eau"), cardc = css("--card"), main = css("--main");
-    var halo = { stroke: cardc, "stroke-width": 3, "paint-order": "stroke" };
+    // pas de liseré autour des étiquettes : un liseré blanc paraît « gras » quand le navigateur assombrit la page
+    var halo = {};
     var an = ang(fin), aLab = an + 0.12, k, i;
     function assign(a, b) { for (var x in b) a[x] = b[x]; return a; }
     function age(t) { return Math.max(0, Math.min(1, (fin - t) / JOUR)); }
@@ -259,8 +260,8 @@
       hMin = Math.floor(Math.min.apply(null, hs) * 2) / 2 - 0.5; hMax = Math.max(hMin + 1, Math.ceil(Math.max.apply(null, hs) * 2) / 2);
     }
     var rad = function (h) { return R0 + (h - hMin) / (hMax - hMin) * (R1 - R0); };
-    for (var hh = Math.ceil(hMin); hh <= hMax; hh++) el("circle", { cx: 0, cy: 0, r: rad(hh), fill: "none", stroke: grid });
-    el("circle", { cx: 0, cy: 0, r: R0, fill: "none", stroke: line });
+    for (var hh = Math.ceil(hMin); hh <= hMax; hh++) el("circle", { cx: 0, cy: 0, r: rad(hh), fill: "none", stroke: muted, "stroke-opacity": 0.18 });
+    el("circle", { cx: 0, cy: 0, r: R0, fill: "none", stroke: muted, "stroke-opacity": 0.35 });
     if (G.length > 1) {
       for (i = 0; i < G.length - 1; i += 12) {
         var tr = G.slice(i, Math.min(i + 13, G.length)), a0 = ang(tr[0].t), a1 = ang(tr[tr.length - 1].t);
@@ -283,8 +284,8 @@
     var vMax = Math.max(10, Math.ceil(Math.max.apply(null, tous.concat([0])) / 5) * 5);
     CFG.stations.forEach(function (st, s) {
       var rb = RB[s], ra = RA[s], rv = function (n) { return rb + Math.min(n, vMax) / vMax * RL; };
-      el("circle", { cx: 0, cy: 0, r: rb, fill: "none", stroke: line });
-      el("circle", { cx: 0, cy: 0, r: rv(vMax), fill: "none", stroke: grid, "stroke-dasharray": "1 3" });
+      el("circle", { cx: 0, cy: 0, r: rb, fill: "none", stroke: muted, "stroke-opacity": 0.35 });
+      el("circle", { cx: 0, cy: 0, r: rv(vMax), fill: "none", stroke: muted, "stroke-opacity": 0.3, "stroke-dasharray": "1 3" });
       V[s].forEach(function (v) {
         var a = ang(new Date(v.t - H / 2)), da = Math.PI / 24 * 0.72, col = css(COUL[classe(v.nd)]);
         var g = el("g", { opacity: (1 - 0.4 * age(v.t)).toFixed(2) });
@@ -297,7 +298,7 @@
         el("path", { d: "M" + (x2 + ux * 2.6) + "," + (y2 + uy * 2.6) + " L" + (x2 - ux * 2.8 + px * 3) + "," + (y2 - uy * 2.8 + py * 3) + " L" + (x2 - ux * 2.8 - px * 3) + "," + (y2 - uy * 2.8 - py * 3) + "Z", fill: col }, g);
       });
       var pn = xy(aLab + 0.05, (rb + ra) / 2);
-      el("text", assign({ x: pn[0], y: pn[1] + 3, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: muted }, halo)).textContent = st.court;
+      el("text", assign({ x: pn[0], y: pn[1] + 3, "text-anchor": "middle", "font-size": 9.5, fill: muted }, halo)).textContent = st.court;
     });
     var pm = xy(aLab + 0.34, RB[2] + RL);
     el("text", assign({ x: pm[0], y: pm[1] - 2, "text-anchor": "middle", "font-size": 8.5, fill: muted }, halo)).textContent = vMax + " nd";
