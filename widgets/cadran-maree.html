@@ -64,6 +64,8 @@
   padding:calc(14px*var(--k)) calc(14px*var(--k)) calc(10px*var(--k));
   box-shadow:0 2px calc(12px*var(--k)) rgba(11,60,93,.10); width:100%; box-sizing:border-box; --k:1;
 }
+/* En pleine page (écran large) : le widget n'occupe que 75 % de la largeur, centré */
+@media (min-width:700px){#mcd-widget{width:75%;margin:0 auto}}
 #mcd-widget *{box-sizing:border-box}
 #mcd-widget a{color:var(--muted);text-decoration:underline;text-underline-offset:2px}
 #mcd-widget a:hover{color:var(--eau)}
@@ -123,7 +125,7 @@
   var svg = document.getElementById("mcd-svg"), NS = "http://www.w3.org/2000/svg";
 
   function fit() {
-    var w = (root.parentElement || root).clientWidth; if (!w) return;
+    var w = root.getBoundingClientRect().width; if (!w) return;
     root.style.setProperty("--k", Math.max(0.8, Math.min(1.6, w / 420)).toFixed(3));
   }
   fit();
