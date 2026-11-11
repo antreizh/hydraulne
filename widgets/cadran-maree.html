@@ -55,8 +55,9 @@
 #mcd-widget{
   --ink:#0b3c5d; --muted:#5f7180; --line:#dde5eb; --grid:#e9eff3; --card:#fff;
   --eau:#1f7bb6; --main:#c2410c; --nuit:#3d5566; --jour:#f3d27a;
-  /* vitesse du vent, du calme à la tempête (> 50 nd) */
-  --v1:#9fb7c6; --v2:#2a9d8f; --v3:#8cc152; --v4:#e9c23b; --v5:#e9a23b; --v6:#e76f51; --v7:#d62839; --v8:#b5179e; --v9:#6a1b9a;
+  /* vitesse du vent, du calme à l'ouragan (> 80 nd) */
+  --v1:#9fb7c6; --v2:#2a9d8f; --v3:#8cc152; --v4:#e9c23b; --v5:#e9a23b; --v6:#e76f51; --v7:#d62839; --v8:#b5179e;
+  --v9:#7b2cbf; --v10:#5a189a; --v11:#3c096c; --v12:#10002b;
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   color:#1d2b36; background:var(--card); border-radius:calc(18px*var(--k));
   padding:calc(14px*var(--k)) calc(14px*var(--k)) calc(10px*var(--k));
@@ -143,9 +144,10 @@
   function el(n, a, p) { var e = document.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); (p || svg).appendChild(e); return e; }
   var CARD = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO"];
   function card(dd) { return CARD[Math.round(dd / 22.5) % 16]; }
-  var SEUILS = [5, 10, 16, 22, 28, 34, 41, 50];                 // classes : < 5, 5–9, 10–15, 16–21, 22–27, 28–33, 34–40, 41–50, > 50 nd
-  function classe(nd) { for (var i = 0; i < SEUILS.length; i++) if (nd < SEUILS[i] || (i === SEUILS.length - 1 && nd <= SEUILS[i])) return i + 1; return 9; }
-  var COUL = ["", "--v1", "--v2", "--v3", "--v4", "--v5", "--v6", "--v7", "--v8", "--v9"];
+  // classes : < 5, 5–9, 10–15, 16–21, 22–27, 28–33, 34–40, 41–50, 51–60, 61–70, 71–80, > 80 nd
+  var SEUILS = [5, 10, 16, 22, 28, 34, 41, 51, 61, 71];
+  function classe(nd) { for (var i = 0; i < SEUILS.length; i++) if (nd < SEUILS[i]) return i + 1; return nd <= 80 ? 11 : 12; }
+  var COUL = ["", "--v1", "--v2", "--v3", "--v4", "--v5", "--v6", "--v7", "--v8", "--v9", "--v10", "--v11", "--v12"];
   function secteur(a0, a1, r0, r1) {
     var g = a1 - a0 > Math.PI ? 1 : 0;
     return "M" + xy(a0, r0) + " L" + xy(a0, r1) + " A" + r1 + "," + r1 + " 0 " + g + " 1 " + xy(a1, r1) +
@@ -340,7 +342,7 @@
   }
 
   var lg = document.getElementById("mcd-leg");
-  [["< 5 nd", 1], ["5–9", 2], ["10–15", 3], ["16–21", 4], ["22–27", 5], ["28–33", 6], ["34–40", 7], ["41–50", 8], ["> 50 nd", 9]].forEach(function (c) {
+  [["< 5 nd", 1], ["5–9", 2], ["10–15", 3], ["16–21", 4], ["22–27", 5], ["28–33", 6], ["34–40", 7], ["41–50", 8], ["51–60", 9], ["61–70", 10], ["71–80", 11], ["> 80 nd", 12]].forEach(function (c) {
     var s = document.createElement("span"); s.innerHTML = '<i style="background:var(' + COUL[c[1]] + ')"></i>' + c[0]; lg.appendChild(s);
   });
 
