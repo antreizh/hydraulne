@@ -23,8 +23,8 @@
      ===================================================================== -->
 <div id="mcd-widget">
   <div class="mcd-head">
-    <div class="mcd-t">Rose des marées et vents réels <span>· <b class="mcd-lieu">Guily Glaz</b>, dernières 24 heures</span></div>
-    <div class="mcd-maj" id="mcd-maj">Chargement des mesures…</div>
+    <div class="mcd-t">Rose des marées et vents réels <span>· <b class="mcd-lieu">Guily Glaz</b></span></div>
+    <div class="mcd-maj" id="mcd-maj"><b>Dernières 24h</b> · chargement des mesures…</div>
   </div>
   <div class="mcd-lect" id="mcd-lect" aria-live="polite"></div>
   <svg id="mcd-svg" viewBox="-276 -276 552 552" role="img"
@@ -70,6 +70,7 @@
 #mcd-widget .mcd-t span{font-weight:400;color:var(--muted);font-size:.82em}
 #mcd-widget .mcd-lieu{color:var(--eau);font-weight:700;font-size:calc(17px*var(--k))}   /* Guily Glaz en bleu, même taille que le titre */
 #mcd-widget .mcd-maj{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(2px*var(--k))}
+#mcd-widget .mcd-maj b{color:var(--ink);font-weight:600}
 #mcd-widget .mcd-lect{display:flex;flex-wrap:wrap;gap:calc(2px*var(--k)) calc(12px*var(--k));margin-top:calc(6px*var(--k));
   font-size:calc(12px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums;min-height:calc(17px*var(--k))}
 #mcd-widget .mcd-lect b{color:var(--ink)}
@@ -336,9 +337,9 @@
       ex.appendChild(d);
     });
     var der = G.length ? G[G.length - 1].t : null;
-    document.getElementById("mcd-maj").textContent = maj
-      ? "Actualisé le " + fmtJ.format(maj) + " à " + fmtH.format(maj) + (der ? " · dernière mesure de marée " + fmtH.format(der) : "")
-      : "Chargement des mesures…";
+    document.getElementById("mcd-maj").innerHTML = "<b>Dernières 24h</b> · " + (maj
+      ? "actualisé le " + fmtJ.format(maj) + " à " + fmtH.format(maj) + (der ? " · dernière mesure de marée " + fmtH.format(der) : "")
+      : "chargement des mesures…");
   }
 
   var lg = document.getElementById("mcd-leg");
