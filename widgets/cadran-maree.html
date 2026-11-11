@@ -64,8 +64,8 @@
   padding:calc(14px*var(--k)) calc(14px*var(--k)) calc(10px*var(--k));
   box-shadow:0 2px calc(12px*var(--k)) rgba(11,60,93,.10); width:100%; box-sizing:border-box; --k:1;
 }
-/* En pleine page (écran large) : le widget n'occupe que 75 % de la largeur, centré */
-@media (min-width:700px){#mcd-widget{width:75%;margin:0 auto}}
+/* En pleine page (écran large) : le widget n'occupe que la moitié de la largeur, centré, sans descendre sous 420 px */
+@media (min-width:700px){#mcd-widget{width:max(50%,420px);margin:0 auto}}
 #mcd-widget *{box-sizing:border-box}
 #mcd-widget a{color:var(--muted);text-decoration:underline;text-underline-offset:2px}
 #mcd-widget a:hover{color:var(--eau)}
