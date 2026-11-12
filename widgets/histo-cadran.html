@@ -335,7 +335,9 @@
       t3.setAttribute("fill", dh > 0 ? eau : muted);
       t4.textContent = p.c ? "coef. " + p.c : "";
     } else { t1.textContent = fmtH.format(fin); t2.textContent = "—"; t3.textContent = "pas de mesure"; }
-    $("mhc-quand").textContent = fmtL.format(fin).replace(/^./, function (c) { return c.toUpperCase(); }) + " · " + fmtH.format(fin);
+    // instant rejoué, suivi du coefficient de la marée (archivé avec la mesure la plus proche)
+    var pc = G.length ? G[G.length - 1] : null, cfi = pc && fin - pc.t < 2 * H ? pc.c : null;
+    $("mhc-quand").textContent = fmtL.format(fin).replace(/^./, function (c) { return c.toUpperCase(); }) + " · " + fmtH.format(fin) + (cfi ? " · coef. " + cfi : "");
     $("mhc-lect").innerHTML = "<b>À cet instant</b>" + CFG.stations.map(function (st, s) {
       var v = plusProche(vents[s], fin);
       if (!v || Math.abs(v.t - fin) > 1.5 * H) return "<span>" + st.nom + " : —</span>";
