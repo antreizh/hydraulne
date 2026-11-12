@@ -1,0 +1,40 @@
+# Essai temporaire : sources de vent 6 min accessibles depuis GitHub (sera supprimé).
+name: Essai des sources
+on:
+  workflow_dispatch:
+jobs:
+  essai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Essai
+        run: |
+          python3 - <<'PY'
+          import re, urllib.request, gzip, io, csv, time
+          cle = re.search(r'cleApiMeteoFrance:\s*"([^"]+)"', open("widgets/cadran-maree.html", encoding="utf-8").read()).group(1)
+          NAV = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+          def essai(nom, url, h):
+              try:
+                  t0 = time.time()
+                  with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=40) as r:
+                      b = r.read()
+                  t = b.decode("utf-8", "replace") if not url.endswith(".gz") else gzip.decompress(b).decode("utf-8", "replace")
+                  print(f"=== {nom} OK {len(b)} o en {time.time()-t0:.1f} s\n{t[:400]}\n...\n{t[-300:]}\n")
+              except Exception as e:
+                  print(f"=== {nom} ÉCHEC {e}\n")
+          base = "https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/"
+          for ua in ("hydraulne-archive (antreizh.fr)", NAV):
+              essai(f"6m UA={ua[:20]}", base + "infrahoraire-6m?id_station=29120001&format=csv", {"apikey": cle, "accept": "*/*", "User-Agent": ua})
+          essai("6m sans UA", base + "infrahoraire-6m?id_station=29120001&format=csv", {"apikey": cle, "accept": "*/*"})
+          essai("6m navigateur complet", base + "infrahoraire-6m?id_station=29120001&format=csv",
+                {"apikey": cle, "accept": "*/*", "User-Agent": NAV, "Accept-Language": "fr-FR,fr;q=0.9", "Origin": "https://appli.antreizh.fr", "Referer": "https://appli.antreizh.fr/"})
+          S3 = "https://meteofrance.s3.sbg.io.cloud.ovh.net"
+          x = urllib.request.urlopen(f"{S3}/?list-type=2&prefix=data/synchro_ftp/BASE/MIN/MN_29", timeout=60).read().decode()
+          print("MIN :", re.findall(r"<Key>([^<]+)</Key><LastModified>([^<]+)</LastModified>(?:<ETag>[^<]*</ETag>)?<Size>(\d+)", x)[-6:])
+          x = urllib.request.urlopen(f"{S3}/?list-type=2&prefix=data/synchro_ftp/BASE/HOR/H_29", timeout=60).read().decode()
+          print("HOR :", re.findall(r"<Key>([^<]+)</Key><LastModified>([^<]+)</LastModified>", x)[-4:])
+          for pre in ("data/synchro_ftp/OBS", "data/synchro_ftp/PAQUET", "data/obs", "data/synchro_ftp/"):
+              x = urllib.request.urlopen(f"{S3}/?list-type=2&delimiter=/&prefix={pre}", timeout=60).read().decode()
+              print("PREFIXE", pre, re.findall(r"<Prefix>([^<]+)</Prefix>", x)[:30])
+          PY
