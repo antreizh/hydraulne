@@ -28,6 +28,13 @@ Fichiers produits (un fichier par mois, heures en UTC, séparateur « ; ») :
       FF vent moyen sur 10 min (m/s), DD direction (degrés, d'où vient le vent), FXI rafale max de l'heure.
       Pression : Brest-Guipavas (29075001 ; la pointe Saint-Mathieu ne la mesure pas), PMER au niveau de la mer.
 
+  data/vent-rade/AAAA-MM.csv          date_utc;segal_ms;segal_dir;segal_raf;lanveoc_ms;lanveoc_dir;lanveoc_raf;
+                                      mathieu_ms;mathieu_dir;mathieu_raf
+      vent horaire (même fichier Météo-France) des trois stations du widget « Cadran de marée » :
+      Saint-Ségal 29263002, Lanvéoc 29120001, pointe Saint-Mathieu 29190001 (m/s, degrés, rafale max de l'heure).
+  data/historique.json                bornes de l'historique (marée de Guily Glaz, vent de la rade) et mois disponibles,
+      lu par le widget « Histo cadran » pour proposer ses listes de dates.
+
 Colonnes coef / vent / pression : coef = coefficient de la pleine mer de Brest la plus proche (à 6 h 13 près) ;
 vent et pression = observation horaire la plus proche. Vides tant qu'ils ne sont pas connus : ils sont
 complétés aux passages suivants (le vent arrive avec environ une demi-journée de retard). Le SHOM ne
@@ -60,6 +67,9 @@ MF_PRESSION = "29075001"                          # BREST-GUIPAVAS (pas de barom
 
 COLS_MAREE = ["date_utc", "hauteur_mm", "coef", "vent_ms", "vent_dir", "pression_hpa"]
 COLS_METEO = ["date_utc", "vent_ms", "vent_dir", "rafale_ms", "pression_hpa"]
+# vent des trois stations du widget « Cadran de marée », pour le widget « Histo cadran » (rejeu)
+VENT_RADE = (("segal", "29263002"), ("lanveoc", "29120001"), ("mathieu", "29190001"))
+COLS_VENT_RADE = ["date_utc"] + [f"{n}_{c}" for n, _ in VENT_RADE for c in ("ms", "dir", "raf")]
 COLS_PRED = ["date_utc", "type", "hauteur_m", "coef"]
 COLS_EXT = ["date_utc_prevue", "type", "hauteur_prevue_m", "coef", "date_utc_mesuree", "hauteur_mesuree_m",
             "surcote_m", "vent_ms", "vent_dir", "pression_hpa", "gg_date_utc", "gg_hauteur_mm"]
@@ -246,7 +256,7 @@ def meteo_mf(depuis):
     lignes = csv.reader(io.StringIO(gzip.decompress(lire_url(url, binaire=True)).decode("utf-8", "replace")), delimiter=";")
     tete = [h.strip() for h in next(lignes)]
     ix = {c: tete.index(c) for c in ("NUM_POSTE", "AAAAMMJJHH", "FF", "DD", "FXI", "PMER")}
-    out, mini = {}, depuis.strftime("%Y%m%d%H")
+    out, rade, mini = {}, {}, depuis.strftime("%Y%m%d%H")
     for l in lignes:
         if len(l) <= max(ix.values()) or l[ix["AAAAMMJJHH"]].strip() < mini:
             continue
@@ -256,10 +266,14 @@ def meteo_mf(depuis):
             out.setdefault(k, {}).update(vent_ms=l[ix["FF"]].strip(), vent_dir=l[ix["DD"]].strip(), rafale_ms=l[ix["FXI"]].strip())
         elif poste == MF_PRESSION:
             out.setdefault(k, {})["pression_hpa"] = l[ix["PMER"]].strip()
+        for nom, num in VENT_RADE:
+            if poste == num:
+                rade.setdefault(k, {}).update({f"{nom}_ms": l[ix["FF"]].strip(), f"{nom}_dir": l[ix["DD"]].strip(), f"{nom}_raf": l[ix["FXI"]].strip()})
     vent = [k for k, v in out.items() if v.get("vent_ms")]
     print(f"Météo-France {url.rsplit('/', 1)[1]} : {len(vent)} heures de vent à la pointe Saint-Mathieu "
-          f"(dernière {max(vent) if vent else '—'}), {sum(1 for v in out.values() if v.get('pression_hpa'))} de pression à Brest-Guipavas")
-    return out
+          f"(dernière {max(vent) if vent else '—'}), {sum(1 for v in out.values() if v.get('pression_hpa'))} de pression à Brest-Guipavas, "
+          f"{len(rade)} heures pour les trois stations de la rade")
+    return out, rade
 
 
 # ---------------------------------------------------------------- assemblage
@@ -319,15 +333,21 @@ def main(base):
     pred = maj_predictions(os.path.join(d_br, "predictions-shom.csv"), os.path.join(d_gg, "brest-shom.csv"))
     pm = [(t, c) for t, ty, h, c in pred if ty == "PM" and c]
 
-    # météo horaire : vent de la pointe Saint-Mathieu, pression de Brest-Guipavas
-    meteo = charger_mensuel(d_mt)
+    # météo horaire : vent de la pointe Saint-Mathieu, pression de Brest-Guipavas ;
+    # vent horaire des trois stations du Cadran de marée (Saint-Ségal, Lanvéoc, Saint-Mathieu) pour le rejeu
+    d_vr = os.path.join(base, "data", "vent-rade")
+    meteo, rade = charger_mensuel(d_mt), charger_mensuel(d_vr)
     try:
-        neuves = meteo_mf(depuis_archive(meteo, maintenant) - dt.timedelta(days=2))
+        depuis = min(depuis_archive(meteo, maintenant), depuis_archive(rade, maintenant)) - dt.timedelta(days=2)
+        neuves, neuves_rade = meteo_mf(max(depuis, DEBUT - dt.timedelta(days=1)))
         for k, v in neuves.items():
             meteo.setdefault(k, {}).update({c: x for c, x in v.items() if x})
+        for k, v in neuves_rade.items():
+            rade.setdefault(k, {}).update({c: x for c, x in v.items() if x})
     except Exception as e:
         print(f"::warning::Météo-France injoignable, vent non actualisé ({e})")
     mois_mt = ecrire_mensuel(d_mt, COLS_METEO, meteo)
+    mois_vr = ecrire_mensuel(d_vr, COLS_VENT_RADE, rade)
     meteo_l = sorted((date(k), v) for k, v in meteo.items())
 
     # marégraphes
@@ -359,6 +379,15 @@ def main(base):
     ecrire_texte(os.path.join(d_br, "pleines-basses-mers.csv"), table(COLS_EXT, ext))
     resume.append(f"Brest : {sum(1 for l in ext if l.get('surcote_m'))} surcote(s) de pleine/basse mer calculée(s) ; "
                   f"météo : {len(meteo)} heures, fichiers réécrits : {', '.join(mois_mt) or 'aucun'}")
+    resume.append(f"Vent de la rade : {len(rade)} heures, fichiers réécrits : {', '.join(mois_vr) or 'aucun'}")
+
+    # sommaire de l'historique pour le widget « Histo cadran » (listes de dates)
+    def bornes(d, champ):
+        ks = sorted(k for k, v in d.items() if v.get(champ))
+        return {"debut": ks[0], "fin": ks[-1]} if ks else None
+    sommaire = {"maree_guily_glaz": bornes(gg, "hauteur_mm"), "vent_rade": bornes(rade, "segal_ms") or bornes(rade, "mathieu_ms"),
+                "mois": sorted({k[:7] for k in gg} | {k[:7] for k in rade}), "actualise": cle(maintenant)}
+    ecrire_texte(os.path.join(base, "data", "historique.json"), json.dumps(sommaire, ensure_ascii=False, indent=1) + "\n")
     for r in resume:
         print("::notice::" + r)
     return 0
