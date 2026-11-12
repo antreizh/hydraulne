@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Histo cadran · antreizh.fr</title>
+<style>html,body{margin:0;background:transparent}body{padding:1px}</style>
+</head>
+<body>
+<!-- Widget servi depuis https://appli.antreizh.fr/widgets/ : toujours à jour sur le site -->
+<!-- =====================================================================
+     Widget « Histo cadran » — Guily Glaz, Port-Launay (29)
+     Même cadran que le widget « Cadran de marée » (rose des marées et vents réels), mais alimenté par l'historique
+     archivé : on choisit une date de début et une date de fin, puis on rejoue au ralenti, à vitesse réglable,
+     la marée de Guily Glaz et le vent de Saint-Ségal, Lanvéoc et la pointe Saint-Mathieu.
+     À chaque instant, le cadran montre les 24 heures qui précèdent ; le trait orange marque l'instant rejoué.
+     Données : fichiers de l'historique publiés avec l'appli (dossier data/ du dépôt) :
+       data/historique.json (bornes), data/maree-guily-glaz/AAAA-MM.csv (toutes les 5 min, Hub'Eau),
+       data/vent-rade/AAAA-MM.csv (vent horaire Météo-France des trois stations).
+     Le vent archivé est le vent moyen sur 10 minutes relevé à chaque heure (le Cadran en direct fait la moyenne
+     des mesures 6 min de l'heure) ; il arrive avec une demi-journée de retard environ.
+     ===================================================================== -->
+<div id="mhc-widget">
+  <div class="mhc-head">
+    <div class="mhc-t">Rose des marées et vents réels <span>· <b class="mhc-lieu">Guily Glaz</b></span></div>
+    <div class="mhc-per">Rejeu de l'historique</div>
+    <div class="mhc-maj" id="mhc-maj">Chargement de l'historique…</div>
+  </div>
+  <div class="mhc-cmd">
+    <label for="mhc-debut">Date de début <select id="mhc-debut"></select></label>
+    <label for="mhc-fin">Date de fin <select id="mhc-fin"></select></label>
+    <label for="mhc-vit">Vitesse
+      <select id="mhc-vit">
+        <option value="0.5">30 min par seconde</option>
+        <option value="1">1 h par seconde</option>
+        <option value="2" selected>2 h par seconde</option>
+        <option value="4">4 h par seconde</option>
+        <option value="8">8 h par seconde</option>
+        <option value="24">1 jour par seconde</option>
+      </select></label>
+    <label>&nbsp;<button type="button" id="mhc-zero">⟲ Recommencer</button></label>
+    <div class="mhc-btn">
+      <button type="button" class="mhc-lire" id="mhc-lire" aria-pressed="false">▶ Lecture</button>
+      <input type="range" id="mhc-pos" min="0" max="1000" value="0" aria-label="Position dans la période rejouée">
+    </div>
+  </div>
+  <div class="mhc-quand" id="mhc-quand" aria-live="off"></div>
+  <div class="mhc-lect" id="mhc-lect"></div>
+  <svg id="mhc-svg" viewBox="-276 -276 552 552" role="img"
+       aria-label="Cadran de 24 heures rejoué : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, jour et nuit"></svg>
+  <div class="mhc-ext-t">Vitesse du vent</div>
+  <div class="mhc-leg" id="mhc-leg"></div>
+  <div class="mhc-ext-t">Rétrospective des marées</div>
+  <div class="mhc-ext" id="mhc-ext"></div>
+  <div class="mhc-foot">
+    <span class="mhc-src">Sources : <a href="https://www.hydro.eaufrance.fr/stationhydro/J382183001/fiche" target="_blank" rel="noopener" title="L'Aulne à Port-Launay – Guily Glaz [marégraphe] – HydroPortail">HydroPortail</a> · <a href="https://meteo.data.gouv.fr" target="_blank" rel="noopener" title="Vent : observations horaires des stations Météo-France">Météo-France</a></span>
+    <span class="mhc-copy">© <a href="https://www.antreizh.fr" target="_blank" rel="noopener" title="www.antreizh.fr">antreizh.fr</a></span>
+    <span class="mhc-avert">Données et représentation indicatives non officielles</span>
+  </div>
+  <details class="mhc-aide">
+    <summary>Lire le cadran</summary>
+    <ul>
+      <li><b>Rejeu</b> : choisissez une date de début et une date de fin, la vitesse, puis « Lecture ». Le curseur permet d'aller directement à un instant de la période.</li>
+      <li><b>Centre</b> : hauteur et sens de la marée à l'instant rejoué.</li>
+      <li><b>1<sup>er</sup> cercle</b> : hauteur d'eau à Guily Glaz sur les 24 heures qui précèdent l'instant rejoué ; plus l'aire bleue s'éloigne du centre, plus l'eau est haute. Points : pleines (pleins) et basses mers (creux).</li>
+      <li><b>Cercles suivants, par paires</b> : vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu. Pour chaque station, une barre par heure (vent moyen, rafale en trait), puis une flèche qui pointe vers où souffle le vent (nord en haut) ; un petit rond signale un vent calme.</li>
+      <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre).</li>
+      <li>0 h en haut, sens des aiguilles d'une montre, heure de Paris ; le trait orange marque l'instant rejoué ; les tracés pâlissent avec l'ancienneté.</li>
+    </ul>
+  </details>
+</div>
+
+<style>
+/* Toutes les tailles de texte sont multipliées par --k, calculé selon la largeur allouée au widget */
+#mhc-widget{
+  --ink:#0b3c5d; --muted:#5f7180; --line:#dde5eb; --grid:#e9eff3; --card:#fff;
+  --eau:#1f7bb6; --main:#c2410c; --nuit:#3d5566; --jour:#f3d27a;
+  /* vitesse du vent, du calme à l'ouragan (> 80 nd) */
+  --v1:#9fb7c6; --v2:#2a9d8f; --v3:#8cc152; --v4:#e9c23b; --v5:#e9a23b; --v6:#e76f51; --v7:#d62839; --v8:#b5179e;
+  --v9:#7b2cbf; --v10:#5a189a; --v11:#3c096c; --v12:#10002b;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:#1d2b36; background:var(--card); border-radius:calc(18px*var(--k));
+  padding:calc(14px*var(--k)) calc(14px*var(--k)) calc(10px*var(--k));
+  box-shadow:0 2px calc(12px*var(--k)) rgba(11,60,93,.10); width:100%; box-sizing:border-box; --k:1;
+}
+/* Fond sombre (téléphone ou navigateur en mode sombre) : lettres et chiffres sans graisse ni liseré */
+@media (prefers-color-scheme:dark){
+  #mhc-widget, #mhc-widget *{font-weight:400 !important}
+  #mhc-widget svg text{stroke:none !important}
+}
+/* En pleine page (écran large) : le widget n'occupe que la moitié de la largeur, centré, sans descendre sous 420 px */
+@media (min-width:700px){#mhc-widget{width:max(50%,420px);margin:0 auto}}
+#mhc-widget *{box-sizing:border-box}
+#mhc-widget a{color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+#mhc-widget a:hover{color:var(--eau)}
+#mhc-widget .mhc-t{font-size:calc(17px*var(--k));font-weight:700;color:var(--ink)}
+#mhc-widget .mhc-t span{font-weight:400;color:var(--muted);font-size:.82em}
+#mhc-widget .mhc-lieu{color:var(--eau);font-weight:700;font-size:calc(17px*var(--k))}   /* Guily Glaz en bleu, même taille que le titre */
+#mhc-widget .mhc-maj{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(2px*var(--k))}
+#mhc-widget .mhc-per{font-size:calc(13.5px*var(--k));font-weight:600;color:var(--ink);margin-top:calc(2px*var(--k))}
+#mhc-widget .mhc-lect{display:flex;flex-wrap:wrap;gap:calc(2px*var(--k)) calc(12px*var(--k));margin-top:calc(7px*var(--k));border-top:1px solid var(--line);padding-top:calc(6px*var(--k));
+  font-size:calc(12px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums;min-height:calc(17px*var(--k))}
+#mhc-widget .mhc-lect b{color:var(--ink)}
+#mhc-widget svg{display:block;width:100%;height:auto;margin-top:calc(4px*var(--k));touch-action:manipulation}
+#mhc-widget svg text{font-family:inherit;font-variant-numeric:tabular-nums}
+#mhc-widget .mhc-hit{fill:transparent;cursor:pointer}
+#mhc-widget .mhc-hit:focus{outline:none}
+#mhc-widget .mhc-hit:focus-visible{fill:var(--eau);fill-opacity:.08}
+#mhc-widget .mhc-ext-t{font-size:calc(12.5px*var(--k));font-weight:700;color:var(--ink);margin-top:calc(10px*var(--k))}
+#mhc-widget .mhc-ext{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(6px*var(--k));margin-top:calc(4px*var(--k))}
+#mhc-widget .mhc-ext div{border-top:2px solid var(--line);padding-top:calc(3px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
+#mhc-widget .mhc-ext b{display:block;color:var(--ink);font-size:calc(13.5px*var(--k))}
+#mhc-widget .mhc-ext .mhc-j{display:block;font-size:calc(10.5px*var(--k));font-weight:700;color:var(--eau)}   /* jour de la pleine ou basse mer */
+#mhc-widget .mhc-aide{margin-top:calc(8px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted)}
+#mhc-widget .mhc-aide summary{cursor:pointer;color:var(--ink)}
+#mhc-widget .mhc-aide ul{margin:calc(4px*var(--k)) 0 0;padding-left:calc(16px*var(--k));display:grid;gap:calc(2px*var(--k))}
+#mhc-widget .mhc-aide b{color:var(--ink);font-weight:600}
+#mhc-widget .mhc-leg{display:flex;flex-wrap:wrap;gap:calc(4px*var(--k)) calc(12px*var(--k));font-size:calc(11px*var(--k));color:var(--muted);margin-top:calc(4px*var(--k));align-items:center}
+#mhc-widget .mhc-leg i{display:inline-block;width:calc(16px*var(--k));height:calc(4px*var(--k));border-radius:2px;vertical-align:middle;margin-right:calc(4px*var(--k))}
+#mhc-widget .mhc-foot{display:flex;flex-wrap:wrap;gap:calc(2px*var(--k)) calc(10px*var(--k));justify-content:space-between;
+  border-top:1px solid var(--line);margin-top:calc(8px*var(--k));padding-top:calc(6px*var(--k));font-size:calc(10.5px*var(--k));color:var(--muted)}
+#mhc-widget .mhc-avert{flex-basis:100%;font-style:italic}
+@media (max-width:330px){#mhc-widget .mhc-ext{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* commandes du rejeu */
+#mhc-widget .mhc-cmd{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(6px*var(--k)) calc(10px*var(--k));margin-top:calc(8px*var(--k));
+  border-top:1px solid var(--line);padding-top:calc(8px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted)}
+#mhc-widget .mhc-cmd label{display:flex;flex-direction:column;gap:calc(2px*var(--k));min-width:0}
+#mhc-widget select,#mhc-widget button{font:inherit;font-size:calc(12.5px*var(--k));color:var(--ink);background:#fff;border:1px solid var(--line);
+  border-radius:calc(6px*var(--k));padding:calc(5px*var(--k)) calc(6px*var(--k));min-width:0}
+#mhc-widget button{cursor:pointer}
+#mhc-widget button:hover,#mhc-widget select:hover{border-color:var(--eau)}
+#mhc-widget button:focus-visible,#mhc-widget select:focus-visible,#mhc-widget input:focus-visible{outline:2px solid var(--eau);outline-offset:1px}
+#mhc-widget .mhc-btn{display:flex;gap:calc(6px*var(--k));grid-column:1/-1;align-items:center}
+#mhc-widget .mhc-btn button.mhc-lire{background:var(--eau);color:#fff;border-color:var(--eau);font-weight:600;min-width:calc(92px*var(--k))}
+#mhc-widget .mhc-btn input{flex:1;min-width:0;accent-color:var(--main)}
+#mhc-widget .mhc-quand{font-size:calc(15px*var(--k));font-weight:700;color:var(--main);margin-top:calc(8px*var(--k));font-variant-numeric:tabular-nums}
+#mhc-widget .mhc-etat{font-size:calc(11px*var(--k));color:var(--muted)}
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================== PARAMÈTRES (modifiables) ================== */
+  var CFG = {
+    data: "../data/",                         // dossier de l'historique, à côté du dossier widgets/
+    stations: [                               // de l'intérieur des terres vers le large ; préfixe des colonnes de data/vent-rade
+      { nom: "Saint-Ségal",   court: "St-Ségal",   col: "segal" },
+      { nom: "Lanvéoc",       court: "Lanvéoc",    col: "lanveoc" },
+      { nom: "Saint-Mathieu", court: "St-Mathieu", col: "mathieu" }
+    ],
+    joursParDefaut: 3                         // période proposée à l'ouverture : les 3 derniers jours
+  };
+  /* ============================================================== */
+
+  var root = document.getElementById("mhc-widget");
+  if (!root || root.getAttribute("data-init")) return;
+  root.setAttribute("data-init", "1");
+  var svg = document.getElementById("mhc-svg"), NS = "http://www.w3.org/2000/svg";
+  function $(id) { return document.getElementById(id); }
+
+  function fit() {
+    var w = root.getBoundingClientRect().width; if (!w) return;
+    root.style.setProperty("--k", Math.max(0.8, Math.min(1.6, w / 420)).toFixed(3));
+  }
+  fit();
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(root);
+  window.addEventListener("resize", fit);
+
+  /* ---------------- outils (repris du Cadran de marée) ---------------- */
+  var KT = 1.94384, TZ = "Europe/Paris", H = 3600e3, JOUR = 24 * H;
+  var R0 = 44, R1 = 96;
+  var RB = [104, 150, 196], RL = 23, RA = [137, 183, 229];
+  var RN0 = 241, RN1 = 246, RH = 260;
+  var fmtH = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  var fmtJ = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
+  var fmtJA = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  var fmtL = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  var fmtP = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  var fmtD = new Intl.DateTimeFormat("fr-CA", { timeZone: TZ });          // AAAA-MM-JJ, heure de Paris
+  function minLoc(d) { var p = fmtP.formatToParts(d), h = 0, m = 0; p.forEach(function (x) { if (x.type === "hour") h = +x.value; if (x.type === "minute") m = +x.value; }); return h * 60 + m; }
+  function ang(d) { return minLoc(d) / 1440 * 2 * Math.PI; }
+  function xy(a, r) { return [+(r * Math.sin(a)).toFixed(2), +(-r * Math.cos(a)).toFixed(2)]; }
+  function css(v) { return getComputedStyle(root).getPropertyValue(v).trim(); }
+  function nf(v, d) { return v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+  function el(n, a, p) { var e = document.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); (p || svg).appendChild(e); return e; }
+  var CARD = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO"];
+  function card(dd) { return CARD[Math.round(dd / 22.5) % 16]; }
+  var SEUILS = [5, 10, 16, 22, 28, 34, 41, 51, 61, 71];
+  function classe(nd) { for (var i = 0; i < SEUILS.length; i++) if (nd < SEUILS[i]) return i + 1; return nd <= 80 ? 11 : 12; }
+  var COUL = ["", "--v1", "--v2", "--v3", "--v4", "--v5", "--v6", "--v7", "--v8", "--v9", "--v10", "--v11", "--v12"];
+  function secteur(a0, a1, r0, r1) {
+    var g = a1 - a0 > Math.PI ? 1 : 0;
+    return "M" + xy(a0, r0) + " L" + xy(a0, r1) + " A" + r1 + "," + r1 + " 0 " + g + " 1 " + xy(a1, r1) +
+           " L" + xy(a1, r0) + " A" + r0 + "," + r0 + " 0 " + g + " 0 " + xy(a0, r0) + "Z";
+  }
+  function num(x) { if (x == null) return null; x = String(x).trim().replace(",", "."); if (x === "") return null; var n = +x; return isFinite(n) ? n : null; }
+  // premier indice dont la date est > t (tableaux triés)
+  function apres(l, t) { var a = 0, b = l.length; while (a < b) { var m = (a + b) >> 1; if (l[m].t <= t) a = m + 1; else b = m; } return a; }
+  function tranche(l, t0, t1) { return l.slice(apres(l, t0), apres(l, t1)); }
+  function plusProche(l, d) { var i = apres(l, d), c = [l[i - 1], l[i]].filter(Boolean); return c.length ? c.reduce(function (b, q) { return Math.abs(q.t - d) < Math.abs(b.t - d) ? q : b; }) : null; }
+  function texte(url) { return fetch(url, { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); }); }
+  // minuit (heure de Paris) du jour AAAA-MM-JJ : à 0 h UTC il est 1 h ou 2 h à Paris, le même jour
+  function minuit(j) { var g = Date.parse(j + "T00:00:00Z"); return g - minLoc(new Date(g)) * 60e3; }
+
+  /* ---------------- historique ---------------- */
+  var gg = [], vents = [[], [], []], mois = {}, somm = null;
+  function chargerMois(m) {
+    if (mois[m]) return mois[m];
+    var pM = texte(CFG.data + "maree-guily-glaz/" + m + ".csv").then(function (t) {
+      return t.trim().split(/\r?\n/).slice(1).map(function (l) { var c = l.split(";"), h = num(c[1]); return h == null ? null : { t: new Date(c[0]), h: h / 1000 }; }).filter(Boolean);
+    }).catch(function () { return []; });
+    var pV = texte(CFG.data + "vent-rade/" + m + ".csv").then(function (t) {
+      var L = t.trim().split(/\r?\n/), tete = L[0].split(";");
+      return CFG.stations.map(function (st) {
+        var iff = tete.indexOf(st.col + "_ms"), idd = tete.indexOf(st.col + "_dir"), irf = tete.indexOf(st.col + "_raf");
+        return L.slice(1).map(function (l) {
+          var c = l.split(";"), ff = num(c[iff]); if (ff == null) return null;
+          var dd = num(c[idd]), rf = num(c[irf]), nd = ff * KT;
+          return { t: new Date(c[0]), nd: nd, dd: ff > 0 ? dd : null, raf: Math.max(rf != null ? rf * KT : nd, nd) };
+        }).filter(Boolean);
+      });
+    }).catch(function () { return [[], [], []]; });
+    return (mois[m] = Promise.all([pM, pV]));
+  }
+  function moisEntre(t0, t1) {
+    var out = [], d = new Date(t0); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+    while (d.getTime() <= t1) { out.push(d.toISOString().slice(0, 7)); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)); }
+    return out;
+  }
+  function chargerPeriode(t0, t1) {
+    var ms = moisEntre(t0 - JOUR - H, t1 + H);
+    return Promise.all(ms.map(chargerMois)).then(function (r) {
+      var G = [], V = [[], [], []];
+      r.forEach(function (x) { G = G.concat(x[0]); for (var s = 0; s < 3; s++) V[s] = V[s].concat(x[1][s]); });
+      var tri = function (a, b) { return a.t - b.t; };
+      gg = G.sort(tri); vents = V.map(function (l) { return l.sort(tri); });
+    });
+  }
+
+  /* ---------------- dessin d'un instant ---------------- */
+  function extremes(G) {
+    var out = [];
+    for (var i = 6; i < G.length - 6; i++) {
+      var w = G.slice(Math.max(0, i - 24), i + 25).map(function (p) { return p.h; });
+      [["PM", Math.max.apply(null, w)], ["BM", Math.min.apply(null, w)]].forEach(function (c) {
+        if (G[i].h === c[1] && !out.some(function (e) { return e.type === c[0] && Math.abs(e.t - G[i].t) < 4 * H; }))
+          out.push({ type: c[0], t: G[i].t, h: G[i].h });
+      });
+    }
+    return out.sort(function (a, b) { return a.t - b.t; });
+  }
+  var hMinP = -1, hMaxP = 3.5, vMaxP = 10;    // échelles fixées pour toute la période (le cadran ne « respire » pas pendant le rejeu)
+
+  function dessiner(fin) {
+    svg.textContent = "";
+    var hFin = Math.ceil(fin / H) * H, debut = hFin - JOUR;
+    var G = tranche(gg, new Date(debut), fin);
+    var V = vents.map(function (l) { return tranche(l, new Date(debut), new Date(Math.min(hFin, +fin + H))); });
+    var ink = css("--ink"), muted = css("--muted"), eau = css("--eau"), cardc = css("--card"), main = css("--main");
+    var an = ang(fin), aLab = an + 0.12, k, i;
+    function age(t) { return Math.max(0, Math.min(1, (fin - t) / JOUR)); }
+
+    for (k = 0; k < 24; k++) el("path", { d: secteur(k / 24 * 2 * Math.PI, (k + 1) / 24 * 2 * Math.PI, RN0, RN1), fill: (k >= 18 || k < 8) ? css("--nuit") : css("--jour") });
+    for (k = 0; k < 24; k += 3) { var ph = xy(k / 24 * 2 * Math.PI, RH); el("text", { x: ph[0], y: ph[1] + 5, "text-anchor": "middle", "font-size": 15, fill: ink, "font-weight": k % 6 === 0 ? 700 : 400 }).textContent = k + " h"; }
+
+    var hMin = hMinP, hMax = hMaxP;
+    var rad = function (h) { return R0 + (h - hMin) / (hMax - hMin) * (R1 - R0); };
+    for (var hh = Math.ceil(hMin); hh <= hMax; hh++) el("circle", { cx: 0, cy: 0, r: rad(hh), fill: "none", stroke: muted, "stroke-opacity": 0.18 });
+    el("circle", { cx: 0, cy: 0, r: R0, fill: "none", stroke: muted, "stroke-opacity": 0.35 });
+    if (G.length > 1) {
+      for (i = 0; i < G.length - 1; i += 12) {
+        var tr = G.slice(i, Math.min(i + 13, G.length)), a0 = ang(tr[0].t), a1 = ang(tr[tr.length - 1].t);
+        el("path", { d: "M" + xy(a0, R0) + " L" + tr.map(function (p) { return xy(ang(p.t), rad(p.h)); }).join(" L") + " L" + xy(a1, R0) +
+          " A" + R0 + "," + R0 + " 0 0 0 " + xy(a0, R0) + "Z", fill: eau, "fill-opacity": (0.6 - 0.42 * age(tr[tr.length - 1].t)).toFixed(2) });
+      }
+      el("path", { d: "M" + G.map(function (p) { return xy(ang(p.t), rad(p.h)); }).join(" L"), fill: "none", stroke: eau, "stroke-width": 1.6, "stroke-linejoin": "round" });
+      var pl = xy(aLab, rad(Math.floor(hMax)));
+      el("text", { x: pl[0], y: pl[1] + 3, "text-anchor": "middle", "font-size": 9.5, fill: muted }).textContent = nf(Math.floor(hMax), 0) + " m";
+    }
+    var ext = extremes(G);
+    ext.forEach(function (e) {
+      var a = ang(e.t), p = xy(a, rad(e.h)), l = xy(a, e.type === "PM" ? rad(e.h) - 13 : rad(e.h) + 12);
+      el("circle", { cx: p[0], cy: p[1], r: 3, fill: e.type === "PM" ? eau : cardc, stroke: eau, "stroke-width": 1.4 });
+      el("text", { x: l[0], y: l[1] + 3.5, "text-anchor": "middle", "font-size": 10, fill: ink }).textContent = fmtH.format(e.t);
+    });
+
+    var vMax = vMaxP;
+    CFG.stations.forEach(function (st, s) {
+      var rb = RB[s], ra = RA[s], rv = function (n) { return rb + Math.min(n, vMax) / vMax * RL; };
+      el("circle", { cx: 0, cy: 0, r: rb, fill: "none", stroke: muted, "stroke-opacity": 0.35 });
+      el("circle", { cx: 0, cy: 0, r: rv(vMax), fill: "none", stroke: muted, "stroke-opacity": 0.3, "stroke-dasharray": "1 3" });
+      V[s].forEach(function (v) {
+        var a = ang(new Date(v.t - H / 2)), da = Math.PI / 24 * 0.72, col = css(COUL[classe(v.nd)]);
+        var g = el("g", { opacity: (1 - 0.4 * age(v.t)).toFixed(2) });
+        el("path", { d: secteur(a - da, a + da, rb, Math.max(rb + 1.5, rv(v.nd))), fill: col }, g);
+        el("path", { d: "M" + xy(a - da, rv(v.raf)) + " A" + rv(v.raf) + "," + rv(v.raf) + " 0 0 1 " + xy(a + da, rv(v.raf)), fill: "none", stroke: col, "stroke-width": 1.8 }, g);
+        var c = xy(a, ra);
+        if (v.nd < 0.5 || v.dd == null) { el("circle", { cx: c[0], cy: c[1], r: 2.4, fill: "none", stroke: muted, "stroke-width": 1.2 }, g); return; }
+        var L = 11, b = (v.dd + 180) * Math.PI / 180, ux = Math.sin(b), uy = -Math.cos(b), px = -uy, py = ux, x2 = c[0] + ux * L / 2, y2 = c[1] + uy * L / 2;
+        el("line", { x1: c[0] - ux * L / 2, y1: c[1] - uy * L / 2, x2: x2, y2: y2, stroke: col, "stroke-width": 2, "stroke-linecap": "round" }, g);
+        el("path", { d: "M" + (x2 + ux * 2.6) + "," + (y2 + uy * 2.6) + " L" + (x2 - ux * 2.8 + px * 3) + "," + (y2 - uy * 2.8 + py * 3) + " L" + (x2 - ux * 2.8 - px * 3) + "," + (y2 - uy * 2.8 - py * 3) + "Z", fill: col }, g);
+      });
+      var pn = xy(aLab + 0.05, (rb + ra) / 2);
+      el("text", { x: pn[0], y: pn[1] + 3, "text-anchor": "middle", "font-size": 9.5, fill: muted }).textContent = st.court;
+    });
+    var pm = xy(aLab + 0.34, RB[2] + RL);
+    el("text", { x: pm[0], y: pm[1] - 2, "text-anchor": "middle", "font-size": 8.5, fill: muted }).textContent = vMax + " nd";
+
+    var n0 = xy(an, R0), n1 = xy(an, RN1);
+    el("line", { x1: n0[0], y1: n0[1], x2: n1[0], y2: n1[1], stroke: main, "stroke-width": 1.6, "stroke-dasharray": "4 3" });
+
+    // centre et ligne de lecture : valeurs à l'instant rejoué
+    var t1 = el("text", { x: 0, y: -13, "text-anchor": "middle", "font-size": 10, fill: muted });
+    var t2 = el("text", { x: 0, y: 6, "text-anchor": "middle", "font-size": 19, "font-weight": 700, fill: ink });
+    var t3 = el("text", { x: 0, y: 20, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: eau });
+    var p = G.length ? G[G.length - 1] : null;
+    if (p && fin - p.t < 2 * H) {
+      var q = G[Math.max(0, G.length - 4)], dh = p.h - q.h;
+      t1.textContent = fmtH.format(p.t); t2.textContent = nf(p.h, 2) + " m";
+      t3.textContent = Math.abs(dh) < 0.01 ? "étale" : dh > 0 ? "▲ montante" : "▼ descendante";
+      t3.setAttribute("fill", dh > 0 ? eau : muted);
+    } else { t1.textContent = fmtH.format(fin); t2.textContent = "—"; t3.textContent = "pas de mesure"; }
+    $("mhc-quand").textContent = fmtL.format(fin).replace(/^./, function (c) { return c.toUpperCase(); }) + " · " + fmtH.format(fin);
+    $("mhc-lect").innerHTML = "<b>À cet instant</b>" + CFG.stations.map(function (st, s) {
+      var v = plusProche(vents[s], fin);
+      if (!v || Math.abs(v.t - fin) > 1.5 * H) return "<span>" + st.nom + " : —</span>";
+      return "<span>" + st.nom + " <b>" + (v.nd < 0.5 || v.dd == null ? "calme" : card(v.dd) + " " + Math.round(v.nd) + " nd") + "</b> · raf. " + Math.round(v.raf) + "</span>";
+    }).join("");
+
+    var ex = $("mhc-ext"); ex.innerHTML = "";
+    ext.slice(-4).forEach(function (e) {
+      var d = document.createElement("div");
+      d.innerHTML = (e.type === "PM" ? "Pleine mer" : "Basse mer") + '<span class="mhc-j">' + fmtJ.format(e.t) + "</span><b>" + fmtH.format(e.t) + "</b>" + nf(e.h, 2) + " m";
+      ex.appendChild(d);
+    });
+  }
+
+  /* ---------------- rejeu ---------------- */
+  var selD = $("mhc-debut"), selF = $("mhc-fin"), selV = $("mhc-vit"), bLire = $("mhc-lire"), pos = $("mhc-pos");
+  var T0 = 0, T1 = 0, t = 0, anim = null, dernier = 0, dernierDessin = 0;
+  function majPos() { pos.value = T1 > T0 ? Math.round((t - T0) / (T1 - T0) * 1000) : 0; }
+  function afficher() { dessiner(new Date(t)); majPos(); }
+  function arreter() { if (anim) cancelAnimationFrame(anim); anim = null; bLire.textContent = "▶ Lecture"; bLire.setAttribute("aria-pressed", "false"); }
+  function lire() {
+    if (t >= T1) t = T0;
+    bLire.textContent = "❚❚ Pause"; bLire.setAttribute("aria-pressed", "true"); dernier = 0;
+    var pas = function (ts) {
+      if (dernier) t = Math.min(T1, t + (ts - dernier) / 1000 * (+selV.value) * H);
+      dernier = ts;
+      if (ts - dernierDessin > 50 || t >= T1) { dernierDessin = ts; afficher(); }   // ≈ 20 images par seconde
+      if (t >= T1) { arreter(); return; }
+      anim = requestAnimationFrame(pas);
+    };
+    anim = requestAnimationFrame(pas);
+  }
+  bLire.addEventListener("click", function () { if (anim) arreter(); else lire(); });
+  $("mhc-zero").addEventListener("click", function () { t = T0; afficher(); });
+  pos.addEventListener("input", function () { t = T0 + (T1 - T0) * pos.value / 1000; afficher(); });
+
+  // période choisie : du minuit de la date de début au minuit suivant la date de fin (bornée par les dernières mesures)
+  function periode() {
+    arreter();
+    if (selF.value < selD.value) selF.value = selD.value;
+    var der = Math.max(somm.maree_guily_glaz ? +new Date(somm.maree_guily_glaz.fin) : 0, somm.vent_rade ? +new Date(somm.vent_rade.fin) : 0);
+    T0 = minuit(selD.value); T1 = Math.min(minuit(selF.value) + JOUR, der);
+    T1 = Math.max(T1, T0 + H);
+    $("mhc-maj").textContent = "Chargement des mesures…";
+    chargerPeriode(T0, T1).then(function () {
+      var G = tranche(gg, new Date(T0 - JOUR), new Date(T1)), hs = G.map(function (p) { return p.h; });
+      if (hs.length) { hMinP = Math.floor(Math.min.apply(null, hs) * 2) / 2 - 0.5; hMaxP = Math.max(hMinP + 1, Math.ceil(Math.max.apply(null, hs) * 2) / 2); }
+      var rf = [].concat.apply([], vents.map(function (l) { return tranche(l, new Date(T0 - JOUR), new Date(T1)).map(function (v) { return v.raf; }); }));
+      vMaxP = Math.max(10, Math.ceil(Math.max.apply(null, rf.concat([0])) / 5) * 5);
+      $("mhc-maj").textContent = "Du " + fmtJA.format(new Date(T0)) + " au " + fmtJA.format(new Date(T1 - 1)) +
+        " · historique jusqu'au " + fmtJ.format(new Date(der)) + " " + fmtH.format(new Date(der));
+      t = T0; afficher();
+    });
+  }
+  selD.addEventListener("change", periode); selF.addEventListener("change", periode);
+
+  var lg = $("mhc-leg");
+  [["< 5 nd", 1], ["5–9", 2], ["10–15", 3], ["16–21", 4], ["22–27", 5], ["28–33", 6], ["34–40", 7], ["41–50", 8], ["51–60", 9], ["61–70", 10], ["71–80", 11], ["> 80 nd", 12]].forEach(function (c) {
+    var s = document.createElement("span"); s.innerHTML = '<i style="background:var(' + COUL[c[1]] + ')"></i>' + c[0]; lg.appendChild(s);
+  });
+
+  texte(CFG.data + "historique.json").then(function (j) {
+    somm = JSON.parse(j);
+    var d0 = somm.maree_guily_glaz ? somm.maree_guily_glaz.debut : somm.vent_rade.debut;
+    var d1 = [somm.maree_guily_glaz, somm.vent_rade].filter(Boolean).map(function (b) { return b.fin; }).sort().pop();
+    var jours = [], j0 = fmtD.format(new Date(new Date(d0).getTime() + JOUR)), j1 = fmtD.format(new Date(d1));   // 1er jour complet après le début de l'historique
+    for (var x = new Date(j0 + "T12:00:00Z"); fmtD.format(x) <= j1; x = new Date(x.getTime() + JOUR)) jours.push(fmtD.format(x));
+    [selD, selF].forEach(function (s) {
+      jours.forEach(function (jj) { var o = document.createElement("option"); o.value = jj; o.textContent = fmtJA.format(new Date(jj + "T12:00:00Z")); s.appendChild(o); });
+    });
+    selF.value = jours[jours.length - 1]; selD.value = jours[Math.max(0, jours.length - CFG.joursParDefaut)];
+    periode();
+  }).catch(function () { $("mhc-maj").textContent = "Historique indisponible pour le moment."; });
+})();
+</script>
+<script>
+  // Signale la hauteur du widget à la page qui l'affiche (site antreizh.fr ou appli), pour ajuster le cadre
+  (function () {
+    if (window.parent === window) return;
+    var last = 0;
+    function envoyer() {
+      var h = Math.ceil(document.body.getBoundingClientRect().height);
+      if (h && h !== last) { last = h; window.parent.postMessage({ hydraulneHauteur: h }, "*"); }
+    }
+    if (window.ResizeObserver) new ResizeObserver(envoyer).observe(document.body);
+    window.addEventListener("load", envoyer);
+    setTimeout(envoyer, 500); setTimeout(envoyer, 2000); setTimeout(envoyer, 5000);
+  })();
+</script>
+</body>
+</html>
