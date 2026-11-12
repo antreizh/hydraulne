@@ -32,6 +32,11 @@ Fichiers produits (un fichier par mois, heures en UTC, séparateur « ; ») :
                                       mathieu_ms;mathieu_dir;mathieu_raf
       vent horaire (même fichier Météo-France) des trois stations du widget « Cadran de marée » :
       Saint-Ségal 29263002, Lanvéoc 29120001, pointe Saint-Mathieu 29190001 (m/s, degrés, rafale max de l'heure).
+  data/vent-rade-6min/AAAA-MM.csv     date_utc;segal_ff;segal_dd;segal_raf;lanveoc_ff;…;mathieu_raf
+      mesures toutes les 6 minutes de ces trois stations, prises à la même source que le widget « Cadran de marée »
+      (API Météo-France « Paquet Observations » v2, ~5 derniers jours à chaque passage, clé lue dans
+      widgets/cadran-maree.html). Elles sont regroupées par heure comme dans le Cadran et, là où elles existent,
+      remplacent dans data/vent-rade/ les valeurs du fichier horaire.
   data/historique.json                bornes de l'historique (marée de Guily Glaz, vent de la rade) et mois disponibles,
       lu par le widget « Histo cadran » pour proposer ses listes de dates.
 
@@ -70,6 +75,10 @@ COLS_METEO = ["date_utc", "vent_ms", "vent_dir", "rafale_ms", "pression_hpa"]
 # vent des trois stations du widget « Cadran de marée », pour le widget « Histo cadran » (rejeu)
 VENT_RADE = (("segal", "29263002"), ("lanveoc", "29120001"), ("mathieu", "29190001"))
 COLS_VENT_RADE = ["date_utc"] + [f"{n}_{c}" for n, _ in VENT_RADE for c in ("ms", "dir", "raf")]
+# mesures toutes les 6 minutes de ces trois stations : exactement la source du widget « Cadran de marée »
+# (API Météo-France « Paquet Observations » v2, infrahoraire-6m ; elle rend environ les 5 derniers jours)
+API_6MIN = "https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m?id_station={}&format=csv"
+COLS_VENT_6MIN = ["date_utc"] + [f"{n}_{c}" for n, _ in VENT_RADE for c in ("ff", "dd", "raf")]
 COLS_PRED = ["date_utc", "type", "hauteur_m", "coef"]
 COLS_EXT = ["date_utc_prevue", "type", "hauteur_prevue_m", "coef", "date_utc_mesuree", "hauteur_mesuree_m",
             "surcote_m", "vent_ms", "vent_dir", "pression_hpa", "gg_date_utc", "gg_hauteur_mm"]
@@ -276,6 +285,76 @@ def meteo_mf(depuis):
     return out, rade
 
 
+# ---------------------------------------------------------------- vent 6 min des stations du Cadran de marée
+def cle_meteofrance(base):
+    """Clé de l'API Météo-France : la même que celle du widget Cadran de marée (une seule clé à tenir à jour)."""
+    txt = open(os.path.join(base, "widgets", "cadran-maree.html"), encoding="utf-8").read()
+    return re.search(r'cleApiMeteoFrance:\s*"([^"]+)"', txt).group(1)
+
+
+def vent_6min(cle):
+    """{date_utc: {segal_ff, segal_dd, segal_raf, …}} des ~5 derniers jours (m/s, degrés).
+    Pas d'en-tête User-Agent personnalisé : le pare-feu de l'API le prend pour un robot et répond par un captcha."""
+    out, bilan = {}, []
+    for nom, num in VENT_RADE:
+        try:
+            with urllib.request.urlopen(urllib.request.Request(API_6MIN.format(num), headers={"apikey": cle, "accept": "*/*"}), timeout=60) as r:
+                txt = r.read().decode("utf-8", "replace")
+            lignes = txt.strip().splitlines()
+            if not lignes or not lignes[0].startswith("lat;"):
+                raise RuntimeError("réponse inattendue (" + (lignes[0][:40] if lignes else "vide") + ")")
+            tete = lignes[0].split(";")
+            n = 0
+            for l in lignes[1:]:
+                c = dict(zip(tete, l.split(";")))
+                k, ff = c.get("validity_time", "").strip(), c.get("ff", "").strip()
+                if not k or ff == "":
+                    continue
+                raf = c.get("raf10", "").strip() or c.get("fxi10", "").strip()
+                out.setdefault(k, {}).update({f"{nom}_ff": ff, f"{nom}_dd": c.get("dd", "").strip(), f"{nom}_raf": raf})
+                n += 1
+            bilan.append(f"{nom} {n}")
+        except Exception as e:
+            print(f"::warning::Vent 6 min de {nom} injoignable ({e})")
+    print("Vent 6 min (API Météo-France) : " + (", ".join(bilan) or "aucune station"))
+    return out
+
+
+def horaire_depuis_6min(v6):
+    """Regroupe les mesures 6 min par heure comme le Cadran de marée : mesures de ]H-1 ; H] → heure H,
+    vent moyen, direction moyenne vectorielle, rafale maximale (au moins la moyenne). Au moins 3 mesures par heure."""
+    import math
+    acc = {}
+    for k, v in v6.items():
+        t = date(k)
+        h = t.replace(minute=0, second=0, microsecond=0) + (dt.timedelta(hours=1) if (t.minute or t.second) else dt.timedelta(0))
+        for nom, _ in VENT_RADE:
+            try:
+                ff = float(v.get(f"{nom}_ff", ""))
+            except ValueError:
+                continue
+            a = acc.setdefault((cle(h), nom), {"n": 0, "ff": 0.0, "u": 0.0, "v": 0.0, "fx": 0.0})
+            a["n"] += 1; a["ff"] += ff
+            try:
+                a["fx"] = max(a["fx"], float(v.get(f"{nom}_raf", "")))
+            except ValueError:
+                a["fx"] = max(a["fx"], ff)
+            try:
+                dd = float(v.get(f"{nom}_dd", ""))
+                if ff > 0:
+                    a["u"] += ff * math.sin(math.radians(dd)); a["v"] += ff * math.cos(math.radians(dd))
+            except ValueError:
+                pass
+    out = {}
+    for (k, nom), a in acc.items():
+        if a["n"] < 3:
+            continue
+        moy = a["ff"] / a["n"]
+        dd = (math.degrees(math.atan2(a["u"], a["v"])) + 360) % 360 if (a["u"] or a["v"]) else 0
+        out.setdefault(k, {}).update({f"{nom}_ms": f"{moy:.1f}", f"{nom}_dir": f"{dd:.0f}", f"{nom}_raf": f"{max(a['fx'], moy):.1f}"})
+    return out
+
+
 # ---------------------------------------------------------------- assemblage
 def completer(mesures, pm, meteo_l):
     """Ajoute coef, vent et pression à chaque mesure {date_utc: {hauteur_mm: …}}."""
@@ -347,7 +426,20 @@ def main(base):
     except Exception as e:
         print(f"::warning::Météo-France injoignable, vent non actualisé ({e})")
     mois_mt = ecrire_mensuel(d_mt, COLS_METEO, meteo)
+    # mesures 6 min de l'API (source du Cadran de marée) : archivées telles quelles, puis regroupées par heure ;
+    # là où elles existent, ces heures remplacent celles du fichier horaire (valeurs identiques à celles du Cadran)
+    d_v6 = os.path.join(base, "data", "vent-rade-6min")
+    v6 = charger_mensuel(d_v6)
+    try:
+        for k, v in vent_6min(cle_meteofrance(base)).items():
+            v6.setdefault(k, {}).update({c: x for c, x in v.items() if x != ""})
+    except Exception as e:
+        print(f"::warning::Vent 6 min non actualisé ({e})")
+    mois_v6 = ecrire_mensuel(d_v6, COLS_VENT_6MIN, v6)
+    for k, v in horaire_depuis_6min(v6).items():
+        rade.setdefault(k, {}).update(v)
     mois_vr = ecrire_mensuel(d_vr, COLS_VENT_RADE, rade)
+    print(f"::notice::Vent 6 min : {len(v6)} instants archivés, fichiers réécrits : {', '.join(mois_v6) or 'aucun'}")
     meteo_l = sorted((date(k), v) for k, v in meteo.items())
 
     # marégraphes
