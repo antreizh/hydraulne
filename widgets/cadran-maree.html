@@ -92,7 +92,7 @@
 #mcd-widget .mcd-ext div{border-top:2px solid var(--line);padding-top:calc(3px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
 #mcd-widget .mcd-ext b{display:block;color:var(--ink);font-size:calc(13.5px*var(--k))}
 #mcd-widget .mcd-ext .mcd-j{display:block;font-size:calc(10.5px*var(--k));font-weight:700;color:var(--eau)}   /* J (aujourd'hui) ou J-1 (hier) */
-#mcd-widget .mcd-ext .mcd-cf{display:block;color:var(--ink)}
+#mcd-widget .mcd-ext .mcd-cf{display:block;color:var(--ink);font-size:calc(12.5px*var(--k))}
 #mcd-widget .mcd-aide{margin-top:calc(8px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted)}
 #mcd-widget .mcd-aide summary{cursor:pointer;color:var(--ink)}
 #mcd-widget .mcd-aide ul{margin:calc(4px*var(--k)) 0 0;padding-left:calc(16px*var(--k));display:grid;gap:calc(2px*var(--k))}
@@ -326,7 +326,7 @@
     var t1 = el("text", { x: 0, y: -17, "text-anchor": "middle", "font-size": 10, fill: muted });
     var t2 = el("text", { x: 0, y: 2, "text-anchor": "middle", "font-size": 19, "font-weight": 700, fill: ink });
     var t3 = el("text", { x: 0, y: 15, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: eau });
-    var t4 = el("text", { x: 0, y: 29, "text-anchor": "middle", "font-size": 10.5, fill: ink });   // coefficient de la marée en cours
+    var t4 = el("text", { x: 0, y: 31, "text-anchor": "middle", "font-size": 13, fill: ink });   // coefficient de la marée en cours
     function lire(d, actuel) {
       if (G.length) {
         var p = plusProche(G, d), j = G.indexOf(p), q = G[Math.max(0, j - 3)], dh = p.h - q.h;
