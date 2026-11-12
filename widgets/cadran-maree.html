@@ -42,7 +42,7 @@
   <details class="mcd-aide">
     <summary>Lire le cadran</summary>
     <ul>
-      <li><b>Centre</b> : hauteur et sens de la marée à l'heure choisie (le moment présent par défaut).</li>
+      <li><b>Centre</b> : hauteur, sens et coefficient de la marée à l'heure choisie (le moment présent par défaut). Le coefficient est celui de la pleine mer de Brest la plus proche (prédiction officielle du SHOM).</li>
       <li><b>1<sup>er</sup> cercle</b> : hauteur d'eau à Guily Glaz ; plus l'aire bleue s'éloigne du centre, plus l'eau est haute. Points : pleines (pleins) et basses mers (creux).</li>
       <li><b>Cercles suivants, par paires</b> : vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu. Pour chaque station, une barre par heure (vent moyen, rafale en trait), puis une flèche qui pointe vers où souffle le vent (nord en haut) ; un petit rond signale un vent calme.</li>
       <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre).</li>
@@ -92,6 +92,7 @@
 #mcd-widget .mcd-ext div{border-top:2px solid var(--line);padding-top:calc(3px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
 #mcd-widget .mcd-ext b{display:block;color:var(--ink);font-size:calc(13.5px*var(--k))}
 #mcd-widget .mcd-ext .mcd-j{display:block;font-size:calc(10.5px*var(--k));font-weight:700;color:var(--eau)}   /* J (aujourd'hui) ou J-1 (hier) */
+#mcd-widget .mcd-ext .mcd-cf{display:block;color:var(--ink)}
 #mcd-widget .mcd-aide{margin-top:calc(8px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted)}
 #mcd-widget .mcd-aide summary{cursor:pointer;color:var(--ink)}
 #mcd-widget .mcd-aide ul{margin:calc(4px*var(--k)) 0 0;padding-left:calc(16px*var(--k));display:grid;gap:calc(2px*var(--k))}
@@ -120,6 +121,7 @@
     cleApiMeteoFrance: "eyJ4NXQiOiJZV0kxTTJZNE1qWTNOemsyTkRZeU5XTTRPV014TXpjek1UVmhNbU14T1RSa09ETXlOVEE0Tnc9PSIsImtpZCI6ImdhdGV3YXlfY2VydGlmaWNhdGVfYWxpYXMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhbnRyZWl6aEBjYXJib24uc3VwZXIiLCJhcHBsaWNhdGlvbiI6eyJvd25lciI6ImFudHJlaXpoIiwidGllclF1b3RhVHlwZSI6bnVsbCwidGllciI6IlVubGltaXRlZCIsIm5hbWUiOiJEZWZhdWx0QXBwbGljYXRpb24iLCJpZCI6NTExMTQsInV1aWQiOiI2M2EwYjc3ZS0zYTJmLTRmMjgtOGJkMS02MzEyOTcyYTEwNmMifSwiaXNzIjoiaHR0cHM6XC9cL3BvcnRhaWwtYXBpLm1ldGVvZnJhbmNlLmZyOjQ0M1wvb2F1dGgyXC90b2tlbiIsInRpZXJJbmZvIjp7IjEwMFJlcVBlck1pbiI6eyJ0aWVyUXVvdGFUeXBlIjoicmVxdWVzdENvdW50IiwiZ3JhcGhRTE1heENvbXBsZXhpdHkiOjAsImdyYXBoUUxNYXhEZXB0aCI6MCwic3RvcE9uUXVvdGFSZWFjaCI6dHJ1ZSwic3Bpa2VBcnJlc3RMaW1pdCI6MCwic3Bpa2VBcnJlc3RVbml0Ijoic2VjIn19LCJrZXl0eXBlIjoiUFJPRFVDVElPTiIsInN1YnNjcmliZWRBUElzIjpbeyJzdWJzY3JpYmVyVGVuYW50RG9tYWluIjoiY2FyYm9uLnN1cGVyIiwibmFtZSI6IkRvbm5lZXNQdWJsaXF1ZXNQYXF1ZXRPYnNlcnZhdGlvbiIsImNvbnRleHQiOiJcL3B1YmxpY1wvRFBQYXF1ZXRPYnNcL3YyIiwicHVibGlzaGVyIjoiYmFzdGllbmciLCJ2ZXJzaW9uIjoidjIiLCJzdWJzY3JpcHRpb25UaWVyIjoiMTAwUmVxUGVyTWluIn1dLCJleHAiOjE4MjQzOTQ3NjEsInRva2VuX3R5cGUiOiJhcGlLZXkiLCJpYXQiOjE3OTI4NTg3NjEsImp0aSI6IjZiMzJiY2UzLTYyYTUtNGZhNy05MjMyLTA1M2VkMGU0NGIyZCJ9.m4G3jgL3LOmI4ci45zND4OYAyrj9U0-YcWiSFfSdwNv4vx3AGH-SaklMVr_tFyjFPJPchmawjGIhIl1DdWrDZlPl5Uy-Ox7zdDVBxwewU_ek8XKpshvf7H5tdGI90n7fdDSjRn1G5Z6E-32fjtoP2_wvQCCUoo9QPtygRqJY882jxk3QyWzzX4V_pHRk6KW-G4mokch4B1YljKyv0l5TmGY5xOWa6N67AQAIL9i6EVsuIUdq2O9MR0rx_aOLf7Y4Pq31R3RylH7EBTn81kVVW5fSO8sK_5Hbbccs_IyfcQPnbWjDVyr94wVdTFUsapYXdVlsEOtHuXS2xcFUGYo4EA==",
     urlObsMeteoFrance: "https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m",
     urlHubeau: "https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr",
+    urlCoefs: "https://appli.antreizh.fr/data/maree-brest/predictions-shom.csv",   // coefficients (archive SHOM de l'appli)
     refreshMinutes: 10
   };
   /* ============================================================== */
@@ -211,8 +213,21 @@
       });
   }
 
+  // Coefficients de marée : prédictions officielles du SHOM pour Brest (pleines mers), archivées 3 fois par jour avec
+  // l'appli (data/maree-brest/predictions-shom.csv : jour même + 6 jours, et tout l'historique depuis le 5/11/2026).
+  // Le coefficient d'une heure est celui de la pleine mer de Brest la plus proche (à 6 h 13 près), valable pour Guily Glaz.
+  var coefs = [];
+  function chargerCoefs() {
+    return getText(CFG.urlCoefs + "?t=" + Math.floor(Date.now() / 6e5), {}).then(function (txt) {
+      coefs = txt.trim().split(/\r?\n/).slice(1).map(function (l) { var c = l.split(";"); return c[1] === "PM" && c[3] ? { t: new Date(c[0]), c: +c[3] } : null; })
+        .filter(Boolean).sort(function (a, b) { return a.t - b.t; });
+    }).catch(function () { /* coefficients indisponibles : rien n'est affiché */ });
+  }
+  function coefA(d) { if (!coefs.length) return null; var q = plusProche(coefs, d); return Math.abs(q.t - d) <= 373 * 60e3 ? q.c : null; }
+
   function charger() {
     var p = [chargerMaree()].concat(CFG.stations.map(function (s) { return chargerStation(s).catch(function () { return null; }); }));
+    p.push(chargerCoefs());
     Promise.all(p.map(function (x, i) { return i ? x : x.catch(function () { return null; }); })).then(function (r) {
       if (r[0] && r[0].length) gg = r[0];
       for (var i = 0; i < 3; i++) if (r[i + 1]) vents[i] = r[i + 1];
@@ -308,9 +323,10 @@
     el("line", { x1: n0[0], y1: n0[1], x2: n1[0], y2: n1[1], stroke: main, "stroke-width": 1.6, "stroke-dasharray": "4 3" });
 
     // centre
-    var t1 = el("text", { x: 0, y: -13, "text-anchor": "middle", "font-size": 10, fill: muted });
-    var t2 = el("text", { x: 0, y: 6, "text-anchor": "middle", "font-size": 19, "font-weight": 700, fill: ink });
-    var t3 = el("text", { x: 0, y: 20, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: eau });
+    var t1 = el("text", { x: 0, y: -17, "text-anchor": "middle", "font-size": 10, fill: muted });
+    var t2 = el("text", { x: 0, y: 2, "text-anchor": "middle", "font-size": 19, "font-weight": 700, fill: ink });
+    var t3 = el("text", { x: 0, y: 15, "text-anchor": "middle", "font-size": 9.5, "font-weight": 700, fill: eau });
+    var t4 = el("text", { x: 0, y: 29, "text-anchor": "middle", "font-size": 10.5, fill: ink });   // coefficient de la marée en cours
     function lire(d, actuel) {
       if (G.length) {
         var p = plusProche(G, d), j = G.indexOf(p), q = G[Math.max(0, j - 3)], dh = p.h - q.h;
@@ -318,7 +334,8 @@
         t2.textContent = nf(p.h, 2) + " m";
         t3.textContent = Math.abs(dh) < 0.01 ? "étale" : dh > 0 ? "▲ montante" : "▼ descendante";
         t3.setAttribute("fill", dh > 0 ? eau : muted);
-      } else { t1.textContent = ""; t2.textContent = "—"; t3.textContent = "marégraphe indisponible"; }
+        var cf = coefA(p.t); t4.textContent = cf ? "coef. " + cf : "";
+      } else { t1.textContent = ""; t2.textContent = "—"; t3.textContent = "marégraphe indisponible"; t4.textContent = ""; }
       document.getElementById("mcd-lect").innerHTML = "<b>" + (actuel ? "Maintenant" : fmtH.format(d)) + "</b>" + CFG.stations.map(function (st, s) {
         var l = vents[s];
         if (!l.length) return "<span>" + st.nom + " : indisponible</span>";
@@ -342,7 +359,9 @@
     ext.slice(-4).forEach(function (e) {
       var j = fmtD.format(e.t) === auj ? "J" : fmtD.format(e.t) === hier ? "J-1" : "";
       var d = document.createElement("div");
-      d.innerHTML = (e.type === "PM" ? "Pleine mer" : "Basse mer") + '<span class="mcd-j">' + j + "</span><b>" + fmtH.format(e.t) + "</b>" + nf(e.h, 2) + " m";
+      var cf = coefA(e.t);
+      d.innerHTML = (e.type === "PM" ? "Pleine mer" : "Basse mer") + '<span class="mcd-j">' + j + "</span><b>" + fmtH.format(e.t) + "</b>" + nf(e.h, 2) + " m" +
+        (cf ? '<span class="mcd-cf">coef. ' + cf + "</span>" : "");
       ex.appendChild(d);
     });
     var der = G.length ? G[G.length - 1].t : null;
