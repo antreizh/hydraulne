@@ -18,7 +18,8 @@
        data/historique.json (bornes), data/maree-guily-glaz/AAAA-MM.csv (toutes les 5 min, Hub'Eau),
        data/vent-rade/AAAA-MM.csv (vent horaire Météo-France des trois stations).
      Le vent archivé est le vent moyen sur 10 minutes relevé à chaque heure (le Cadran en direct fait la moyenne
-     des mesures 6 min de l'heure) ; il arrive avec une demi-journée de retard environ.
+     des mesures 6 min de l'heure) ; il arrive avec une demi-journée de retard environ. Les dernières heures que
+     l'historique n'a pas encore sont complétées par les mesures en direct (Hub'Eau, Météo-France, 24 dernières heures).
      Option « Créer une vidéo MP4 du rejeu » : enregistre le rejeu en vidéo (WebCodecs H.264 + lib/mp4-muxer.js).
      ===================================================================== -->
 <div id="mhc-widget">
@@ -155,10 +156,15 @@
   /* ================== PARAMÈTRES (modifiables) ================== */
   var CFG = {
     data: "../data/",                         // dossier de l'historique, à côté du dossier widgets/
+    // Mesures en direct, pour compléter les dernières heures que l'historique n'a pas encore (même source que le Cadran) :
+    maregraphe: "J382183001",
+    urlHubeau: "https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr",
+    urlObsMeteoFrance: "https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m",
+    cleApiMeteoFrance: "eyJ4NXQiOiJZV0kxTTJZNE1qWTNOemsyTkRZeU5XTTRPV014TXpjek1UVmhNbU14T1RSa09ETXlOVEE0Tnc9PSIsImtpZCI6ImdhdGV3YXlfY2VydGlmaWNhdGVfYWxpYXMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhbnRyZWl6aEBjYXJib24uc3VwZXIiLCJhcHBsaWNhdGlvbiI6eyJvd25lciI6ImFudHJlaXpoIiwidGllclF1b3RhVHlwZSI6bnVsbCwidGllciI6IlVubGltaXRlZCIsIm5hbWUiOiJEZWZhdWx0QXBwbGljYXRpb24iLCJpZCI6NTExMTQsInV1aWQiOiI2M2EwYjc3ZS0zYTJmLTRmMjgtOGJkMS02MzEyOTcyYTEwNmMifSwiaXNzIjoiaHR0cHM6XC9cL3BvcnRhaWwtYXBpLm1ldGVvZnJhbmNlLmZyOjQ0M1wvb2F1dGgyXC90b2tlbiIsInRpZXJJbmZvIjp7IjEwMFJlcVBlck1pbiI6eyJ0aWVyUXVvdGFUeXBlIjoicmVxdWVzdENvdW50IiwiZ3JhcGhRTE1heENvbXBsZXhpdHkiOjAsImdyYXBoUUxNYXhEZXB0aCI6MCwic3RvcE9uUXVvdGFSZWFjaCI6dHJ1ZSwic3Bpa2VBcnJlc3RMaW1pdCI6MCwic3Bpa2VBcnJlc3RVbml0Ijoic2VjIn19LCJrZXl0eXBlIjoiUFJPRFVDVElPTiIsInN1YnNjcmliZWRBUElzIjpbeyJzdWJzY3JpYmVyVGVuYW50RG9tYWluIjoiY2FyYm9uLnN1cGVyIiwibmFtZSI6IkRvbm5lZXNQdWJsaXF1ZXNQYXF1ZXRPYnNlcnZhdGlvbiIsImNvbnRleHQiOiJcL3B1YmxpY1wvRFBQYXF1ZXRPYnNcL3YyIiwicHVibGlzaGVyIjoiYmFzdGllbmciLCJ2ZXJzaW9uIjoidjIiLCJzdWJzY3JpcHRpb25UaWVyIjoiMTAwUmVxUGVyTWluIn1dLCJleHAiOjE4MjQzOTQ3NjEsInRva2VuX3R5cGUiOiJhcGlLZXkiLCJpYXQiOjE3OTI4NTg3NjEsImp0aSI6IjZiMzJiY2UzLTYyYTUtNGZhNy05MjMyLTA1M2VkMGU0NGIyZCJ9.m4G3jgL3LOmI4ci45zND4OYAyrj9U0-YcWiSFfSdwNv4vx3AGH-SaklMVr_tFyjFPJPchmawjGIhIl1DdWrDZlPl5Uy-Ox7zdDVBxwewU_ek8XKpshvf7H5tdGI90n7fdDSjRn1G5Z6E-32fjtoP2_wvQCCUoo9QPtygRqJY882jxk3QyWzzX4V_pHRk6KW-G4mokch4B1YljKyv0l5TmGY5xOWa6N67AQAIL9i6EVsuIUdq2O9MR0rx_aOLf7Y4Pq31R3RylH7EBTn81kVVW5fSO8sK_5Hbbccs_IyfcQPnbWjDVyr94wVdTFUsapYXdVlsEOtHuXS2xcFUGYo4EA==",
     stations: [                               // de l'intérieur des terres vers le large ; préfixe des colonnes de data/vent-rade
-      { nom: "Saint-Ségal",   court: "St-Ségal",   col: "segal" },
-      { nom: "Lanvéoc",       court: "Lanvéoc",    col: "lanveoc" },
-      { nom: "Saint-Mathieu", court: "St-Mathieu", col: "mathieu" }
+      { nom: "Saint-Ségal",   court: "St-Ségal",   col: "segal",   id: "29263002" },
+      { nom: "Lanvéoc",       court: "Lanvéoc",    col: "lanveoc", id: "29120001" },
+      { nom: "Saint-Mathieu", court: "St-Mathieu", col: "mathieu", id: "29190001" }
     ],
     joursParDefaut: 3                         // période proposée à l'ouverture : les 3 derniers jours
   };
@@ -245,9 +251,85 @@
     return Promise.all(ms.map(chargerMois)).then(function (r) {
       var G = [], V = [[], [], []];
       r.forEach(function (x) { G = G.concat(x[0]); for (var s = 0; s < 3; s++) V[s] = V[s].concat(x[1][s]); });
+      // dernières heures : les mesures en direct prennent le relais là où l'historique s'arrête
+      var finG = G.reduce(function (m, p) { return Math.max(m, +p.t); }, 0);
+      G = G.concat(direct.gg.filter(function (p) { return +p.t > finG; }));
+      for (var s = 0; s < 3; s++) {
+        var finV = V[s].reduce(function (m, v) { return Math.max(m, +v.t); }, 0);
+        V[s] = V[s].concat(direct.vents[s].filter(function (v) { return +v.t > finV; }));
+      }
       var tri = function (a, b) { return a.t - b.t; };
       gg = G.sort(tri); vents = V.map(function (l) { return l.sort(tri); });
     });
+  }
+
+  /* ---------------- mesures en direct (dernières 24 h) ----------------
+     L'historique du vent n'arrive qu'une fois par jour (fichier Météo-France du matin) et celui de la marée trois fois
+     par jour : pour rejouer jusqu'à maintenant sans trou, on complète avec les mesures en direct, comme le Cadran
+     de marée (Hub'Eau pour Guily Glaz, mesures 6 min Météo-France regroupées par heure pour le vent). */
+  var direct = { gg: [], vents: [[], [], []], quand: 0 };
+  function getText(url, opts) {
+    var ctl = window.AbortController ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, 20000) : 0;
+    if (ctl) opts.signal = ctl.signal;
+    return fetch(url, opts).then(function (r) { clearTimeout(tm); if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
+  }
+  function premier(p, noms) { for (var i = 0; i < noms.length; i++) { var n = num(p[noms[i]]); if (n != null) return n; } return null; }
+  function directMaree() {
+    var debut = new Date(Date.now() - 26 * H).toISOString().slice(0, 19) + "Z";
+    var url = CFG.urlHubeau + "?code_entite=" + CFG.maregraphe + "&grandeur_hydro=H&date_debut_obs=" + encodeURIComponent(debut) +
+              "&size=1000&sort=asc&fields=date_obs,resultat_obs&format=json";
+    return getText(url, { headers: { Accept: "application/json" } }).then(function (t) {
+      return (JSON.parse(t).data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
+        .map(function (r) { return { t: new Date(r.date_obs), h: r.resultat_obs / 1000, c: null }; });
+    });
+  }
+  function directVent(st) {
+    return getText(CFG.urlObsMeteoFrance + "?id_station=" + st.id + "&format=csv", { headers: { apikey: CFG.cleApiMeteoFrance, accept: "*/*" } })
+      .then(function (txt) {
+        var lignes = txt.trim().split(/\r?\n/); if (lignes.length < 2) return [];
+        var tete = lignes[0].split(";").map(function (s) { return s.trim(); }), heures = {};
+        lignes.slice(1).forEach(function (l) {
+          var c = l.split(";"), p = {}; tete.forEach(function (h, k) { p[h] = c[k]; });
+          var tt = new Date(String(p.validity_time || p.reference_time || "").trim()), ff = num(p.ff), dd = num(p.dd), fx = premier(p, ["raf10", "fxi10", "raf"]);
+          if (isNaN(tt) || ff == null) return;
+          var k = Math.ceil(tt.getTime() / H) * H, o = heures[k] || (heures[k] = { n: 0, ff: 0, u: 0, v: 0, fx: 0 });
+          o.n++; o.ff += ff; o.fx = Math.max(o.fx, fx != null ? fx : ff);
+          if (dd != null && ff > 0) { var r = dd * Math.PI / 180; o.u += ff * Math.sin(r); o.v += ff * Math.cos(r); }
+        });
+        // l'heure en cours n'est gardée que si elle est complète (sinon elle sera prise au rechargement suivant)
+        return Object.keys(heures).filter(function (k) { return +k <= Date.now(); }).map(function (k) {
+          var o = heures[k], nd = o.ff / o.n * KT;
+          return { t: new Date(+k), nd: nd, dd: (o.u || o.v) ? (Math.atan2(o.u, o.v) * 180 / Math.PI + 360) % 360 : null, raf: Math.max(o.fx * KT, nd) };
+        });
+      });
+  }
+  // coefficient des mesures en direct : pleine mer de Brest la plus proche (à 6 h 13 près), d'après l'archive des prédictions SHOM
+  function directCoefs() {
+    return texte(CFG.data + "maree-brest/predictions-shom.csv").then(function (txt) {
+      return txt.trim().split(/\r?\n/).slice(1).map(function (l) { var c = l.split(";"); return c[1] === "PM" && c[3] ? { t: new Date(c[0]), c: +c[3] } : null; })
+        .filter(Boolean).sort(function (a, b) { return a.t - b.t; });
+    });
+  }
+  function chargerDirect() {
+    if (Date.now() - direct.quand < 10 * 60e3) return Promise.resolve();
+    return Promise.all([directMaree().catch(function () { return null; }), directCoefs().catch(function () { return []; })]
+        .concat(CFG.stations.map(function (st) { return directVent(st).catch(function () { return null; }); })))
+      .then(function (r) {
+        var cf = r[1];
+        if (r[0]) direct.gg = r[0].map(function (p) {
+          var q = cf.length ? plusProche(cf, p.t) : null;
+          p.c = q && Math.abs(q.t - p.t) <= 373 * 60e3 ? q.c : null; return p;
+        });
+        r.splice(1, 1);
+        for (var s = 0; s < 3; s++) if (r[s + 1]) direct.vents[s] = r[s + 1];
+        direct.quand = Date.now();
+      });
+  }
+  // dernière date connue, historique et direct confondus
+  function derniereMesure() {
+    var l = [somm.maree_guily_glaz && somm.maree_guily_glaz.fin, somm.vent_rade && somm.vent_rade.fin].filter(Boolean).map(function (x) { return +new Date(x); });
+    direct.gg.forEach(function (p) { l.push(+p.t); });
+    return Math.max.apply(null, l);
   }
 
   /* ---------------- dessin d'un instant ---------------- */
@@ -386,17 +468,18 @@
   function periode() {
     arreter();
     if (selF.value < selD.value) selF.value = selD.value;
-    var der = Math.max(somm.maree_guily_glaz ? +new Date(somm.maree_guily_glaz.fin) : 0, somm.vent_rade ? +new Date(somm.vent_rade.fin) : 0);
-    T0 = minuit(selD.value); T1 = Math.min(minuit(selF.value) + JOUR, der);
-    T1 = Math.max(T1, T0 + H);
     $("mhc-maj").textContent = "Chargement des mesures…";
-    chargerPeriode(T0, T1).then(function () {
+    chargerDirect().then(function () {
+      var der = derniereMesure();
+      T0 = minuit(selD.value); T1 = Math.max(Math.min(minuit(selF.value) + JOUR, der), T0 + H);
+      return chargerPeriode(T0, T1).then(function () { return der; });
+    }).then(function (der) {
       var G = tranche(gg, new Date(T0 - JOUR), new Date(T1)), hs = G.map(function (p) { return p.h; });
       if (hs.length) { hMinP = Math.floor(Math.min.apply(null, hs) * 2) / 2 - 0.5; hMaxP = Math.max(hMinP + 1, Math.ceil(Math.max.apply(null, hs) * 2) / 2); }
       var rf = [].concat.apply([], vents.map(function (l) { return tranche(l, new Date(T0 - JOUR), new Date(T1)).map(function (v) { return v.raf; }); }));
       vMaxP = Math.max(10, Math.ceil(Math.max.apply(null, rf.concat([0])) / 5) * 5);
       $("mhc-maj").textContent = "Du " + fmtJA.format(new Date(T0)) + " au " + fmtJA.format(new Date(T1 - 1)) +
-        " · historique jusqu'au " + fmtJ.format(new Date(der)) + " " + fmtH.format(new Date(der));
+        " · mesures jusqu'au " + fmtJ.format(new Date(der)) + " " + fmtH.format(new Date(der));
       t = T0; afficher();
     });
   }
@@ -515,7 +598,7 @@
   texte(CFG.data + "historique.json").then(function (j) {
     somm = JSON.parse(j);
     var d0 = somm.maree_guily_glaz ? somm.maree_guily_glaz.debut : somm.vent_rade.debut;
-    var d1 = [somm.maree_guily_glaz, somm.vent_rade].filter(Boolean).map(function (b) { return b.fin; }).sort().pop();
+    var d1 = new Date().toISOString();                     // jusqu'à aujourd'hui : les mesures en direct complètent l'historique
     var jours = [], j0 = fmtD.format(new Date(new Date(d0).getTime() + JOUR)), j1 = fmtD.format(new Date(d1));   // 1er jour complet après le début de l'historique
     for (var x = new Date(j0 + "T12:00:00Z"); fmtD.format(x) <= j1; x = new Date(x.getTime() + JOUR)) jours.push(fmtD.format(x));
     [selD, selF].forEach(function (s) {
