@@ -20,7 +20,8 @@
      Le vent archivé est le vent moyen sur 10 minutes relevé à chaque heure (le Cadran en direct fait la moyenne
      des mesures 6 min de l'heure) ; il arrive avec une demi-journée de retard environ. Les dernières heures que
      l'historique n'a pas encore sont complétées par les mesures en direct (Hub'Eau, Météo-France, 24 dernières heures).
-     Option « Créer une vidéo MP4 du rejeu » : enregistre le rejeu en vidéo (WebCodecs H.264 + lib/mp4-muxer.js).
+     Option « Créer une vidéo MP4 du rejeu » : enregistre le rejeu en vidéo (WebCodecs H.264, sinon VP9 ou AV1, + lib/mp4-muxer.js ;
+     en dernier recours, enregistrement en temps réel par MediaRecorder, en MP4 ou WebM selon le navigateur).
      ===================================================================== -->
 <div id="mhc-widget">
   <div class="mhc-head">
@@ -65,7 +66,7 @@
     <summary>Lire le cadran</summary>
     <ul>
       <li><b>Rejeu</b> : choisissez une date de début et une date de fin, la vitesse, puis « Lecture ». Le curseur permet d'aller directement à un instant de la période.</li>
-      <li><b>Vidéo</b> : cochez « Créer une vidéo MP4 du rejeu », puis « Créer la vidéo ». Le rejeu de la période est enregistré image par image (30 images par seconde, à la vitesse choisie) puis proposé au téléchargement. Navigateurs : Chrome, Edge ou Safari récent, de préférence sur ordinateur.</li>
+      <li><b>Vidéo</b> : cochez « Créer une vidéo MP4 du rejeu », puis « Créer la vidéo ». Le rejeu de la période est enregistré image par image (30 images par seconde, à la vitesse choisie) puis proposé au téléchargement. Navigateurs : Chrome, Edge, Safari ou Firefox récents, de préférence sur ordinateur (avec Firefox, la vidéo peut être enregistrée en temps réel, au format WebM).</li>
       <li><b>Centre</b> : hauteur, sens et coefficient de la marée à l'instant rejoué (coefficient archivé avec chaque mesure ; il n'existe qu'à partir du 5 novembre 2026, le SHOM ne publiant pas ses prédictions passées).</li>
       <li><b>1<sup>er</sup> cercle</b> : hauteur d'eau à Guily Glaz sur les 24 heures qui précèdent l'instant rejoué ; plus l'aire bleue s'éloigne du centre, plus l'eau est haute. Points : pleines (pleins) et basses mers (creux).</li>
       <li><b>Cercles suivants, par paires</b> : vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu. Pour chaque station, une barre par heure (vent moyen, rafale en trait), puis une flèche qui pointe vers où souffle le vent (nord en haut) ; un petit rond signale un vent calme.</li>
@@ -492,7 +493,7 @@
      La durée de la vidéo suit la vitesse choisie : 3 jours à 2 h par seconde = 36 s de vidéo. */
   var VW = 1080, VH = 1300, FPS = 30;
   // H.264 d'abord (lisible partout) ; VP9 en secours (MP4 lisible par Chrome, Firefox, VLC, mais pas toujours par les appareils Apple)
-  var CODECS = [["avc1.640028", "avc"], ["avc1.4d0028", "avc"], ["avc1.42e028", "avc"], ["vp09.00.40.08", "vp9"]];
+  var CODECS = [["avc1.640028", "avc"], ["avc1.4d0028", "avc"], ["avc1.42e028", "avc"], ["vp09.00.40.08", "vp9"], ["av01.0.08M.08", "av1"]];
   function chargerMuxer() {
     if (window.Mp4Muxer) return Promise.resolve();
     return new Promise(function (ok, ko) { var s = document.createElement("script"); s.src = "lib/mp4-muxer.js"; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
@@ -526,69 +527,123 @@
     texteCanevas(c, "Rejeu de l'historique · marégraphe Hub'Eau, vent Météo-France · antreizh.fr", VW / 2, 1255, 23, muted, false, "center");
     texteCanevas(c, "Données et représentation indicatives non officielles", VW / 2, 1285, 21, muted, false, "center");
   }
+  // Une image de la vidéo : instant n° i redessiné puis recopié sur le canevas
+  function imageNo(c, i, pasT) { t = Math.min(T1, T0 + i * pasT); afficher(); return imageSvg().then(function (img) { composer(c, img); }); }
+  function progression(i, nb, quoi) {
+    if (i % 5 === 0 || i === nb) etatVideo(quoi + " " + Math.round(i / nb * 100) + " % (" + i + " / " + nb + " images)<progress max=\"" + nb + "\" value=\"" + i + "\"></progress>");
+  }
+
+  // 1re méthode : WebCodecs, image par image (rapide, rendu exact), assemblage MP4 par mp4-muxer.
+  // Les codecs sont essayés dans l'ordre ; si l'un échoue en cours de route (cas de certains Firefox), on passe au suivant.
+  function videoWebCodecs(k, canevas, c, nb, pasT) {
+    if (k >= CODECS.length) return Promise.reject(new Error("aucun codec"));
+    return essaiCodec(CODECS[k], canevas, c, nb, pasT).then(function (r) {
+      return r || videoWebCodecs(k + 1, canevas, c, nb, pasT);            // codec non pris en charge : le suivant
+    }, function (e) {
+      if (video.annule || (e && e.message === "annulée")) throw new Error("annulée");
+      return videoWebCodecs(k + 1, canevas, c, nb, pasT);                 // codec en échec en cours de route : le suivant
+    });
+  }
+  // un essai avec un codec : résultat, ou null si le navigateur ne le prend pas en charge, ou rejet en cas d'échec
+  function essaiCodec(codec, canevas, c, nb, pasT) {
+    var erreur = null, enc = null, cible, muxer;
+    var conf = { codec: codec[0], width: VW, height: VH, bitrate: 5e6, framerate: FPS };
+    if (codec[1] === "avc") conf.avc = { format: "avc" };   // format MP4 (avcC) demandé explicitement : Firefox ne le met pas toujours par défaut
+    var fermer = function () { try { if (enc && enc.state !== "closed") enc.close(); } catch (x) { /* rien */ } };
+    return VideoEncoder.isConfigSupported(conf).then(function (r) { return r.supported; }, function () { return false; }).then(function (ok) {
+      if (!ok) return null;
+      cible = new Mp4Muxer.ArrayBufferTarget();
+      muxer = new Mp4Muxer.Muxer({ target: cible, video: { codec: codec[1], width: VW, height: VH, frameRate: FPS }, fastStart: "in-memory" });
+      enc = new VideoEncoder({
+        output: function (ch, meta) { try { muxer.addVideoChunk(ch, meta); } catch (e) { erreur = e; } },
+        error: function (e) { erreur = e; }
+      });
+      enc.configure(conf);
+      var i = 0;
+      var image = function () {
+        if (erreur) throw erreur;
+        if (video.annule) throw new Error("annulée");
+        if (i >= nb) return enc.flush();
+        return imageNo(c, i, pasT).then(function () {
+          var f = new VideoFrame(canevas, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+          enc.encode(f, { keyFrame: i % (FPS * 2) === 0 }); f.close();
+          i++; progression(i, nb, "Création de la vidéo…");
+          return (enc.encodeQueueSize > 8 ? new Promise(function (ok2) { setTimeout(ok2, 15); }) : Promise.resolve()).then(image);
+        });
+      };
+      return image().then(function () {
+        if (erreur) throw erreur;
+        muxer.finalize(); fermer();
+        return { blob: new Blob([cible.buffer], { type: "video/mp4" }), ext: "mp4", note: codec[1] === "avc" ? "" :
+          " (format " + codec[1].toUpperCase() + " : ce navigateur ne sait pas produire de H.264 ; lisible avec Chrome, Firefox ou VLC)" };
+      }, function (e) { fermer(); throw e; });
+    });
+  }
+
+  // 2e méthode (secours, par ex. Firefox sans WebCodecs) : enregistrement du canevas en temps réel par MediaRecorder.
+  // MP4 si le navigateur sait l'enregistrer, sinon WebM (lisible par Firefox, Chrome, VLC). Durée réelle = durée de la vidéo.
+  function videoEnregistreur(canevas, c, nb, pasT) {
+    if (!window.MediaRecorder || !canevas.captureStream) return Promise.reject(new Error("aucun codec"));
+    var types = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    var type = types.filter(function (x) { try { return MediaRecorder.isTypeSupported(x); } catch (e) { return false; } })[0];
+    if (!type) return Promise.reject(new Error("aucun codec"));
+    return imageNo(c, 0, pasT).then(function () {
+      var flux = canevas.captureStream(FPS), morceaux = [];
+      var rec = new MediaRecorder(flux, { mimeType: type, videoBitsPerSecond: 5e6 });
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) morceaux.push(e.data); };
+      var fini = new Promise(function (ok) { rec.onstop = ok; });
+      rec.start(1000);
+      var debut = performance.now(), i = 0;
+      // chaque image est montrée à son heure ; si le dessin prend du retard, on saute des instants pour garder la vitesse
+      var image = function () {
+        if (video.annule) { rec.stop(); throw new Error("annulée"); }
+        var cible = Math.floor((performance.now() - debut) / 1000 * FPS);
+        if (cible >= nb) { rec.stop(); return fini; }
+        i = Math.max(i + 1, cible);
+        return imageNo(c, Math.min(i, nb - 1), pasT).then(function () {
+          progression(Math.min(i, nb), nb, "Enregistrement de la vidéo (en temps réel)…");
+          var attente = debut + (i + 1) * 1000 / FPS - performance.now();
+          return new Promise(function (ok) { setTimeout(ok, Math.max(0, attente)); }).then(image);
+        });
+      };
+      return image().then(function () {
+        var mp4 = type.indexOf("mp4") >= 0;
+        return { blob: new Blob(morceaux, { type: type.split(";")[0] }), ext: mp4 ? "mp4" : "webm",
+                 note: mp4 ? "" : " (format WebM : ce navigateur ne sait pas produire de MP4 ; lisible avec Firefox, Chrome ou VLC)" };
+      });
+    });
+  }
+
   function creerVideo() {
-    if (!window.VideoEncoder || !window.VideoFrame) {
-      etatVideo("Ce navigateur ne sait pas créer de vidéo MP4. Essayez avec Chrome, Edge ou Safari récent (ordinateur de préférence).");
-      return;
-    }
     var vitesse = +selV.value, nb = Math.max(2, Math.ceil((T1 - T0) / H / vitesse * FPS) + 1), pasT = vitesse * H / FPS;
     var canevas = document.createElement("canvas"); canevas.width = VW; canevas.height = VH;
-    var c = canevas.getContext("2d"), tSauve = t, erreur = null;
+    var c = canevas.getContext("2d"), tSauve = t;
     video = { annule: false };
     bLire.textContent = "■ Arrêter la vidéo"; bLire.setAttribute("aria-pressed", "true");
     [selD, selF, selV, coche, pos, $("mhc-zero")].forEach(function (e) { e.disabled = true; });
     etatVideo("Préparation de la vidéo…");
-    var codec = null, muxer, cible, enc;
-    chargerMuxer().then(function () {
-      var essai = function (i) {
-        if (i >= CODECS.length) throw new Error("H.264 indisponible");
-        var conf = { codec: CODECS[i][0], width: VW, height: VH, bitrate: 5e6, framerate: FPS };
-        return VideoEncoder.isConfigSupported(conf).then(function (r) { if (r.supported) { codec = CODECS[i]; return conf; } return essai(i + 1); },
-                                                         function () { return essai(i + 1); });
-      };
-      return essai(0);
-    }).then(function (conf) {
-      cible = new Mp4Muxer.ArrayBufferTarget();
-      muxer = new Mp4Muxer.Muxer({ target: cible, video: { codec: codec[1], width: VW, height: VH, frameRate: FPS }, fastStart: "in-memory" });
-      enc = new VideoEncoder({ output: function (ch, meta) { muxer.addVideoChunk(ch, meta); }, error: function (e) { erreur = e; } });
-      enc.configure(conf);
-      var i = 0;
-      var suivante = function () {
-        if (erreur) throw erreur;
-        if (video.annule) throw new Error("annulée");
-        if (i >= nb) return;
-        t = Math.min(T1, T0 + i * pasT); afficher();
-        return imageSvg().then(function (img) {
-          composer(c, img);
-          var f = new VideoFrame(canevas, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
-          enc.encode(f, { keyFrame: i % (FPS * 2) === 0 }); f.close();
-          i++;
-          if (i % 5 === 0 || i === nb) etatVideo("Création de la vidéo… " + Math.round(i / nb * 100) + " % (" + i + " / " + nb + " images)<progress max=\"" + nb + "\" value=\"" + i + "\"></progress>");
-          var attente = enc.encodeQueueSize > 8 ? new Promise(function (r) { setTimeout(r, 15); }) : Promise.resolve();
-          return attente.then(suivante);
-        });
-      };
-      return suivante();
-    }).then(function () {
-      return enc.flush().then(function () {
-        muxer.finalize();
-        var blob = new Blob([cible.buffer], { type: "video/mp4" }), url = URL.createObjectURL(blob);
-        var nom = "rejeu-guily-glaz_" + selD.value + "_" + selF.value + ".mp4";
-        etatVideo('Vidéo prête : ' + nb + " images, " + nf(nb / FPS, 0) + " s, " + nf(blob.size / 1048576, 1) + " Mo" +
-          (codec[1] === "vp9" ? " (format VP9 : ce navigateur ne sait pas produire de H.264 ; lisible avec Chrome, Firefox ou VLC)" : "") + '. <a href="' + url + '" download="' + nom + '">Télécharger la vidéo MP4</a>');
-        var a = zoneVideo.querySelector("a"); try { a.click(); } catch (e) { /* le lien reste disponible */ }
-      });
+    var webcodecs = window.VideoEncoder && window.VideoFrame
+      ? chargerMuxer().then(function () { return videoWebCodecs(0, canevas, c, nb, pasT); })
+      : Promise.reject(new Error("aucun codec"));
+    webcodecs.catch(function (e) {
+      if (e && e.message === "annulée") throw e;
+      return videoEnregistreur(canevas, c, nb, pasT);
+    }).then(function (r) {
+      var url = URL.createObjectURL(r.blob), nom = "rejeu-guily-glaz_" + selD.value + "_" + selF.value + "." + r.ext;
+      etatVideo("Vidéo prête : " + nf(nb / FPS, 0) + " s, " + nf(r.blob.size / 1048576, 1) + " Mo" + r.note +
+        '. <a href="' + url + '" download="' + nom + '">Télécharger la vidéo ' + r.ext.toUpperCase() + "</a>");
+      var a = zoneVideo.querySelector("a"); try { a.click(); } catch (e) { /* le lien reste disponible */ }
     }).catch(function (e) {
-      try { if (enc && enc.state !== "closed") enc.close(); } catch (x) { /* rien */ }
-      etatVideo(String(e.message) === "annulée" ? "Création de la vidéo arrêtée." :
-        String(e.message) === "H.264 indisponible" ? "Ce navigateur ne sait pas encoder de vidéo : essayez avec Chrome, Edge ou Safari récent." :
-        "La vidéo n'a pas pu être créée (" + (e.message || e) + ").");
+      etatVideo(e && e.message === "annulée" ? "Création de la vidéo arrêtée." :
+        e && e.message === "aucun codec" ? "Ce navigateur ne sait pas créer de vidéo : essayez avec Chrome, Edge, Firefox ou Safari récents." :
+        "La vidéo n'a pas pu être créée (" + ((e && e.message) || e) + ").");
     }).then(function () {
       video = null; t = tSauve; afficher();
       [selD, selF, selV, coche, pos, $("mhc-zero")].forEach(function (e) { e.disabled = false; });
       bLire.setAttribute("aria-pressed", "false"); bLire.textContent = ""; libelle();
     });
   }
+
 
   var lg = $("mhc-leg");
   [["< 5 nd", 1], ["5–9", 2], ["10–15", 3], ["16–21", 4], ["22–27", 5], ["28–33", 6], ["34–40", 7], ["41–50", 8], ["51–60", 9], ["61–70", 10], ["71–80", 11], ["> 80 nd", 12]].forEach(function (c) {
