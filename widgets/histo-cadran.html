@@ -135,6 +135,7 @@
 #mhc-widget select,#mhc-widget button{font:inherit;font-size:calc(12.5px*var(--k));color:var(--ink);background:#fff;border:1px solid var(--line);
   border-radius:calc(6px*var(--k));padding:calc(5px*var(--k)) calc(6px*var(--k));min-width:0}
 #mhc-widget button{cursor:pointer}
+#mhc-widget button:disabled{opacity:.55;cursor:wait}
 #mhc-widget button:hover,#mhc-widget select:hover{border-color:var(--eau)}
 #mhc-widget button:focus-visible,#mhc-widget select:focus-visible,#mhc-widget input:focus-visible{outline:2px solid var(--eau);outline-offset:1px}
 #mhc-widget .mhc-btn{display:flex;gap:calc(6px*var(--k));grid-column:1/-1;align-items:center}
@@ -470,6 +471,7 @@
     arreter();
     if (selF.value < selD.value) selF.value = selD.value;
     $("mhc-maj").textContent = "Chargement des mesures…";
+    bLire.disabled = true;                                  // pas de lecture ni de vidéo tant que la période n'est pas chargée
     chargerDirect().then(function () {
       var der = derniereMesure();
       T0 = minuit(selD.value); T1 = Math.max(Math.min(minuit(selF.value) + JOUR, der), T0 + H);
@@ -482,7 +484,7 @@
       $("mhc-maj").textContent = "Du " + fmtJA.format(new Date(T0)) + " au " + fmtJA.format(new Date(T1 - 1)) +
         " · mesures jusqu'au " + fmtJ.format(new Date(der)) + " " + fmtH.format(new Date(der));
       t = T0; afficher();
-    });
+    }).then(function () { bLire.disabled = false; }, function () { bLire.disabled = false; });
   }
   selD.addEventListener("change", periode); selF.addEventListener("change", periode);
 
@@ -491,7 +493,8 @@
      avec le titre, l'instant et le vent, puis encodé en H.264 par le navigateur (WebCodecs) et assemblé en MP4
      (bibliothèque mp4-muxer, fichier lib/mp4-muxer.js, chargé seulement à la première vidéo).
      La durée de la vidéo suit la vitesse choisie : 3 jours à 2 h par seconde = 36 s de vidéo. */
-  var VW = 1080, VH = 1300, FPS = 30;
+  // dimensions multiples de 16 : certains lecteurs (Windows « Films et TV », Lecteur multimédia) refusent sinon le H.264
+  var VW = 1088, VH = 1312, FPS = 30;
   // H.264 d'abord (lisible partout) ; VP9 en secours (MP4 lisible par Chrome, Firefox, VLC, mais pas toujours par les appareils Apple)
   var CODECS = [["avc1.640028", "avc"], ["avc1.4d0028", "avc"], ["avc1.42e028", "avc"], ["vp09.00.40.08", "vp9"], ["av01.0.08M.08", "av1"]];
   function chargerMuxer() {
@@ -523,9 +526,9 @@
       return vents.reduce(function (s, v) { return s + c.measureText(v).width; }, 0) + ecart * (vents.length - 1); };
     while (larg() > VW - 88 && taille > 16) taille--;
     var x = 44; vents.forEach(function (v) { x += texteCanevas(c, v, x, 178, taille, ink, false) + ecart; });
-    c.drawImage(img, 40, 205, 1000, 1000);
-    texteCanevas(c, "Rejeu de l'historique · marégraphe Hub'Eau, vent Météo-France · antreizh.fr", VW / 2, 1255, 23, muted, false, "center");
-    texteCanevas(c, "Données et représentation indicatives non officielles", VW / 2, 1285, 21, muted, false, "center");
+    c.drawImage(img, (VW - 1000) / 2, 205, 1000, 1000);
+    texteCanevas(c, "Rejeu de l'historique · marégraphe Hub'Eau, vent Météo-France · antreizh.fr", VW / 2, 1264, 23, muted, false, "center");
+    texteCanevas(c, "Données et représentation indicatives non officielles", VW / 2, 1295, 21, muted, false, "center");
   }
   // Une image de la vidéo : instant n° i redessiné puis recopié sur le canevas
   function imageNo(c, i, pasT) { t = Math.min(T1, T0 + i * pasT); afficher(); return imageSvg().then(function (img) { composer(c, img); }); }
@@ -544,9 +547,33 @@
       return videoWebCodecs(k + 1, canevas, c, nb, pasT);                 // codec en échec en cours de route : le suivant
     });
   }
+  // Outils H.264 : flux « Annex B » (codes de début 00 00 01) → format MP4 (longueur sur 4 octets), description avcC
+  function estAnnexB(d) { return d.length > 4 && d[0] === 0 && d[1] === 0 && (d[2] === 1 || (d[2] === 0 && d[3] === 1)); }
+  function nalsAnnexB(d) {
+    var out = [], i = 0, debut = -1;
+    while (i + 2 < d.length) {
+      if (d[i] === 0 && d[i + 1] === 0 && d[i + 2] === 1) {
+        if (debut >= 0) { var fin = i; while (fin > debut && d[fin - 1] === 0) fin--; out.push(d.subarray(debut, fin)); }
+        i += 3; debut = i;
+      } else i++;
+    }
+    if (debut >= 0 && debut < d.length) out.push(d.subarray(debut));
+    return out.filter(function (n) { return n.length; });
+  }
+  function enAvcc(nals) {
+    var n = nals.reduce(function (s, x) { return s + 4 + x.length; }, 0), out = new Uint8Array(n), o = 0;
+    nals.forEach(function (x) { out[o] = x.length >>> 24; out[o + 1] = (x.length >>> 16) & 255; out[o + 2] = (x.length >>> 8) & 255; out[o + 3] = x.length & 255; out.set(x, o + 4); o += 4 + x.length; });
+    return out;
+  }
+  function avcC(sps, pps) {
+    var out = new Uint8Array(11 + sps.length + pps.length);
+    out.set([1, sps[1], sps[2], sps[3], 0xff, 0xe1, sps.length >> 8, sps.length & 255]); out.set(sps, 8);
+    var o = 8 + sps.length; out.set([1, pps.length >> 8, pps.length & 255], o); out.set(pps, o + 3);
+    return out.buffer;
+  }
   // un essai avec un codec : résultat, ou null si le navigateur ne le prend pas en charge, ou rejet en cas d'échec
   function essaiCodec(codec, canevas, c, nb, pasT) {
-    var erreur = null, enc = null, cible, muxer, premier = true;
+    var erreur = null, enc = null, cible, muxer, premier = true, sps = null, pps = null;
     var conf = { codec: codec[0], width: VW, height: VH, bitrate: 5e6, framerate: FPS };
     if (codec[1] === "avc") conf.avc = { format: "avc" };   // format MP4 (avcC) demandé explicitement : Firefox ne le met pas toujours par défaut
     var fermer = function () { try { if (enc && enc.state !== "closed") enc.close(); } catch (x) { /* rien */ } };
@@ -557,6 +584,16 @@
       enc = new VideoEncoder({
         output: function (ch, meta) {
           try {
+            // Données de l'image : certains navigateurs livrent le H.264 avec des codes de début (« Annex B ») au lieu
+            // des longueurs attendues dans un MP4 ; on les convertit, et on en tire SPS/PPS si la description manque.
+            var data = new Uint8Array(ch.byteLength); ch.copyTo(data);
+            if (codec[1] === "avc" && estAnnexB(data)) {
+              var nals = nalsAnnexB(data);
+              nals.forEach(function (n) { var ty = n[0] & 31; if (ty === 7) sps = n; else if (ty === 8) pps = n; });
+              data = enAvcc(nals.filter(function (n) { var ty = n[0] & 31; return ty !== 9; }));
+              if (premier && !(meta && meta.decoderConfig && meta.decoderConfig.description) && sps && pps)
+                meta = Object.assign({}, meta || {}, { decoderConfig: Object.assign({}, (meta && meta.decoderConfig) || {}, { description: avcC(sps, pps) }) });
+            }
             // Firefox ne fournit pas toujours la description du flux (decoderConfig) ou son espace colorimétrique :
             // on la complète avec les réglages de l'encodeur, sinon le fichier MP4 ne peut pas être finalisé.
             if (premier) {
@@ -566,7 +603,7 @@
               if (codec[1] === "avc" && !dc.description) throw new Error("description H.264 absente");
               meta = Object.assign({}, meta || {}, { decoderConfig: dc }); premier = false;
             }
-            muxer.addVideoChunk(ch, meta);
+            muxer.addVideoChunkRaw(data, ch.type, ch.timestamp, ch.duration, meta);
           } catch (e) { erreur = e; }
         },
         error: function (e) { erreur = e; }
