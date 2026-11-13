@@ -560,6 +560,21 @@
     if (debut >= 0 && debut < d.length) out.push(d.subarray(debut));
     return out.filter(function (n) { return n.length; });
   }
+  function nalsAvcc(d) {                                      // format MP4 : longueur sur 4 octets puis NAL
+    var out = [], i = 0;
+    while (i + 4 <= d.length) { var l = (d[i] << 24 >>> 0) + (d[i + 1] << 16) + (d[i + 2] << 8) + d[i + 3]; if (!l || i + 4 + l > d.length) break; out.push(d.subarray(i + 4, i + 4 + l)); i += 4 + l; }
+    return out;
+  }
+  // description avcC fournie par le navigateur, relue puis réécrite proprement (en-tête de NAL doublé retiré)
+  function nettoyerAvcC(buf) {
+    if (!buf) return null;
+    var d = new Uint8Array(buf.buffer ? buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) : buf);
+    if (d.length < 8 || d[0] !== 1) return null;
+    var lire = function (o) { var l = (d[o] << 8) + d[o + 1], n = d.subarray(o + 2, o + 2 + l); if (n.length > 1 && n[0] === n[1] && ((n[0] & 31) === 7 || (n[0] & 31) === 8)) n = n.subarray(1); return [n, o + 2 + l]; };
+    if ((d[5] & 31) < 1) return null;
+    var s = lire(6), p0 = s[1]; if (d[p0] < 1) return null;
+    return avcC(s[0], lire(p0 + 1)[0]);
+  }
   function enAvcc(nals) {
     var n = nals.reduce(function (s, x) { return s + 4 + x.length; }, 0), out = new Uint8Array(n), o = 0;
     nals.forEach(function (x) { out[o] = x.length >>> 24; out[o + 1] = (x.length >>> 16) & 255; out[o + 2] = (x.length >>> 8) & 255; out[o + 3] = x.length & 255; out.set(x, o + 4); o += 4 + x.length; });
@@ -587,12 +602,17 @@
             // Données de l'image : certains navigateurs livrent le H.264 avec des codes de début (« Annex B ») au lieu
             // des longueurs attendues dans un MP4 ; on les convertit, et on en tire SPS/PPS si la description manque.
             var data = new Uint8Array(ch.byteLength); ch.copyTo(data);
-            if (codec[1] === "avc" && estAnnexB(data)) {
-              var nals = nalsAnnexB(data);
-              nals.forEach(function (n) { var ty = n[0] & 31; if (ty === 7) sps = n; else if (ty === 8) pps = n; });
-              data = enAvcc(nals.filter(function (n) { var ty = n[0] & 31; return ty !== 9; }));
-              if (premier && !(meta && meta.decoderConfig && meta.decoderConfig.description) && sps && pps)
-                meta = Object.assign({}, meta || {}, { decoderConfig: Object.assign({}, (meta && meta.decoderConfig) || {}, { description: avcC(sps, pps) }) });
+            if (codec[1] === "avc") {
+              var nals = estAnnexB(data) ? nalsAnnexB(data) : nalsAvcc(data);
+              if (estAnnexB(data)) data = enAvcc(nals.filter(function (n) { return (n[0] & 31) !== 9; }));
+              nals.forEach(function (n) { var ty = n[0] & 31; if (ty === 7 && !sps) sps = n.slice(); else if (ty === 8 && !pps) pps = n.slice(); });
+              if (premier) {
+                // Description (avcC) : reconstruite à partir des SPS/PPS présents dans l'image quand il y en a — Firefox livre
+                // une description défectueuse (en-tête de NAL doublé, champs réservés à 0) que le lecteur de Windows refuse ;
+                // sinon celle du navigateur, nettoyée.
+                var desc = sps && pps ? avcC(sps, pps) : nettoyerAvcC(meta && meta.decoderConfig && meta.decoderConfig.description);
+                if (desc) meta = Object.assign({}, meta || {}, { decoderConfig: Object.assign({}, (meta && meta.decoderConfig) || {}, { description: desc }) });
+              }
             }
             // Firefox ne fournit pas toujours la description du flux (decoderConfig) ou son espace colorimétrique :
             // on la complète avec les réglages de l'encodeur, sinon le fichier MP4 ne peut pas être finalisé.
