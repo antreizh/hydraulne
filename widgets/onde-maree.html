@@ -1,0 +1,2835 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Widget Onde marée</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+/* Plan : carte réelle (OpenStreetMap) à gauche, panneau de marée à droite. Palette sombre de carte marine.
+   Données : horaires SHOM de Brest, marégraphe de Guily-Glaz (Hub'Eau), emprise OSM de l'Aulne maritime (relation 9871). */
+:root {
+  color-scheme: dark;
+  --ink: #e3ebe8; --ink-2: #a9bbbc; --ink-3: #74898b;
+  --bg: #0b1418; --panel: #101b22; --rule: #213139;
+  --flood: #86b6ef; --ebb: #e66767; --warn: #fab219; --good: #0ca30c;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); }
+.app { display: grid; grid-template-rows: auto auto auto; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; padding: 10px 16px; border-bottom: 1px solid var(--rule); background: var(--panel); }
+header h1 { font: 700 22px/1.1 var(--f-display); margin: 0; letter-spacing: .01em; }
+header .now { font: 500 13px var(--f-mono); color: var(--ink-2); }
+header .small a { color: var(--ink-2); }
+header .live { display: inline-flex; align-items: center; gap: 6px; color: var(--good); font: 600 12px var(--f-display); letter-spacing: .1em; text-transform: uppercase; }
+header .live i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; animation: blink 1.6s infinite; }
+header .live.off { color: var(--warn); } header .live.off i { animation: none; }
+@keyframes blink { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { header .live i { animation: none; } }
+.main { display: grid; grid-template-columns: 1fr; }
+.mapwrap { position: relative; width: 100%; border-bottom: 1px solid var(--rule); }
+.mapframe { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: min(92vh, 760px); min-height: 360px; }
+#map { position: absolute; inset: 0; }
+#flow { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.status { position: absolute; left: 12px; top: 12px; display: grid; grid-template-columns: repeat(3, auto); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; max-width: calc(100% - 70px); }
+.tile { background: rgba(16,27,34,.92); padding: 8px 12px; display: grid; gap: 1px; min-width: 0; }
+.tile .k { font: 600 11px/1.2 var(--f-display); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.tile .v { font: 500 17px/1.2 var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tile .s { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+#tideMini { position: absolute; right: 12px; top: 12px; width: 216px; height: 116px; z-index: 3; pointer-events: none; background: rgba(16,27,34,.92); border: 1px solid var(--rule); border-radius: 6px; }
+@media (max-width: 1280px) and (min-width: 901px) { #tideMini { top: 96px; } }
+@media (max-width: 900px) { #tideMini { right: 8px; top: 8px; width: 158px; height: 92px; } }
+.legend { position: absolute; left: 12px; bottom: 28px; background: rgba(16,27,34,.92); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; font-size: 12px; color: var(--ink-2); display: grid; grid-template-columns: auto auto; gap: 6px 22px; align-items: center; width: max-content; max-width: calc(100% - 24px); }
+.legend .scale { display: grid; gap: 3px; width: 240px; }
+.legend .hint { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; color: var(--flood); font: 500 12.5px var(--f-body); padding-bottom: 5px; border-bottom: 1px solid var(--rule); }
+.legend .rows { display: grid; grid-template-columns: auto auto; gap: 4px 18px; }
+.legend .ramp { grid-row: 2; } .legend .ticks { grid-row: 3; }
+.legend .ramp { height: 8px; border-radius: 2px; background: linear-gradient(90deg, #f6b6ad, #e66767 30%, #6b4848 46%, #5d6b70 50%, #3d6f9e 54%, #86b6ef 75%, #e3f0ff); }
+.legend .ticks { display: flex; justify-content: space-between; font: 11px var(--f-mono); color: var(--ink-3); }
+.legend .row { display: flex; align-items: center; gap: 8px; }
+.tip { position: absolute; pointer-events: none; background: rgba(8,14,18,.94); border: 1px solid var(--rule); border-radius: 5px; padding: 7px 9px; font: 12.5px/1.45 var(--f-mono); color: var(--ink); white-space: nowrap; display: none; z-index: 5; }
+.tip .t { font: 600 13px var(--f-display); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+aside { background: var(--panel); display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-content: start; }
+aside section { padding: 14px 18px; min-width: 0; border-bottom: 1px solid var(--rule); border-right: 1px solid var(--rule); display: grid; gap: 8px; align-content: start; }
+aside h2 { font: 600 15px/1.2 var(--f-display); letter-spacing: .06em; text-transform: uppercase; margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+aside p { margin: 0; color: var(--ink-2); font-size: 13px; }
+.ctl { display: grid; gap: 4px; }
+.ctl label { font: 600 11.5px/1.2 var(--f-display); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); display: flex; justify-content: space-between; gap: 8px; }
+.ctl label output { font: 500 12.5px var(--f-mono); color: var(--ink); letter-spacing: 0; text-transform: none; }
+input[type=range] { width: 100%; accent-color: var(--flood); }
+input[type=datetime-local] { font: 13px var(--f-mono); color: var(--ink); background: #0b1418; border: 1px solid #2c4350; border-radius: 4px; padding: 6px 8px; width: 100%; color-scheme: dark; }
+textarea { font: 12px var(--f-mono); color: var(--ink); background: #0b1418; border: 1px solid #2c4350; border-radius: 4px; padding: 6px 8px; width: 100%; min-height: 70px; resize: vertical; }
+button { font: 600 13px var(--f-body); color: var(--ink); background: #172833; border: 1px solid #2c4350; border-radius: 5px; padding: 7px 11px; cursor: pointer; }
+button:hover { border-color: var(--flood); }
+button.primary { background: var(--flood); color: #08131a; border-color: var(--flood); }
+button[aria-pressed=true] { background: #1f3a4c; }
+button.primary, button.primary[aria-pressed=true] { background: var(--flood); color: #08131a; border-color: var(--flood); }
+:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
+table.tides { width: 100%; border-collapse: collapse; font: 12.5px var(--f-mono); font-variant-numeric: tabular-nums; }
+table.tides td, table.tides th { padding: 3px 4px; text-align: left; border-bottom: 1px dotted var(--rule); white-space: nowrap; }
+table.tides th { font: 600 11px var(--f-display); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+table.tides tr.cur td { color: var(--warn); }
+table.tides td.dim { color: var(--ink-3); }
+.badge { display: inline-block; font: 600 11px var(--f-display); letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; border: 1px solid currentColor; }
+.badge.approx { color: var(--warn); } .badge.shom { color: var(--good); } .badge.live { color: var(--flood); }
+.small { font-size: 12px; color: var(--ink-3); }
+.animopts { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--rule); border-left: 3px solid var(--flood); border-radius: 6px; background: #0d171d; }
+.animopts[hidden], #seeAt[hidden] { display: none; }
+.check { display: flex; align-items: center; gap: 8px; font: 500 13.5px var(--f-body); color: var(--ink); cursor: pointer; }
+.check input { width: 17px; height: 17px; accent-color: var(--flood); }
+.recfields { display: grid; gap: 8px; padding-left: 25px; }
+.recfields[hidden] { display: none; }
+button.go { width: 100%; padding: 9px 12px; font-size: 14px; }
+button.go.dl { margin-top: 8px; background: #2f7d5b; border-color: #2f7d5b; color: #fff; }
+button.go.stop { background: var(--ebb); border-color: var(--ebb); color: #160808; }
+.subh { font: 600 13px/1.2 var(--f-display); letter-spacing: .06em; text-transform: uppercase; margin: 6px 0 0; display: flex; gap: 8px; align-items: center; }
+section[hidden] { display: none !important; }
+.credits { padding: 10px 16px; font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--rule); background: var(--bg); }
+.credits a { color: var(--ink-2); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--f-body); padding: 4px 8px; border-radius: 999px; border: 1px solid currentColor; width: fit-content; }
+.pill.open { color: var(--good); } .pill.closed { color: var(--ink-3); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font: 12.5px var(--f-mono); }
+.kv b { font: 600 11px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); align-self: center; }
+@media (max-width: 760px) { aside section { grid-column: auto !important; } }
+@media (max-width: 900px) {
+  .mapframe { aspect-ratio: 5 / 4; min-height: 300px; }
+  /* sur petit écran, bandeau d'état et légende passent sous la carte au lieu de la masquer */
+  .status { position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: none; border-radius: 0; border-width: 1px 0 0; }
+  .tile { background: var(--panel); }
+  .tile .v, .tile .s { white-space: normal; }
+  .legend { position: static; width: auto; max-width: none; grid-template-columns: 1fr; border-radius: 0; border-width: 1px 0 0; background: var(--panel); }
+  .legend .scale { width: 100%; }
+}
+@media (max-width: 560px) { .legend .rows { grid-template-columns: 1fr 1fr; gap: 4px 10px; font-size: 11.5px; } .lbl.minor { display: none; } .status { grid-template-columns: 1fr 1fr; } .status .tile:last-child { grid-column: 1 / -1; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>L'Aulne maritime, la marée</h1>
+    <span class="live" id="liveBadge"><i></i>Temps réel</span>
+    <span class="now" id="hNow">—</span>
+    <span class="small">Fond OpenStreetMap · horaires SHOM Brest · marégraphe de Guily-Glaz · modèle 1D de démonstration, pas une aide à la navigation · © <a href="https://antreizh.fr" target="_blank" rel="noopener">antreizh.fr</a></span>
+  </header>
+  <div class="main">
+    <div class="mapwrap">
+      <div class="mapframe">
+        <div id="map"></div>
+        <canvas id="tideMini" role="img" aria-label="Courbe de marée à Brest autour de l'instant affiché"></canvas>
+        <canvas id="flow"></canvas>
+        <div class="tip" id="tip"></div>
+      </div>
+      <div class="status" aria-live="polite">
+        <div class="tile"><span class="k">Brest (SHOM)</span><span class="v" id="kBrest">—</span><span class="s" id="kBrestb">—</span></div>
+        <div class="tile"><span class="k">Guily-Glaz · échelle</span><span class="v" id="kHL">—</span><span class="s" id="kHLb">—</span></div>
+        <div class="tile"><span class="k">Courant</span><span class="v" id="kU">—</span><span class="s" id="kUb">—</span></div>
+      </div>
+      <div class="legend">
+        <div class="hint"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="15" y1="15" x2="21" y2="21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" stroke-width="2"/><line x1="10" y1="7" x2="10" y2="13" stroke="currentColor" stroke-width="2"/></svg>Zoomer sur la carte pour observer la marée localement</div>
+        <div class="scale"><div><b>Courant</b> · vitesse moyenne de section (m/s)</div><div class="ramp"></div><div class="ticks"><span>jusant 1,2</span><span>étale</span><span>flot 1,2</span></div></div>
+        <div class="rows">
+          <div class="row"><svg width="22" height="10"><rect x="0" y="1" width="22" height="8" fill="#1f6596"/></svg>Plan d'eau (rives OSM à pleine mer)</div>
+          <div class="row"><svg width="22" height="10"><rect x="0" y="1" width="22" height="8" fill="#cdb98a"/></svg>Vasière découverte</div>
+          <div class="row"><svg width="22" height="10"><line x1="11" y1="0" x2="11" y2="10" stroke="#fab219" stroke-width="3"/></svg>Renverse du courant</div>
+          <div class="row"><svg width="22" height="10"><rect x="1" y="1" width="20" height="8" fill="#9a937c" stroke="#d47f00"/></svg>Sas écluse 237 (radier 0,4 m NGF)</div>
+        </div>
+      </div>
+    </div>
+    <aside>
+      <section>
+        <h2>Horloge de marée</h2>
+        <div class="btnrow"><button class="primary" id="bNow">Maintenant</button><button id="bPlay" aria-pressed="false">Observer une période</button><button id="bFlood">Prochain flot</button></div>
+        <div class="ctl" id="seeAt"><label for="atTime">Voir la marée à <output id="oOff">maintenant</output></label>
+          <input type="datetime-local" id="atTime">
+          <input type="range" id="off" min="-48" max="240" step="0.05" value="0" aria-label="Avancer ou reculer dans le temps">
+          <span class="small">Choisissez une date et une heure, ou glissez le curseur (48 h en arrière, 10 jours en avant).</span></div>
+        <div id="animOpts" class="animopts" hidden>
+        <div class="ctl"><label for="speed">Vitesse d'animation</label><input type="range" id="speed" min="60" max="3600" step="60" value="900"><span class="small" id="oSpeed">15 min de marée par seconde</span></div>
+        <div class="ctl"><label for="recStart">Début de l'animation (heure locale)</label><input type="datetime-local" id="recStart"></div>
+        <div class="ctl"><label for="recEnd">Fin de l'animation (heure locale)</label><input type="datetime-local" id="recEnd"></div>
+        <span class="small">L'animation part du début choisi et s'arrête à la fin.</span>
+        <label class="check" for="recOn"><input type="checkbox" id="recOn"> Enregistrer une vidéo MP4</label>
+        <div id="recFields" class="recfields" hidden>
+          <span class="small">La vidéo couvre la même période. Durée de la vidéo = (fin − début) ÷ vitesse d'animation.</span>
+        </div>
+        <button class="primary go" id="bGo">▶ Lancer l'animation</button>
+        <span class="small" id="recMsg"></span>
+        </div>
+        <button class="primary go dl" id="recLink" hidden>⬇ Télécharger la vidéo MP4</button>
+      </section>
+      <section>
+        <h2>Marégraphe de Guily-Glaz <span class="badge live" id="ggBadge">Hub'Eau</span></h2>
+        <div class="kv"><b>Mesure</b><span id="ggMeas">—</span><b>Modèle</b><span id="ggModel">—</span><b>Écart</b><span id="ggDiff">—</span></div>
+        <p class="small" id="ggMsg">Station J382183001 (Port-Launay, marégraphe de Guily-Glaz), hauteur à l'échelle, actualisée automatiquement toutes les 5 min. Le palier à −0,64 m est le fond de l'échelle : à marée basse l'eau est en dessous du capteur.</p>
+      </section>
+      <section>
+        <h2>Débit de l'Aulne <span class="badge live">Hub'Eau</span></h2>
+        <div class="ctl"><label for="q">À Châteaulin <output id="oQ">20 m³/s</output></label><input type="range" id="q" min="1" max="150" step="1" value="20"></div>
+        <span class="small" id="hubMsg">Station J382182001, Châteaulin pont routier : le débit mesuré est chargé automatiquement à l'ouverture puis toutes les 10 min.</span>
+      </section>
+      <section>
+        <h2>Méthode</h2>
+        <p>Le niveau à Brest suit les extrema SHOM (raccord en cosinus). L'onde remonte l'estuaire avec un retard qui dépend du niveau : quasi nul à la crête, plus de deux heures au creux, comme le montre le marégraphe de Guily-Glaz ; amplitude réduite de 12 % à l'amont ; niveau d'étiage borné par le débit. Les courants viennent de la continuité : le débit traversant une section égale le volume que l'estuaire stocke en amont, moins le débit du fleuve. Emprise en eau et axe du chenal tirés de la relation OSM 9871 ; largeurs à basse mer et bathymétrie schématiques. Références : Moskalski et al. 2018, 2020 ; Région Bretagne, éclusages de Guily-Glaz. Liens : <a href="https://maree.shom.fr/harbor/BREST/hlt/0" target="_blank" rel="noopener">SHOM Brest</a> · <a href="https://appli.antreizh.fr/#maree" target="_blank" rel="noopener">widget Marée Antreizh</a> · <a href="https://www.openstreetmap.org/relation/9871" target="_blank" rel="noopener">relation OSM 9871</a>.</p>
+      </section>
+      <section style="grid-column: span 2">
+        <h2>Horaires <span class="badge shom" id="srcBadge">SHOM Brest</span></h2>
+        <p id="srcText">Prédictions officielles du SHOM pour Brest (port de référence), du 6 au 23 novembre 2026. À Guily-Glaz, d'après le marégraphe : pleine mer 12 min après Brest et 0,3 m plus bas ; la basse mer y est un palier (eau sous l'échelle) qui ne se relève que 2 h 30 à 3 h après la BM de Brest.</p>
+        <div style="overflow-x:auto"><table class="tides" id="tideTable"><thead><tr><th>Date</th><th>Brest</th><th></th><th>Haut.</th><th>Coef</th><th>Guily-Glaz</th></tr></thead><tbody></tbody></table></div>
+        <p class="small">Guily-Glaz : heure de PM estimée et hauteur à l'échelle ; pour une BM, heure estimée de remontée au-dessus de l'échelle.</p>
+      </section>
+    </aside>
+  </div>
+  <footer class="credits"><a href="https://maplibre.org/" target="_blank" rel="noopener">MapLibre</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · emprise de l'Aulne maritime : relation OSM 9871 · horaires de marée : Shom · hydrométrie : Hub'Eau (HydroPortail)</footer>
+</div>
+<script>/*! mp4-muxer 5.1.3 — MIT License — https://github.com/Vanilagy/mp4-muxer */
+"use strict";
+var Mp4Muxer = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+  var __accessCheck = (obj, member, msg) => {
+    if (!member.has(obj))
+      throw TypeError("Cannot " + msg);
+  };
+  var __privateGet = (obj, member, getter) => {
+    __accessCheck(obj, member, "read from private field");
+    return getter ? getter.call(obj) : member.get(obj);
+  };
+  var __privateAdd = (obj, member, value) => {
+    if (member.has(obj))
+      throw TypeError("Cannot add the same private member more than once");
+    member instanceof WeakSet ? member.add(obj) : member.set(obj, value);
+  };
+  var __privateSet = (obj, member, value, setter) => {
+    __accessCheck(obj, member, "write to private field");
+    setter ? setter.call(obj, value) : member.set(obj, value);
+    return value;
+  };
+  var __privateWrapper = (obj, member, setter, getter) => ({
+    set _(value) {
+      __privateSet(obj, member, value, setter);
+    },
+    get _() {
+      return __privateGet(obj, member, getter);
+    }
+  });
+  var __privateMethod = (obj, member, method) => {
+    __accessCheck(obj, member, "access private method");
+    return method;
+  };
+
+  // src/index.ts
+  var src_exports = {};
+  __export(src_exports, {
+    ArrayBufferTarget: () => ArrayBufferTarget,
+    FileSystemWritableFileStreamTarget: () => FileSystemWritableFileStreamTarget,
+    Muxer: () => Muxer,
+    StreamTarget: () => StreamTarget
+  });
+
+  // src/misc.ts
+  var bytes = new Uint8Array(8);
+  var view = new DataView(bytes.buffer);
+  var u8 = (value) => {
+    return [(value % 256 + 256) % 256];
+  };
+  var u16 = (value) => {
+    view.setUint16(0, value, false);
+    return [bytes[0], bytes[1]];
+  };
+  var i16 = (value) => {
+    view.setInt16(0, value, false);
+    return [bytes[0], bytes[1]];
+  };
+  var u24 = (value) => {
+    view.setUint32(0, value, false);
+    return [bytes[1], bytes[2], bytes[3]];
+  };
+  var u32 = (value) => {
+    view.setUint32(0, value, false);
+    return [bytes[0], bytes[1], bytes[2], bytes[3]];
+  };
+  var i32 = (value) => {
+    view.setInt32(0, value, false);
+    return [bytes[0], bytes[1], bytes[2], bytes[3]];
+  };
+  var u64 = (value) => {
+    view.setUint32(0, Math.floor(value / 2 ** 32), false);
+    view.setUint32(4, value, false);
+    return [bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]];
+  };
+  var fixed_8_8 = (value) => {
+    view.setInt16(0, 2 ** 8 * value, false);
+    return [bytes[0], bytes[1]];
+  };
+  var fixed_16_16 = (value) => {
+    view.setInt32(0, 2 ** 16 * value, false);
+    return [bytes[0], bytes[1], bytes[2], bytes[3]];
+  };
+  var fixed_2_30 = (value) => {
+    view.setInt32(0, 2 ** 30 * value, false);
+    return [bytes[0], bytes[1], bytes[2], bytes[3]];
+  };
+  var ascii = (text, nullTerminated = false) => {
+    let bytes2 = Array(text.length).fill(null).map((_, i) => text.charCodeAt(i));
+    if (nullTerminated)
+      bytes2.push(0);
+    return bytes2;
+  };
+  var last = (arr) => {
+    return arr && arr[arr.length - 1];
+  };
+  var lastPresentedSample = (samples) => {
+    let result = void 0;
+    for (let sample of samples) {
+      if (!result || sample.presentationTimestamp > result.presentationTimestamp) {
+        result = sample;
+      }
+    }
+    return result;
+  };
+  var intoTimescale = (timeInSeconds, timescale, round = true) => {
+    let value = timeInSeconds * timescale;
+    return round ? Math.round(value) : value;
+  };
+  var rotationMatrix = (rotationInDegrees) => {
+    let theta = rotationInDegrees * (Math.PI / 180);
+    let cosTheta = Math.cos(theta);
+    let sinTheta = Math.sin(theta);
+    return [
+      cosTheta,
+      sinTheta,
+      0,
+      -sinTheta,
+      cosTheta,
+      0,
+      0,
+      0,
+      1
+    ];
+  };
+  var IDENTITY_MATRIX = rotationMatrix(0);
+  var matrixToBytes = (matrix) => {
+    return [
+      fixed_16_16(matrix[0]),
+      fixed_16_16(matrix[1]),
+      fixed_2_30(matrix[2]),
+      fixed_16_16(matrix[3]),
+      fixed_16_16(matrix[4]),
+      fixed_2_30(matrix[5]),
+      fixed_16_16(matrix[6]),
+      fixed_16_16(matrix[7]),
+      fixed_2_30(matrix[8])
+    ];
+  };
+  var deepClone = (x) => {
+    if (!x)
+      return x;
+    if (typeof x !== "object")
+      return x;
+    if (Array.isArray(x))
+      return x.map(deepClone);
+    return Object.fromEntries(Object.entries(x).map(([key, value]) => [key, deepClone(value)]));
+  };
+  var isU32 = (value) => {
+    return value >= 0 && value < 2 ** 32;
+  };
+
+  // src/box.ts
+  var box = (type, contents, children) => ({
+    type,
+    contents: contents && new Uint8Array(contents.flat(10)),
+    children
+  });
+  var fullBox = (type, version, flags, contents, children) => box(
+    type,
+    [u8(version), u24(flags), contents ?? []],
+    children
+  );
+  var ftyp = (details) => {
+    let minorVersion = 512;
+    if (details.fragmented)
+      return box("ftyp", [
+        ascii("iso5"),
+        // Major brand
+        u32(minorVersion),
+        // Minor version
+        // Compatible brands
+        ascii("iso5"),
+        ascii("iso6"),
+        ascii("mp41")
+      ]);
+    return box("ftyp", [
+      ascii("isom"),
+      // Major brand
+      u32(minorVersion),
+      // Minor version
+      // Compatible brands
+      ascii("isom"),
+      details.holdsAvc ? ascii("avc1") : [],
+      ascii("mp41")
+    ]);
+  };
+  var mdat = (reserveLargeSize) => ({ type: "mdat", largeSize: reserveLargeSize });
+  var free = (size) => ({ type: "free", size });
+  var moov = (tracks, creationTime, fragmented = false) => box("moov", null, [
+    mvhd(creationTime, tracks),
+    ...tracks.map((x) => trak(x, creationTime)),
+    fragmented ? mvex(tracks) : null
+  ]);
+  var mvhd = (creationTime, tracks) => {
+    let duration = intoTimescale(Math.max(
+      0,
+      ...tracks.filter((x) => x.samples.length > 0).map((x) => {
+        const lastSample = lastPresentedSample(x.samples);
+        return lastSample.presentationTimestamp + lastSample.duration;
+      })
+    ), GLOBAL_TIMESCALE);
+    let nextTrackId = Math.max(...tracks.map((x) => x.id)) + 1;
+    let needsU64 = !isU32(creationTime) || !isU32(duration);
+    let u32OrU64 = needsU64 ? u64 : u32;
+    return fullBox("mvhd", +needsU64, 0, [
+      u32OrU64(creationTime),
+      // Creation time
+      u32OrU64(creationTime),
+      // Modification time
+      u32(GLOBAL_TIMESCALE),
+      // Timescale
+      u32OrU64(duration),
+      // Duration
+      fixed_16_16(1),
+      // Preferred rate
+      fixed_8_8(1),
+      // Preferred volume
+      Array(10).fill(0),
+      // Reserved
+      matrixToBytes(IDENTITY_MATRIX),
+      // Matrix
+      Array(24).fill(0),
+      // Pre-defined
+      u32(nextTrackId)
+      // Next track ID
+    ]);
+  };
+  var trak = (track, creationTime) => box("trak", null, [
+    tkhd(track, creationTime),
+    mdia(track, creationTime)
+  ]);
+  var tkhd = (track, creationTime) => {
+    let lastSample = lastPresentedSample(track.samples);
+    let durationInGlobalTimescale = intoTimescale(
+      lastSample ? lastSample.presentationTimestamp + lastSample.duration : 0,
+      GLOBAL_TIMESCALE
+    );
+    let needsU64 = !isU32(creationTime) || !isU32(durationInGlobalTimescale);
+    let u32OrU64 = needsU64 ? u64 : u32;
+    let matrix;
+    if (track.info.type === "video") {
+      matrix = typeof track.info.rotation === "number" ? rotationMatrix(track.info.rotation) : track.info.rotation;
+    } else {
+      matrix = IDENTITY_MATRIX;
+    }
+    return fullBox("tkhd", +needsU64, 3, [
+      u32OrU64(creationTime),
+      // Creation time
+      u32OrU64(creationTime),
+      // Modification time
+      u32(track.id),
+      // Track ID
+      u32(0),
+      // Reserved
+      u32OrU64(durationInGlobalTimescale),
+      // Duration
+      Array(8).fill(0),
+      // Reserved
+      u16(0),
+      // Layer
+      u16(0),
+      // Alternate group
+      fixed_8_8(track.info.type === "audio" ? 1 : 0),
+      // Volume
+      u16(0),
+      // Reserved
+      matrixToBytes(matrix),
+      // Matrix
+      fixed_16_16(track.info.type === "video" ? track.info.width : 0),
+      // Track width
+      fixed_16_16(track.info.type === "video" ? track.info.height : 0)
+      // Track height
+    ]);
+  };
+  var mdia = (track, creationTime) => box("mdia", null, [
+    mdhd(track, creationTime),
+    hdlr(track.info.type === "video" ? "vide" : "soun"),
+    minf(track)
+  ]);
+  var mdhd = (track, creationTime) => {
+    let lastSample = lastPresentedSample(track.samples);
+    let localDuration = intoTimescale(
+      lastSample ? lastSample.presentationTimestamp + lastSample.duration : 0,
+      track.timescale
+    );
+    let needsU64 = !isU32(creationTime) || !isU32(localDuration);
+    let u32OrU64 = needsU64 ? u64 : u32;
+    return fullBox("mdhd", +needsU64, 0, [
+      u32OrU64(creationTime),
+      // Creation time
+      u32OrU64(creationTime),
+      // Modification time
+      u32(track.timescale),
+      // Timescale
+      u32OrU64(localDuration),
+      // Duration
+      u16(21956),
+      // Language ("und", undetermined)
+      u16(0)
+      // Quality
+    ]);
+  };
+  var hdlr = (componentSubtype) => fullBox("hdlr", 0, 0, [
+    ascii("mhlr"),
+    // Component type
+    ascii(componentSubtype),
+    // Component subtype
+    u32(0),
+    // Component manufacturer
+    u32(0),
+    // Component flags
+    u32(0),
+    // Component flags mask
+    ascii("mp4-muxer-hdlr", true)
+    // Component name
+  ]);
+  var minf = (track) => box("minf", null, [
+    track.info.type === "video" ? vmhd() : smhd(),
+    dinf(),
+    stbl(track)
+  ]);
+  var vmhd = () => fullBox("vmhd", 0, 1, [
+    u16(0),
+    // Graphics mode
+    u16(0),
+    // Opcolor R
+    u16(0),
+    // Opcolor G
+    u16(0)
+    // Opcolor B
+  ]);
+  var smhd = () => fullBox("smhd", 0, 0, [
+    u16(0),
+    // Balance
+    u16(0)
+    // Reserved
+  ]);
+  var dinf = () => box("dinf", null, [
+    dref()
+  ]);
+  var dref = () => fullBox("dref", 0, 0, [
+    u32(1)
+    // Entry count
+  ], [
+    url()
+  ]);
+  var url = () => fullBox("url ", 0, 1);
+  var stbl = (track) => {
+    const needsCtts = track.compositionTimeOffsetTable.length > 1 || track.compositionTimeOffsetTable.some((x) => x.sampleCompositionTimeOffset !== 0);
+    return box("stbl", null, [
+      stsd(track),
+      stts(track),
+      stss(track),
+      stsc(track),
+      stsz(track),
+      stco(track),
+      needsCtts ? ctts(track) : null
+    ]);
+  };
+  var stsd = (track) => fullBox("stsd", 0, 0, [
+    u32(1)
+    // Entry count
+  ], [
+    track.info.type === "video" ? videoSampleDescription(
+      VIDEO_CODEC_TO_BOX_NAME[track.info.codec],
+      track
+    ) : soundSampleDescription(
+      AUDIO_CODEC_TO_BOX_NAME[track.info.codec],
+      track
+    )
+  ]);
+  var videoSampleDescription = (compressionType, track) => box(compressionType, [
+    Array(6).fill(0),
+    // Reserved
+    u16(1),
+    // Data reference index
+    u16(0),
+    // Pre-defined
+    u16(0),
+    // Reserved
+    Array(12).fill(0),
+    // Pre-defined
+    u16(track.info.width),
+    // Width
+    u16(track.info.height),
+    // Height
+    u32(4718592),
+    // Horizontal resolution
+    u32(4718592),
+    // Vertical resolution
+    u32(0),
+    // Reserved
+    u16(1),
+    // Frame count
+    Array(32).fill(0),
+    // Compressor name
+    u16(24),
+    // Depth
+    i16(65535)
+    // Pre-defined
+  ], [
+    VIDEO_CODEC_TO_CONFIGURATION_BOX[track.info.codec](track)
+  ]);
+  var avcC = (track) => track.info.decoderConfig && box("avcC", [
+    // For AVC, description is an AVCDecoderConfigurationRecord, so nothing else to do here
+    ...new Uint8Array(track.info.decoderConfig.description)
+  ]);
+  var hvcC = (track) => track.info.decoderConfig && box("hvcC", [
+    // For HEVC, description is a HEVCDecoderConfigurationRecord, so nothing else to do here
+    ...new Uint8Array(track.info.decoderConfig.description)
+  ]);
+  var vpcC = (track) => {
+    if (!track.info.decoderConfig) {
+      return null;
+    }
+    let decoderConfig = track.info.decoderConfig;
+    if (!decoderConfig.colorSpace) {
+      throw new Error(`'colorSpace' is required in the decoder config for VP9.`);
+    }
+    let parts = decoderConfig.codec.split(".");
+    let profile = Number(parts[1]);
+    let level = Number(parts[2]);
+    let bitDepth = Number(parts[3]);
+    let chromaSubsampling = 0;
+    let thirdByte = (bitDepth << 4) + (chromaSubsampling << 1) + Number(decoderConfig.colorSpace.fullRange);
+    let colourPrimaries = 2;
+    let transferCharacteristics = 2;
+    let matrixCoefficients = 2;
+    return fullBox("vpcC", 1, 0, [
+      u8(profile),
+      // Profile
+      u8(level),
+      // Level
+      u8(thirdByte),
+      // Bit depth, chroma subsampling, full range
+      u8(colourPrimaries),
+      // Colour primaries
+      u8(transferCharacteristics),
+      // Transfer characteristics
+      u8(matrixCoefficients),
+      // Matrix coefficients
+      u16(0)
+      // Codec initialization data size
+    ]);
+  };
+  var av1C = () => {
+    let marker = 1;
+    let version = 1;
+    let firstByte = (marker << 7) + version;
+    return box("av1C", [
+      firstByte,
+      0,
+      0,
+      0
+    ]);
+  };
+  var soundSampleDescription = (compressionType, track) => box(compressionType, [
+    Array(6).fill(0),
+    // Reserved
+    u16(1),
+    // Data reference index
+    u16(0),
+    // Version
+    u16(0),
+    // Revision level
+    u32(0),
+    // Vendor
+    u16(track.info.numberOfChannels),
+    // Number of channels
+    u16(16),
+    // Sample size (bits)
+    u16(0),
+    // Compression ID
+    u16(0),
+    // Packet size
+    fixed_16_16(track.info.sampleRate)
+    // Sample rate
+  ], [
+    AUDIO_CODEC_TO_CONFIGURATION_BOX[track.info.codec](track)
+  ]);
+  var esds = (track) => {
+    let description = new Uint8Array(track.info.decoderConfig.description);
+    return fullBox("esds", 0, 0, [
+      // https://stackoverflow.com/a/54803118
+      u32(58753152),
+      // TAG(3) = Object Descriptor ([2])
+      u8(32 + description.byteLength),
+      // length of this OD (which includes the next 2 tags)
+      u16(1),
+      // ES_ID = 1
+      u8(0),
+      // flags etc = 0
+      u32(75530368),
+      // TAG(4) = ES Descriptor ([2]) embedded in above OD
+      u8(18 + description.byteLength),
+      // length of this ESD
+      u8(64),
+      // MPEG-4 Audio
+      u8(21),
+      // stream type(6bits)=5 audio, flags(2bits)=1
+      u24(0),
+      // 24bit buffer size
+      u32(130071),
+      // max bitrate
+      u32(130071),
+      // avg bitrate
+      u32(92307584),
+      // TAG(5) = ASC ([2],[3]) embedded in above OD
+      u8(description.byteLength),
+      // length
+      ...description,
+      u32(109084800),
+      // TAG(6)
+      u8(1),
+      // length
+      u8(2)
+      // data
+    ]);
+  };
+  var dOps = (track) => {
+    let preskip = 3840;
+    let gain = 0;
+    const description = track.info.decoderConfig?.description;
+    if (description) {
+      if (description.byteLength < 18) {
+        throw new TypeError("Invalid decoder description provided for Opus; must be at least 18 bytes long.");
+      }
+      const view2 = ArrayBuffer.isView(description) ? new DataView(description.buffer, description.byteOffset, description.byteLength) : new DataView(description);
+      preskip = view2.getUint16(10, true);
+      gain = view2.getInt16(14, true);
+    }
+    return box("dOps", [
+      u8(0),
+      // Version
+      u8(track.info.numberOfChannels),
+      // OutputChannelCount
+      u16(preskip),
+      u32(track.info.sampleRate),
+      // InputSampleRate
+      fixed_8_8(gain),
+      // OutputGain
+      u8(0)
+      // ChannelMappingFamily
+    ]);
+  };
+  var stts = (track) => {
+    return fullBox("stts", 0, 0, [
+      u32(track.timeToSampleTable.length),
+      // Number of entries
+      track.timeToSampleTable.map((x) => [
+        // Time-to-sample table
+        u32(x.sampleCount),
+        // Sample count
+        u32(x.sampleDelta)
+        // Sample duration
+      ])
+    ]);
+  };
+  var stss = (track) => {
+    if (track.samples.every((x) => x.type === "key"))
+      return null;
+    let keySamples = [...track.samples.entries()].filter(([, sample]) => sample.type === "key");
+    return fullBox("stss", 0, 0, [
+      u32(keySamples.length),
+      // Number of entries
+      keySamples.map(([index]) => u32(index + 1))
+      // Sync sample table
+    ]);
+  };
+  var stsc = (track) => {
+    return fullBox("stsc", 0, 0, [
+      u32(track.compactlyCodedChunkTable.length),
+      // Number of entries
+      track.compactlyCodedChunkTable.map((x) => [
+        // Sample-to-chunk table
+        u32(x.firstChunk),
+        // First chunk
+        u32(x.samplesPerChunk),
+        // Samples per chunk
+        u32(1)
+        // Sample description index
+      ])
+    ]);
+  };
+  var stsz = (track) => fullBox("stsz", 0, 0, [
+    u32(0),
+    // Sample size (0 means non-constant size)
+    u32(track.samples.length),
+    // Number of entries
+    track.samples.map((x) => u32(x.size))
+    // Sample size table
+  ]);
+  var stco = (track) => {
+    if (track.finalizedChunks.length > 0 && last(track.finalizedChunks).offset >= 2 ** 32) {
+      return fullBox("co64", 0, 0, [
+        u32(track.finalizedChunks.length),
+        // Number of entries
+        track.finalizedChunks.map((x) => u64(x.offset))
+        // Chunk offset table
+      ]);
+    }
+    return fullBox("stco", 0, 0, [
+      u32(track.finalizedChunks.length),
+      // Number of entries
+      track.finalizedChunks.map((x) => u32(x.offset))
+      // Chunk offset table
+    ]);
+  };
+  var ctts = (track) => {
+    return fullBox("ctts", 0, 0, [
+      u32(track.compositionTimeOffsetTable.length),
+      // Number of entries
+      track.compositionTimeOffsetTable.map((x) => [
+        // Time-to-sample table
+        u32(x.sampleCount),
+        // Sample count
+        u32(x.sampleCompositionTimeOffset)
+        // Sample offset
+      ])
+    ]);
+  };
+  var mvex = (tracks) => {
+    return box("mvex", null, tracks.map(trex));
+  };
+  var trex = (track) => {
+    return fullBox("trex", 0, 0, [
+      u32(track.id),
+      // Track ID
+      u32(1),
+      // Default sample description index
+      u32(0),
+      // Default sample duration
+      u32(0),
+      // Default sample size
+      u32(0)
+      // Default sample flags
+    ]);
+  };
+  var moof = (sequenceNumber, tracks) => {
+    return box("moof", null, [
+      mfhd(sequenceNumber),
+      ...tracks.map(traf)
+    ]);
+  };
+  var mfhd = (sequenceNumber) => {
+    return fullBox("mfhd", 0, 0, [
+      u32(sequenceNumber)
+      // Sequence number
+    ]);
+  };
+  var fragmentSampleFlags = (sample) => {
+    let byte1 = 0;
+    let byte2 = 0;
+    let byte3 = 0;
+    let byte4 = 0;
+    let sampleIsDifferenceSample = sample.type === "delta";
+    byte2 |= +sampleIsDifferenceSample;
+    if (sampleIsDifferenceSample) {
+      byte1 |= 1;
+    } else {
+      byte1 |= 2;
+    }
+    return byte1 << 24 | byte2 << 16 | byte3 << 8 | byte4;
+  };
+  var traf = (track) => {
+    return box("traf", null, [
+      tfhd(track),
+      tfdt(track),
+      trun(track)
+    ]);
+  };
+  var tfhd = (track) => {
+    let tfFlags = 0;
+    tfFlags |= 8;
+    tfFlags |= 16;
+    tfFlags |= 32;
+    tfFlags |= 131072;
+    let referenceSample = track.currentChunk.samples[1] ?? track.currentChunk.samples[0];
+    let referenceSampleInfo = {
+      duration: referenceSample.timescaleUnitsToNextSample,
+      size: referenceSample.size,
+      flags: fragmentSampleFlags(referenceSample)
+    };
+    return fullBox("tfhd", 0, tfFlags, [
+      u32(track.id),
+      // Track ID
+      u32(referenceSampleInfo.duration),
+      // Default sample duration
+      u32(referenceSampleInfo.size),
+      // Default sample size
+      u32(referenceSampleInfo.flags)
+      // Default sample flags
+    ]);
+  };
+  var tfdt = (track) => {
+    return fullBox("tfdt", 1, 0, [
+      u64(intoTimescale(track.currentChunk.startTimestamp, track.timescale))
+      // Base Media Decode Time
+    ]);
+  };
+  var trun = (track) => {
+    let allSampleDurations = track.currentChunk.samples.map((x) => x.timescaleUnitsToNextSample);
+    let allSampleSizes = track.currentChunk.samples.map((x) => x.size);
+    let allSampleFlags = track.currentChunk.samples.map(fragmentSampleFlags);
+    let allSampleCompositionTimeOffsets = track.currentChunk.samples.map((x) => intoTimescale(x.presentationTimestamp - x.decodeTimestamp, track.timescale));
+    let uniqueSampleDurations = new Set(allSampleDurations);
+    let uniqueSampleSizes = new Set(allSampleSizes);
+    let uniqueSampleFlags = new Set(allSampleFlags);
+    let uniqueSampleCompositionTimeOffsets = new Set(allSampleCompositionTimeOffsets);
+    let firstSampleFlagsPresent = uniqueSampleFlags.size === 2 && allSampleFlags[0] !== allSampleFlags[1];
+    let sampleDurationPresent = uniqueSampleDurations.size > 1;
+    let sampleSizePresent = uniqueSampleSizes.size > 1;
+    let sampleFlagsPresent = !firstSampleFlagsPresent && uniqueSampleFlags.size > 1;
+    let sampleCompositionTimeOffsetsPresent = uniqueSampleCompositionTimeOffsets.size > 1 || [...uniqueSampleCompositionTimeOffsets].some((x) => x !== 0);
+    let flags = 0;
+    flags |= 1;
+    flags |= 4 * +firstSampleFlagsPresent;
+    flags |= 256 * +sampleDurationPresent;
+    flags |= 512 * +sampleSizePresent;
+    flags |= 1024 * +sampleFlagsPresent;
+    flags |= 2048 * +sampleCompositionTimeOffsetsPresent;
+    return fullBox("trun", 1, flags, [
+      u32(track.currentChunk.samples.length),
+      // Sample count
+      u32(track.currentChunk.offset - track.currentChunk.moofOffset || 0),
+      // Data offset
+      firstSampleFlagsPresent ? u32(allSampleFlags[0]) : [],
+      track.currentChunk.samples.map((_, i) => [
+        sampleDurationPresent ? u32(allSampleDurations[i]) : [],
+        // Sample duration
+        sampleSizePresent ? u32(allSampleSizes[i]) : [],
+        // Sample size
+        sampleFlagsPresent ? u32(allSampleFlags[i]) : [],
+        // Sample flags
+        // Sample composition time offsets
+        sampleCompositionTimeOffsetsPresent ? i32(allSampleCompositionTimeOffsets[i]) : []
+      ])
+    ]);
+  };
+  var mfra = (tracks) => {
+    return box("mfra", null, [
+      ...tracks.map(tfra),
+      mfro()
+    ]);
+  };
+  var tfra = (track, trackIndex) => {
+    let version = 1;
+    return fullBox("tfra", version, 0, [
+      u32(track.id),
+      // Track ID
+      u32(63),
+      // This specifies that traf number, trun number and sample number are 32-bit ints
+      u32(track.finalizedChunks.length),
+      // Number of entries
+      track.finalizedChunks.map((chunk) => [
+        u64(intoTimescale(chunk.startTimestamp, track.timescale)),
+        // Time
+        u64(chunk.moofOffset),
+        // moof offset
+        u32(trackIndex + 1),
+        // traf number
+        u32(1),
+        // trun number
+        u32(1)
+        // Sample number
+      ])
+    ]);
+  };
+  var mfro = () => {
+    return fullBox("mfro", 0, 0, [
+      // This value needs to be overwritten manually from the outside, where the actual size of the enclosing mfra box
+      // is known
+      u32(0)
+      // Size
+    ]);
+  };
+  var VIDEO_CODEC_TO_BOX_NAME = {
+    "avc": "avc1",
+    "hevc": "hvc1",
+    "vp9": "vp09",
+    "av1": "av01"
+  };
+  var VIDEO_CODEC_TO_CONFIGURATION_BOX = {
+    "avc": avcC,
+    "hevc": hvcC,
+    "vp9": vpcC,
+    "av1": av1C
+  };
+  var AUDIO_CODEC_TO_BOX_NAME = {
+    "aac": "mp4a",
+    "opus": "Opus"
+  };
+  var AUDIO_CODEC_TO_CONFIGURATION_BOX = {
+    "aac": esds,
+    "opus": dOps
+  };
+
+  // src/target.ts
+  var isTarget = Symbol("isTarget");
+  var Target = class {
+  };
+  isTarget;
+  var ArrayBufferTarget = class extends Target {
+    constructor() {
+      super(...arguments);
+      this.buffer = null;
+    }
+  };
+  var StreamTarget = class extends Target {
+    constructor(options) {
+      super();
+      this.options = options;
+      if (typeof options !== "object") {
+        throw new TypeError("StreamTarget requires an options object to be passed to its constructor.");
+      }
+      if (options.onData) {
+        if (typeof options.onData !== "function") {
+          throw new TypeError("options.onData, when provided, must be a function.");
+        }
+        if (options.onData.length < 2) {
+          throw new TypeError(
+            "options.onData, when provided, must be a function that takes in at least two arguments (data and position). Ignoring the position argument, which specifies the byte offset at which the data is to be written, can lead to broken outputs."
+          );
+        }
+      }
+      if (options.chunked !== void 0 && typeof options.chunked !== "boolean") {
+        throw new TypeError("options.chunked, when provided, must be a boolean.");
+      }
+      if (options.chunkSize !== void 0 && (!Number.isInteger(options.chunkSize) || options.chunkSize <= 0)) {
+        throw new TypeError("options.chunkSize, when provided, must be a positive integer.");
+      }
+    }
+  };
+  var FileSystemWritableFileStreamTarget = class extends Target {
+    constructor(stream, options) {
+      super();
+      this.stream = stream;
+      this.options = options;
+      if (!(stream instanceof FileSystemWritableFileStream)) {
+        throw new TypeError("FileSystemWritableFileStreamTarget requires a FileSystemWritableFileStream instance.");
+      }
+      if (options !== void 0 && typeof options !== "object") {
+        throw new TypeError("FileSystemWritableFileStreamTarget's options, when provided, must be an object.");
+      }
+      if (options) {
+        if (options.chunkSize !== void 0 && (!Number.isInteger(options.chunkSize) || options.chunkSize <= 0)) {
+          throw new TypeError("options.chunkSize, when provided, must be a positive integer");
+        }
+      }
+    }
+  };
+
+  // src/writer.ts
+  var _helper, _helperView;
+  var Writer = class {
+    constructor() {
+      this.pos = 0;
+      __privateAdd(this, _helper, new Uint8Array(8));
+      __privateAdd(this, _helperView, new DataView(__privateGet(this, _helper).buffer));
+      /**
+       * Stores the position from the start of the file to where boxes elements have been written. This is used to
+       * rewrite/edit elements that were already added before, and to measure sizes of things.
+       */
+      this.offsets = /* @__PURE__ */ new WeakMap();
+    }
+    /** Sets the current position for future writes to a new one. */
+    seek(newPos) {
+      this.pos = newPos;
+    }
+    writeU32(value) {
+      __privateGet(this, _helperView).setUint32(0, value, false);
+      this.write(__privateGet(this, _helper).subarray(0, 4));
+    }
+    writeU64(value) {
+      __privateGet(this, _helperView).setUint32(0, Math.floor(value / 2 ** 32), false);
+      __privateGet(this, _helperView).setUint32(4, value, false);
+      this.write(__privateGet(this, _helper).subarray(0, 8));
+    }
+    writeAscii(text) {
+      for (let i = 0; i < text.length; i++) {
+        __privateGet(this, _helperView).setUint8(i % 8, text.charCodeAt(i));
+        if (i % 8 === 7)
+          this.write(__privateGet(this, _helper));
+      }
+      if (text.length % 8 !== 0) {
+        this.write(__privateGet(this, _helper).subarray(0, text.length % 8));
+      }
+    }
+    writeBox(box2) {
+      this.offsets.set(box2, this.pos);
+      if (box2.contents && !box2.children) {
+        this.writeBoxHeader(box2, box2.size ?? box2.contents.byteLength + 8);
+        this.write(box2.contents);
+      } else {
+        let startPos = this.pos;
+        this.writeBoxHeader(box2, 0);
+        if (box2.contents)
+          this.write(box2.contents);
+        if (box2.children) {
+          for (let child of box2.children)
+            if (child)
+              this.writeBox(child);
+        }
+        let endPos = this.pos;
+        let size = box2.size ?? endPos - startPos;
+        this.seek(startPos);
+        this.writeBoxHeader(box2, size);
+        this.seek(endPos);
+      }
+    }
+    writeBoxHeader(box2, size) {
+      this.writeU32(box2.largeSize ? 1 : size);
+      this.writeAscii(box2.type);
+      if (box2.largeSize)
+        this.writeU64(size);
+    }
+    measureBoxHeader(box2) {
+      return 8 + (box2.largeSize ? 8 : 0);
+    }
+    patchBox(box2) {
+      let endPos = this.pos;
+      this.seek(this.offsets.get(box2));
+      this.writeBox(box2);
+      this.seek(endPos);
+    }
+    measureBox(box2) {
+      if (box2.contents && !box2.children) {
+        let headerSize = this.measureBoxHeader(box2);
+        return headerSize + box2.contents.byteLength;
+      } else {
+        let result = this.measureBoxHeader(box2);
+        if (box2.contents)
+          result += box2.contents.byteLength;
+        if (box2.children) {
+          for (let child of box2.children)
+            if (child)
+              result += this.measureBox(child);
+        }
+        return result;
+      }
+    }
+  };
+  _helper = new WeakMap();
+  _helperView = new WeakMap();
+  var _target, _buffer, _bytes, _maxPos, _ensureSize, ensureSize_fn;
+  var ArrayBufferTargetWriter = class extends Writer {
+    constructor(target) {
+      super();
+      __privateAdd(this, _ensureSize);
+      __privateAdd(this, _target, void 0);
+      __privateAdd(this, _buffer, new ArrayBuffer(2 ** 16));
+      __privateAdd(this, _bytes, new Uint8Array(__privateGet(this, _buffer)));
+      __privateAdd(this, _maxPos, 0);
+      __privateSet(this, _target, target);
+    }
+    write(data) {
+      __privateMethod(this, _ensureSize, ensureSize_fn).call(this, this.pos + data.byteLength);
+      __privateGet(this, _bytes).set(data, this.pos);
+      this.pos += data.byteLength;
+      __privateSet(this, _maxPos, Math.max(__privateGet(this, _maxPos), this.pos));
+    }
+    finalize() {
+      __privateMethod(this, _ensureSize, ensureSize_fn).call(this, this.pos);
+      __privateGet(this, _target).buffer = __privateGet(this, _buffer).slice(0, Math.max(__privateGet(this, _maxPos), this.pos));
+    }
+  };
+  _target = new WeakMap();
+  _buffer = new WeakMap();
+  _bytes = new WeakMap();
+  _maxPos = new WeakMap();
+  _ensureSize = new WeakSet();
+  ensureSize_fn = function(size) {
+    let newLength = __privateGet(this, _buffer).byteLength;
+    while (newLength < size)
+      newLength *= 2;
+    if (newLength === __privateGet(this, _buffer).byteLength)
+      return;
+    let newBuffer = new ArrayBuffer(newLength);
+    let newBytes = new Uint8Array(newBuffer);
+    newBytes.set(__privateGet(this, _bytes), 0);
+    __privateSet(this, _buffer, newBuffer);
+    __privateSet(this, _bytes, newBytes);
+  };
+  var _target2, _sections;
+  var StreamTargetWriter = class extends Writer {
+    constructor(target) {
+      super();
+      __privateAdd(this, _target2, void 0);
+      __privateAdd(this, _sections, []);
+      __privateSet(this, _target2, target);
+    }
+    write(data) {
+      __privateGet(this, _sections).push({
+        data: data.slice(),
+        start: this.pos
+      });
+      this.pos += data.byteLength;
+    }
+    flush() {
+      if (__privateGet(this, _sections).length === 0)
+        return;
+      let chunks = [];
+      let sorted = [...__privateGet(this, _sections)].sort((a, b) => a.start - b.start);
+      chunks.push({
+        start: sorted[0].start,
+        size: sorted[0].data.byteLength
+      });
+      for (let i = 1; i < sorted.length; i++) {
+        let lastChunk = chunks[chunks.length - 1];
+        let section = sorted[i];
+        if (section.start <= lastChunk.start + lastChunk.size) {
+          lastChunk.size = Math.max(lastChunk.size, section.start + section.data.byteLength - lastChunk.start);
+        } else {
+          chunks.push({
+            start: section.start,
+            size: section.data.byteLength
+          });
+        }
+      }
+      for (let chunk of chunks) {
+        chunk.data = new Uint8Array(chunk.size);
+        for (let section of __privateGet(this, _sections)) {
+          if (chunk.start <= section.start && section.start < chunk.start + chunk.size) {
+            chunk.data.set(section.data, section.start - chunk.start);
+          }
+        }
+        __privateGet(this, _target2).options.onData?.(chunk.data, chunk.start);
+      }
+      __privateGet(this, _sections).length = 0;
+    }
+    finalize() {
+    }
+  };
+  _target2 = new WeakMap();
+  _sections = new WeakMap();
+  var DEFAULT_CHUNK_SIZE = 2 ** 24;
+  var MAX_CHUNKS_AT_ONCE = 2;
+  var _target3, _chunkSize, _chunks, _writeDataIntoChunks, writeDataIntoChunks_fn, _insertSectionIntoChunk, insertSectionIntoChunk_fn, _createChunk, createChunk_fn, _flushChunks, flushChunks_fn;
+  var ChunkedStreamTargetWriter = class extends Writer {
+    constructor(target) {
+      super();
+      __privateAdd(this, _writeDataIntoChunks);
+      __privateAdd(this, _insertSectionIntoChunk);
+      __privateAdd(this, _createChunk);
+      __privateAdd(this, _flushChunks);
+      __privateAdd(this, _target3, void 0);
+      __privateAdd(this, _chunkSize, void 0);
+      /**
+       * The data is divided up into fixed-size chunks, whose contents are first filled in RAM and then flushed out.
+       * A chunk is flushed if all of its contents have been written.
+       */
+      __privateAdd(this, _chunks, []);
+      __privateSet(this, _target3, target);
+      __privateSet(this, _chunkSize, target.options?.chunkSize ?? DEFAULT_CHUNK_SIZE);
+      if (!Number.isInteger(__privateGet(this, _chunkSize)) || __privateGet(this, _chunkSize) < 2 ** 10) {
+        throw new Error("Invalid StreamTarget options: chunkSize must be an integer not smaller than 1024.");
+      }
+    }
+    write(data) {
+      __privateMethod(this, _writeDataIntoChunks, writeDataIntoChunks_fn).call(this, data, this.pos);
+      __privateMethod(this, _flushChunks, flushChunks_fn).call(this);
+      this.pos += data.byteLength;
+    }
+    finalize() {
+      __privateMethod(this, _flushChunks, flushChunks_fn).call(this, true);
+    }
+  };
+  _target3 = new WeakMap();
+  _chunkSize = new WeakMap();
+  _chunks = new WeakMap();
+  _writeDataIntoChunks = new WeakSet();
+  writeDataIntoChunks_fn = function(data, position) {
+    let chunkIndex = __privateGet(this, _chunks).findIndex((x) => x.start <= position && position < x.start + __privateGet(this, _chunkSize));
+    if (chunkIndex === -1)
+      chunkIndex = __privateMethod(this, _createChunk, createChunk_fn).call(this, position);
+    let chunk = __privateGet(this, _chunks)[chunkIndex];
+    let relativePosition = position - chunk.start;
+    let toWrite = data.subarray(0, Math.min(__privateGet(this, _chunkSize) - relativePosition, data.byteLength));
+    chunk.data.set(toWrite, relativePosition);
+    let section = {
+      start: relativePosition,
+      end: relativePosition + toWrite.byteLength
+    };
+    __privateMethod(this, _insertSectionIntoChunk, insertSectionIntoChunk_fn).call(this, chunk, section);
+    if (chunk.written[0].start === 0 && chunk.written[0].end === __privateGet(this, _chunkSize)) {
+      chunk.shouldFlush = true;
+    }
+    if (__privateGet(this, _chunks).length > MAX_CHUNKS_AT_ONCE) {
+      for (let i = 0; i < __privateGet(this, _chunks).length - 1; i++) {
+        __privateGet(this, _chunks)[i].shouldFlush = true;
+      }
+      __privateMethod(this, _flushChunks, flushChunks_fn).call(this);
+    }
+    if (toWrite.byteLength < data.byteLength) {
+      __privateMethod(this, _writeDataIntoChunks, writeDataIntoChunks_fn).call(this, data.subarray(toWrite.byteLength), position + toWrite.byteLength);
+    }
+  };
+  _insertSectionIntoChunk = new WeakSet();
+  insertSectionIntoChunk_fn = function(chunk, section) {
+    let low = 0;
+    let high = chunk.written.length - 1;
+    let index = -1;
+    while (low <= high) {
+      let mid = Math.floor(low + (high - low + 1) / 2);
+      if (chunk.written[mid].start <= section.start) {
+        low = mid + 1;
+        index = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    chunk.written.splice(index + 1, 0, section);
+    if (index === -1 || chunk.written[index].end < section.start)
+      index++;
+    while (index < chunk.written.length - 1 && chunk.written[index].end >= chunk.written[index + 1].start) {
+      chunk.written[index].end = Math.max(chunk.written[index].end, chunk.written[index + 1].end);
+      chunk.written.splice(index + 1, 1);
+    }
+  };
+  _createChunk = new WeakSet();
+  createChunk_fn = function(includesPosition) {
+    let start = Math.floor(includesPosition / __privateGet(this, _chunkSize)) * __privateGet(this, _chunkSize);
+    let chunk = {
+      start,
+      data: new Uint8Array(__privateGet(this, _chunkSize)),
+      written: [],
+      shouldFlush: false
+    };
+    __privateGet(this, _chunks).push(chunk);
+    __privateGet(this, _chunks).sort((a, b) => a.start - b.start);
+    return __privateGet(this, _chunks).indexOf(chunk);
+  };
+  _flushChunks = new WeakSet();
+  flushChunks_fn = function(force = false) {
+    for (let i = 0; i < __privateGet(this, _chunks).length; i++) {
+      let chunk = __privateGet(this, _chunks)[i];
+      if (!chunk.shouldFlush && !force)
+        continue;
+      for (let section of chunk.written) {
+        __privateGet(this, _target3).options.onData?.(
+          chunk.data.subarray(section.start, section.end),
+          chunk.start + section.start
+        );
+      }
+      __privateGet(this, _chunks).splice(i--, 1);
+    }
+  };
+  var FileSystemWritableFileStreamTargetWriter = class extends ChunkedStreamTargetWriter {
+    constructor(target) {
+      super(new StreamTarget({
+        onData: (data, position) => target.stream.write({
+          type: "write",
+          data,
+          position
+        }),
+        chunkSize: target.options?.chunkSize
+      }));
+    }
+  };
+
+  // src/muxer.ts
+  var GLOBAL_TIMESCALE = 1e3;
+  var SUPPORTED_VIDEO_CODECS = ["avc", "hevc", "vp9", "av1"];
+  var SUPPORTED_AUDIO_CODECS = ["aac", "opus"];
+  var TIMESTAMP_OFFSET = 2082844800;
+  var FIRST_TIMESTAMP_BEHAVIORS = ["strict", "offset", "cross-track-offset"];
+  var _options, _writer, _ftypSize, _mdat, _videoTrack, _audioTrack, _creationTime, _finalizedChunks, _nextFragmentNumber, _videoSampleQueue, _audioSampleQueue, _finalized, _validateOptions, validateOptions_fn, _writeHeader, writeHeader_fn, _computeMoovSizeUpperBound, computeMoovSizeUpperBound_fn, _prepareTracks, prepareTracks_fn, _generateMpeg4AudioSpecificConfig, generateMpeg4AudioSpecificConfig_fn, _createSampleForTrack, createSampleForTrack_fn, _addSampleToTrack, addSampleToTrack_fn, _validateTimestamp, validateTimestamp_fn, _finalizeCurrentChunk, finalizeCurrentChunk_fn, _finalizeFragment, finalizeFragment_fn, _maybeFlushStreamingTargetWriter, maybeFlushStreamingTargetWriter_fn, _ensureNotFinalized, ensureNotFinalized_fn;
+  var Muxer = class {
+    constructor(options) {
+      __privateAdd(this, _validateOptions);
+      __privateAdd(this, _writeHeader);
+      __privateAdd(this, _computeMoovSizeUpperBound);
+      __privateAdd(this, _prepareTracks);
+      // https://wiki.multimedia.cx/index.php/MPEG-4_Audio
+      __privateAdd(this, _generateMpeg4AudioSpecificConfig);
+      __privateAdd(this, _createSampleForTrack);
+      __privateAdd(this, _addSampleToTrack);
+      __privateAdd(this, _validateTimestamp);
+      __privateAdd(this, _finalizeCurrentChunk);
+      __privateAdd(this, _finalizeFragment);
+      __privateAdd(this, _maybeFlushStreamingTargetWriter);
+      __privateAdd(this, _ensureNotFinalized);
+      __privateAdd(this, _options, void 0);
+      __privateAdd(this, _writer, void 0);
+      __privateAdd(this, _ftypSize, void 0);
+      __privateAdd(this, _mdat, void 0);
+      __privateAdd(this, _videoTrack, null);
+      __privateAdd(this, _audioTrack, null);
+      __privateAdd(this, _creationTime, Math.floor(Date.now() / 1e3) + TIMESTAMP_OFFSET);
+      __privateAdd(this, _finalizedChunks, []);
+      // Fields for fragmented MP4:
+      __privateAdd(this, _nextFragmentNumber, 1);
+      __privateAdd(this, _videoSampleQueue, []);
+      __privateAdd(this, _audioSampleQueue, []);
+      __privateAdd(this, _finalized, false);
+      __privateMethod(this, _validateOptions, validateOptions_fn).call(this, options);
+      options.video = deepClone(options.video);
+      options.audio = deepClone(options.audio);
+      options.fastStart = deepClone(options.fastStart);
+      this.target = options.target;
+      __privateSet(this, _options, {
+        firstTimestampBehavior: "strict",
+        ...options
+      });
+      if (options.target instanceof ArrayBufferTarget) {
+        __privateSet(this, _writer, new ArrayBufferTargetWriter(options.target));
+      } else if (options.target instanceof StreamTarget) {
+        __privateSet(this, _writer, options.target.options?.chunked ? new ChunkedStreamTargetWriter(options.target) : new StreamTargetWriter(options.target));
+      } else if (options.target instanceof FileSystemWritableFileStreamTarget) {
+        __privateSet(this, _writer, new FileSystemWritableFileStreamTargetWriter(options.target));
+      } else {
+        throw new Error(`Invalid target: ${options.target}`);
+      }
+      __privateMethod(this, _prepareTracks, prepareTracks_fn).call(this);
+      __privateMethod(this, _writeHeader, writeHeader_fn).call(this);
+    }
+    addVideoChunk(sample, meta, timestamp, compositionTimeOffset) {
+      if (!(sample instanceof EncodedVideoChunk)) {
+        throw new TypeError("addVideoChunk's first argument (sample) must be of type EncodedVideoChunk.");
+      }
+      if (meta && typeof meta !== "object") {
+        throw new TypeError("addVideoChunk's second argument (meta), when provided, must be an object.");
+      }
+      if (timestamp !== void 0 && (!Number.isFinite(timestamp) || timestamp < 0)) {
+        throw new TypeError(
+          "addVideoChunk's third argument (timestamp), when provided, must be a non-negative real number."
+        );
+      }
+      if (compositionTimeOffset !== void 0 && !Number.isFinite(compositionTimeOffset)) {
+        throw new TypeError(
+          "addVideoChunk's fourth argument (compositionTimeOffset), when provided, must be a real number."
+        );
+      }
+      let data = new Uint8Array(sample.byteLength);
+      sample.copyTo(data);
+      this.addVideoChunkRaw(
+        data,
+        sample.type,
+        timestamp ?? sample.timestamp,
+        sample.duration,
+        meta,
+        compositionTimeOffset
+      );
+    }
+    addVideoChunkRaw(data, type, timestamp, duration, meta, compositionTimeOffset) {
+      if (!(data instanceof Uint8Array)) {
+        throw new TypeError("addVideoChunkRaw's first argument (data) must be an instance of Uint8Array.");
+      }
+      if (type !== "key" && type !== "delta") {
+        throw new TypeError("addVideoChunkRaw's second argument (type) must be either 'key' or 'delta'.");
+      }
+      if (!Number.isFinite(timestamp) || timestamp < 0) {
+        throw new TypeError("addVideoChunkRaw's third argument (timestamp) must be a non-negative real number.");
+      }
+      if (!Number.isFinite(duration) || duration < 0) {
+        throw new TypeError("addVideoChunkRaw's fourth argument (duration) must be a non-negative real number.");
+      }
+      if (meta && typeof meta !== "object") {
+        throw new TypeError("addVideoChunkRaw's fifth argument (meta), when provided, must be an object.");
+      }
+      if (compositionTimeOffset !== void 0 && !Number.isFinite(compositionTimeOffset)) {
+        throw new TypeError(
+          "addVideoChunkRaw's sixth argument (compositionTimeOffset), when provided, must be a real number."
+        );
+      }
+      __privateMethod(this, _ensureNotFinalized, ensureNotFinalized_fn).call(this);
+      if (!__privateGet(this, _options).video)
+        throw new Error("No video track declared.");
+      if (typeof __privateGet(this, _options).fastStart === "object" && __privateGet(this, _videoTrack).samples.length === __privateGet(this, _options).fastStart.expectedVideoChunks) {
+        throw new Error(`Cannot add more video chunks than specified in 'fastStart' (${__privateGet(this, _options).fastStart.expectedVideoChunks}).`);
+      }
+      let videoSample = __privateMethod(this, _createSampleForTrack, createSampleForTrack_fn).call(this, __privateGet(this, _videoTrack), data, type, timestamp, duration, meta, compositionTimeOffset);
+      if (__privateGet(this, _options).fastStart === "fragmented" && __privateGet(this, _audioTrack)) {
+        while (__privateGet(this, _audioSampleQueue).length > 0 && __privateGet(this, _audioSampleQueue)[0].decodeTimestamp <= videoSample.decodeTimestamp) {
+          let audioSample = __privateGet(this, _audioSampleQueue).shift();
+          __privateMethod(this, _addSampleToTrack, addSampleToTrack_fn).call(this, __privateGet(this, _audioTrack), audioSample);
+        }
+        if (videoSample.decodeTimestamp <= __privateGet(this, _audioTrack).lastDecodeTimestamp) {
+          __privateMethod(this, _addSampleToTrack, addSampleToTrack_fn).call(this, __privateGet(this, _videoTrack), videoSample);
+        } else {
+          __privateGet(this, _videoSampleQueue).push(videoSample);
+        }
+      } else {
+        __privateMethod(this, _addSampleToTrack, addSampleToTrack_fn).call(this, __privateGet(this, _videoTrack), videoSample);
+      }
+    }
+    addAudioChunk(sample, meta, timestamp) {
+      if (!(sample instanceof EncodedAudioChunk)) {
+        throw new TypeError("addAudioChunk's first argument (sample) must be of type EncodedAudioChunk.");
+      }
+      if (meta && typeof meta !== "object") {
+        throw new TypeError("addAudioChunk's second argument (meta), when provided, must be an object.");
+      }
+      if (timestamp !== void 0 && (!Number.isFinite(timestamp) || timestamp < 0)) {
+        throw new TypeError(
+          "addAudioChunk's third argument (timestamp), when provided, must be a non-negative real number."
+        );
+      }
+      let data = new Uint8Array(sample.byteLength);
+      sample.copyTo(data);
+      this.addAudioChunkRaw(data, sample.type, timestamp ?? sample.timestamp, sample.duration, meta);
+    }
+    addAudioChunkRaw(data, type, timestamp, duration, meta) {
+      if (!(data instanceof Uint8Array)) {
+        throw new TypeError("addAudioChunkRaw's first argument (data) must be an instance of Uint8Array.");
+      }
+      if (type !== "key" && type !== "delta") {
+        throw new TypeError("addAudioChunkRaw's second argument (type) must be either 'key' or 'delta'.");
+      }
+      if (!Number.isFinite(timestamp) || timestamp < 0) {
+        throw new TypeError("addAudioChunkRaw's third argument (timestamp) must be a non-negative real number.");
+      }
+      if (!Number.isFinite(duration) || duration < 0) {
+        throw new TypeError("addAudioChunkRaw's fourth argument (duration) must be a non-negative real number.");
+      }
+      if (meta && typeof meta !== "object") {
+        throw new TypeError("addAudioChunkRaw's fifth argument (meta), when provided, must be an object.");
+      }
+      __privateMethod(this, _ensureNotFinalized, ensureNotFinalized_fn).call(this);
+      if (!__privateGet(this, _options).audio)
+        throw new Error("No audio track declared.");
+      if (typeof __privateGet(this, _options).fastStart === "object" && __privateGet(this, _audioTrack).samples.length === __privateGet(this, _options).fastStart.expectedAudioChunks) {
+        throw new Error(`Cannot add more audio chunks than specified in 'fastStart' (${__privateGet(this, _options).fastStart.expectedAudioChunks}).`);
+      }
+      let audioSample = __privateMethod(this, _createSampleForTrack, createSampleForTrack_fn).call(this, __privateGet(this, _audioTrack), data, type, timestamp, duration, meta);
+      if (__privateGet(this, _options).fastStart === "fragmented" && __privateGet(this, _videoTrack)) {
+        while (__privateGet(this, _videoSampleQueue).length > 0 && __privateGet(this, _videoSampleQueue)[0].decodeTimestamp <= audioSample.decodeTimestamp) {
+          let videoSample = __privateGet(this, _videoSampleQueue).shift();
+          __privateMethod(this, _addSampleToTrack, addSampleToTrack_fn).call(this, __privateGet(this, _videoTrack), videoSample);
+        }
+        if (audioSample.decodeTimestamp <= __privateGet(this, _videoTrack).lastDecodeTimestamp) {
+          __privateMethod(this, _addSampleToTrack, addSampleToTrack_fn).call(this, __privateGet(this, _audioTrack), audioSample);
+        } else {
+          __privateGet(this, _audioSampleQueue).push(audioSample);
+        }
+      } else {
+        __privateMethod(this, _addSampleToTrack, addSampleToTrack_fn).call(this, __privateGet(this, _audioTrack), audioSample);
+      }
+    }
+    /** Finalizes the file, making it ready for use. Must be called after all video and audio chunks have been added. */
+    finalize() {
+      if (__privateGet(this, _finalized)) {
+        throw new Error("Cannot finalize a muxer more than once.");
+      }
+      if (__privateGet(this, _options).fastStart === "fragmented") {
+        for (let videoSample of __privateGet(this, _videoSampleQueue))
+          __privateMethod(this, _addSampleToTrack, addSampleToTrack_fn).call(this, __privateGet(this, _videoTrack), videoSample);
+        for (let audioSample of __privateGet(this, _audioSampleQueue))
+          __privateMethod(this, _addSampleToTrack, addSampleToTrack_fn).call(this, __privateGet(this, _audioTrack), audioSample);
+        __privateMethod(this, _finalizeFragment, finalizeFragment_fn).call(this, false);
+      } else {
+        if (__privateGet(this, _videoTrack))
+          __privateMethod(this, _finalizeCurrentChunk, finalizeCurrentChunk_fn).call(this, __privateGet(this, _videoTrack));
+        if (__privateGet(this, _audioTrack))
+          __privateMethod(this, _finalizeCurrentChunk, finalizeCurrentChunk_fn).call(this, __privateGet(this, _audioTrack));
+      }
+      let tracks = [__privateGet(this, _videoTrack), __privateGet(this, _audioTrack)].filter(Boolean);
+      if (__privateGet(this, _options).fastStart === "in-memory") {
+        let mdatSize;
+        for (let i = 0; i < 2; i++) {
+          let movieBox2 = moov(tracks, __privateGet(this, _creationTime));
+          let movieBoxSize = __privateGet(this, _writer).measureBox(movieBox2);
+          mdatSize = __privateGet(this, _writer).measureBox(__privateGet(this, _mdat));
+          let currentChunkPos = __privateGet(this, _writer).pos + movieBoxSize + mdatSize;
+          for (let chunk of __privateGet(this, _finalizedChunks)) {
+            chunk.offset = currentChunkPos;
+            for (let { data } of chunk.samples) {
+              currentChunkPos += data.byteLength;
+              mdatSize += data.byteLength;
+            }
+          }
+          if (currentChunkPos < 2 ** 32)
+            break;
+          if (mdatSize >= 2 ** 32)
+            __privateGet(this, _mdat).largeSize = true;
+        }
+        let movieBox = moov(tracks, __privateGet(this, _creationTime));
+        __privateGet(this, _writer).writeBox(movieBox);
+        __privateGet(this, _mdat).size = mdatSize;
+        __privateGet(this, _writer).writeBox(__privateGet(this, _mdat));
+        for (let chunk of __privateGet(this, _finalizedChunks)) {
+          for (let sample of chunk.samples) {
+            __privateGet(this, _writer).write(sample.data);
+            sample.data = null;
+          }
+        }
+      } else if (__privateGet(this, _options).fastStart === "fragmented") {
+        let startPos = __privateGet(this, _writer).pos;
+        let mfraBox = mfra(tracks);
+        __privateGet(this, _writer).writeBox(mfraBox);
+        let mfraBoxSize = __privateGet(this, _writer).pos - startPos;
+        __privateGet(this, _writer).seek(__privateGet(this, _writer).pos - 4);
+        __privateGet(this, _writer).writeU32(mfraBoxSize);
+      } else {
+        let mdatPos = __privateGet(this, _writer).offsets.get(__privateGet(this, _mdat));
+        let mdatSize = __privateGet(this, _writer).pos - mdatPos;
+        __privateGet(this, _mdat).size = mdatSize;
+        __privateGet(this, _mdat).largeSize = mdatSize >= 2 ** 32;
+        __privateGet(this, _writer).patchBox(__privateGet(this, _mdat));
+        let movieBox = moov(tracks, __privateGet(this, _creationTime));
+        if (typeof __privateGet(this, _options).fastStart === "object") {
+          __privateGet(this, _writer).seek(__privateGet(this, _ftypSize));
+          __privateGet(this, _writer).writeBox(movieBox);
+          let remainingBytes = mdatPos - __privateGet(this, _writer).pos;
+          __privateGet(this, _writer).writeBox(free(remainingBytes));
+        } else {
+          __privateGet(this, _writer).writeBox(movieBox);
+        }
+      }
+      __privateMethod(this, _maybeFlushStreamingTargetWriter, maybeFlushStreamingTargetWriter_fn).call(this);
+      __privateGet(this, _writer).finalize();
+      __privateSet(this, _finalized, true);
+    }
+  };
+  _options = new WeakMap();
+  _writer = new WeakMap();
+  _ftypSize = new WeakMap();
+  _mdat = new WeakMap();
+  _videoTrack = new WeakMap();
+  _audioTrack = new WeakMap();
+  _creationTime = new WeakMap();
+  _finalizedChunks = new WeakMap();
+  _nextFragmentNumber = new WeakMap();
+  _videoSampleQueue = new WeakMap();
+  _audioSampleQueue = new WeakMap();
+  _finalized = new WeakMap();
+  _validateOptions = new WeakSet();
+  validateOptions_fn = function(options) {
+    if (typeof options !== "object") {
+      throw new TypeError("The muxer requires an options object to be passed to its constructor.");
+    }
+    if (!(options.target instanceof Target)) {
+      throw new TypeError("The target must be provided and an instance of Target.");
+    }
+    if (options.video) {
+      if (!SUPPORTED_VIDEO_CODECS.includes(options.video.codec)) {
+        throw new TypeError(`Unsupported video codec: ${options.video.codec}`);
+      }
+      if (!Number.isInteger(options.video.width) || options.video.width <= 0) {
+        throw new TypeError(`Invalid video width: ${options.video.width}. Must be a positive integer.`);
+      }
+      if (!Number.isInteger(options.video.height) || options.video.height <= 0) {
+        throw new TypeError(`Invalid video height: ${options.video.height}. Must be a positive integer.`);
+      }
+      const videoRotation = options.video.rotation;
+      if (typeof videoRotation === "number" && ![0, 90, 180, 270].includes(videoRotation)) {
+        throw new TypeError(`Invalid video rotation: ${videoRotation}. Has to be 0, 90, 180 or 270.`);
+      } else if (Array.isArray(videoRotation) && (videoRotation.length !== 9 || videoRotation.some((value) => typeof value !== "number"))) {
+        throw new TypeError(`Invalid video transformation matrix: ${videoRotation.join()}`);
+      }
+      if (options.video.frameRate !== void 0 && (!Number.isInteger(options.video.frameRate) || options.video.frameRate <= 0)) {
+        throw new TypeError(
+          `Invalid video frame rate: ${options.video.frameRate}. Must be a positive integer.`
+        );
+      }
+    }
+    if (options.audio) {
+      if (!SUPPORTED_AUDIO_CODECS.includes(options.audio.codec)) {
+        throw new TypeError(`Unsupported audio codec: ${options.audio.codec}`);
+      }
+      if (!Number.isInteger(options.audio.numberOfChannels) || options.audio.numberOfChannels <= 0) {
+        throw new TypeError(
+          `Invalid number of audio channels: ${options.audio.numberOfChannels}. Must be a positive integer.`
+        );
+      }
+      if (!Number.isInteger(options.audio.sampleRate) || options.audio.sampleRate <= 0) {
+        throw new TypeError(
+          `Invalid audio sample rate: ${options.audio.sampleRate}. Must be a positive integer.`
+        );
+      }
+    }
+    if (options.firstTimestampBehavior && !FIRST_TIMESTAMP_BEHAVIORS.includes(options.firstTimestampBehavior)) {
+      throw new TypeError(`Invalid first timestamp behavior: ${options.firstTimestampBehavior}`);
+    }
+    if (typeof options.fastStart === "object") {
+      if (options.video) {
+        if (options.fastStart.expectedVideoChunks === void 0) {
+          throw new TypeError(`'fastStart' is an object but is missing property 'expectedVideoChunks'.`);
+        } else if (!Number.isInteger(options.fastStart.expectedVideoChunks) || options.fastStart.expectedVideoChunks < 0) {
+          throw new TypeError(`'expectedVideoChunks' must be a non-negative integer.`);
+        }
+      }
+      if (options.audio) {
+        if (options.fastStart.expectedAudioChunks === void 0) {
+          throw new TypeError(`'fastStart' is an object but is missing property 'expectedAudioChunks'.`);
+        } else if (!Number.isInteger(options.fastStart.expectedAudioChunks) || options.fastStart.expectedAudioChunks < 0) {
+          throw new TypeError(`'expectedAudioChunks' must be a non-negative integer.`);
+        }
+      }
+    } else if (![false, "in-memory", "fragmented"].includes(options.fastStart)) {
+      throw new TypeError(`'fastStart' option must be false, 'in-memory', 'fragmented' or an object.`);
+    }
+  };
+  _writeHeader = new WeakSet();
+  writeHeader_fn = function() {
+    __privateGet(this, _writer).writeBox(ftyp({
+      holdsAvc: __privateGet(this, _options).video?.codec === "avc",
+      fragmented: __privateGet(this, _options).fastStart === "fragmented"
+    }));
+    __privateSet(this, _ftypSize, __privateGet(this, _writer).pos);
+    if (__privateGet(this, _options).fastStart === "in-memory") {
+      __privateSet(this, _mdat, mdat(false));
+    } else if (__privateGet(this, _options).fastStart === "fragmented") {
+    } else {
+      if (typeof __privateGet(this, _options).fastStart === "object") {
+        let moovSizeUpperBound = __privateMethod(this, _computeMoovSizeUpperBound, computeMoovSizeUpperBound_fn).call(this);
+        __privateGet(this, _writer).seek(__privateGet(this, _writer).pos + moovSizeUpperBound);
+      }
+      __privateSet(this, _mdat, mdat(true));
+      __privateGet(this, _writer).writeBox(__privateGet(this, _mdat));
+    }
+    __privateMethod(this, _maybeFlushStreamingTargetWriter, maybeFlushStreamingTargetWriter_fn).call(this);
+  };
+  _computeMoovSizeUpperBound = new WeakSet();
+  computeMoovSizeUpperBound_fn = function() {
+    if (typeof __privateGet(this, _options).fastStart !== "object")
+      return;
+    let upperBound = 0;
+    let sampleCounts = [
+      __privateGet(this, _options).fastStart.expectedVideoChunks,
+      __privateGet(this, _options).fastStart.expectedAudioChunks
+    ];
+    for (let n of sampleCounts) {
+      if (!n)
+        continue;
+      upperBound += (4 + 4) * Math.ceil(2 / 3 * n);
+      upperBound += 4 * n;
+      upperBound += (4 + 4 + 4) * Math.ceil(2 / 3 * n);
+      upperBound += 4 * n;
+      upperBound += 8 * n;
+    }
+    upperBound += 4096;
+    return upperBound;
+  };
+  _prepareTracks = new WeakSet();
+  prepareTracks_fn = function() {
+    if (__privateGet(this, _options).video) {
+      __privateSet(this, _videoTrack, {
+        id: 1,
+        info: {
+          type: "video",
+          codec: __privateGet(this, _options).video.codec,
+          width: __privateGet(this, _options).video.width,
+          height: __privateGet(this, _options).video.height,
+          rotation: __privateGet(this, _options).video.rotation ?? 0,
+          decoderConfig: null
+        },
+        // The fallback contains many common frame rates as factors
+        timescale: __privateGet(this, _options).video.frameRate ?? 57600,
+        samples: [],
+        finalizedChunks: [],
+        currentChunk: null,
+        firstDecodeTimestamp: void 0,
+        lastDecodeTimestamp: -1,
+        timeToSampleTable: [],
+        compositionTimeOffsetTable: [],
+        lastTimescaleUnits: null,
+        lastSample: null,
+        compactlyCodedChunkTable: []
+      });
+    }
+    if (__privateGet(this, _options).audio) {
+      __privateSet(this, _audioTrack, {
+        id: __privateGet(this, _options).video ? 2 : 1,
+        info: {
+          type: "audio",
+          codec: __privateGet(this, _options).audio.codec,
+          numberOfChannels: __privateGet(this, _options).audio.numberOfChannels,
+          sampleRate: __privateGet(this, _options).audio.sampleRate,
+          decoderConfig: null
+        },
+        timescale: __privateGet(this, _options).audio.sampleRate,
+        samples: [],
+        finalizedChunks: [],
+        currentChunk: null,
+        firstDecodeTimestamp: void 0,
+        lastDecodeTimestamp: -1,
+        timeToSampleTable: [],
+        compositionTimeOffsetTable: [],
+        lastTimescaleUnits: null,
+        lastSample: null,
+        compactlyCodedChunkTable: []
+      });
+      if (__privateGet(this, _options).audio.codec === "aac") {
+        let guessedCodecPrivate = __privateMethod(this, _generateMpeg4AudioSpecificConfig, generateMpeg4AudioSpecificConfig_fn).call(
+          this,
+          2,
+          // Object type for AAC-LC, since it's the most common
+          __privateGet(this, _options).audio.sampleRate,
+          __privateGet(this, _options).audio.numberOfChannels
+        );
+        __privateGet(this, _audioTrack).info.decoderConfig = {
+          codec: __privateGet(this, _options).audio.codec,
+          description: guessedCodecPrivate,
+          numberOfChannels: __privateGet(this, _options).audio.numberOfChannels,
+          sampleRate: __privateGet(this, _options).audio.sampleRate
+        };
+      }
+    }
+  };
+  _generateMpeg4AudioSpecificConfig = new WeakSet();
+  generateMpeg4AudioSpecificConfig_fn = function(objectType, sampleRate, numberOfChannels) {
+    let frequencyIndices = [96e3, 88200, 64e3, 48e3, 44100, 32e3, 24e3, 22050, 16e3, 12e3, 11025, 8e3, 7350];
+    let frequencyIndex = frequencyIndices.indexOf(sampleRate);
+    let channelConfig = numberOfChannels;
+    let configBits = "";
+    configBits += objectType.toString(2).padStart(5, "0");
+    configBits += frequencyIndex.toString(2).padStart(4, "0");
+    if (frequencyIndex === 15)
+      configBits += sampleRate.toString(2).padStart(24, "0");
+    configBits += channelConfig.toString(2).padStart(4, "0");
+    let paddingLength = Math.ceil(configBits.length / 8) * 8;
+    configBits = configBits.padEnd(paddingLength, "0");
+    let configBytes = new Uint8Array(configBits.length / 8);
+    for (let i = 0; i < configBits.length; i += 8) {
+      configBytes[i / 8] = parseInt(configBits.slice(i, i + 8), 2);
+    }
+    return configBytes;
+  };
+  _createSampleForTrack = new WeakSet();
+  createSampleForTrack_fn = function(track, data, type, timestamp, duration, meta, compositionTimeOffset) {
+    let presentationTimestampInSeconds = timestamp / 1e6;
+    let decodeTimestampInSeconds = (timestamp - (compositionTimeOffset ?? 0)) / 1e6;
+    let durationInSeconds = duration / 1e6;
+    let adjusted = __privateMethod(this, _validateTimestamp, validateTimestamp_fn).call(this, presentationTimestampInSeconds, decodeTimestampInSeconds, track);
+    presentationTimestampInSeconds = adjusted.presentationTimestamp;
+    decodeTimestampInSeconds = adjusted.decodeTimestamp;
+    if (meta?.decoderConfig) {
+      if (track.info.decoderConfig === null) {
+        track.info.decoderConfig = meta.decoderConfig;
+      } else {
+        Object.assign(track.info.decoderConfig, meta.decoderConfig);
+      }
+    }
+    let sample = {
+      presentationTimestamp: presentationTimestampInSeconds,
+      decodeTimestamp: decodeTimestampInSeconds,
+      duration: durationInSeconds,
+      data,
+      size: data.byteLength,
+      type,
+      // Will be refined once the next sample comes in
+      timescaleUnitsToNextSample: intoTimescale(durationInSeconds, track.timescale)
+    };
+    return sample;
+  };
+  _addSampleToTrack = new WeakSet();
+  addSampleToTrack_fn = function(track, sample) {
+    if (__privateGet(this, _options).fastStart !== "fragmented") {
+      track.samples.push(sample);
+    }
+    const sampleCompositionTimeOffset = intoTimescale(sample.presentationTimestamp - sample.decodeTimestamp, track.timescale);
+    if (track.lastTimescaleUnits !== null) {
+      let timescaleUnits = intoTimescale(sample.decodeTimestamp, track.timescale, false);
+      let delta = Math.round(timescaleUnits - track.lastTimescaleUnits);
+      track.lastTimescaleUnits += delta;
+      track.lastSample.timescaleUnitsToNextSample = delta;
+      if (__privateGet(this, _options).fastStart !== "fragmented") {
+        let lastTableEntry = last(track.timeToSampleTable);
+        if (lastTableEntry.sampleCount === 1) {
+          lastTableEntry.sampleDelta = delta;
+          lastTableEntry.sampleCount++;
+        } else if (lastTableEntry.sampleDelta === delta) {
+          lastTableEntry.sampleCount++;
+        } else {
+          lastTableEntry.sampleCount--;
+          track.timeToSampleTable.push({
+            sampleCount: 2,
+            sampleDelta: delta
+          });
+        }
+        const lastCompositionTimeOffsetTableEntry = last(track.compositionTimeOffsetTable);
+        if (lastCompositionTimeOffsetTableEntry.sampleCompositionTimeOffset === sampleCompositionTimeOffset) {
+          lastCompositionTimeOffsetTableEntry.sampleCount++;
+        } else {
+          track.compositionTimeOffsetTable.push({
+            sampleCount: 1,
+            sampleCompositionTimeOffset
+          });
+        }
+      }
+    } else {
+      track.lastTimescaleUnits = 0;
+      if (__privateGet(this, _options).fastStart !== "fragmented") {
+        track.timeToSampleTable.push({
+          sampleCount: 1,
+          sampleDelta: intoTimescale(sample.duration, track.timescale)
+        });
+        track.compositionTimeOffsetTable.push({
+          sampleCount: 1,
+          sampleCompositionTimeOffset
+        });
+      }
+    }
+    track.lastSample = sample;
+    let beginNewChunk = false;
+    if (!track.currentChunk) {
+      beginNewChunk = true;
+    } else {
+      let currentChunkDuration = sample.presentationTimestamp - track.currentChunk.startTimestamp;
+      if (__privateGet(this, _options).fastStart === "fragmented") {
+        let mostImportantTrack = __privateGet(this, _videoTrack) ?? __privateGet(this, _audioTrack);
+        if (track === mostImportantTrack && sample.type === "key" && currentChunkDuration >= 1) {
+          beginNewChunk = true;
+          __privateMethod(this, _finalizeFragment, finalizeFragment_fn).call(this);
+        }
+      } else {
+        beginNewChunk = currentChunkDuration >= 0.5;
+      }
+    }
+    if (beginNewChunk) {
+      if (track.currentChunk) {
+        __privateMethod(this, _finalizeCurrentChunk, finalizeCurrentChunk_fn).call(this, track);
+      }
+      track.currentChunk = {
+        startTimestamp: sample.presentationTimestamp,
+        samples: []
+      };
+    }
+    track.currentChunk.samples.push(sample);
+  };
+  _validateTimestamp = new WeakSet();
+  validateTimestamp_fn = function(presentationTimestamp, decodeTimestamp, track) {
+    const strictTimestampBehavior = __privateGet(this, _options).firstTimestampBehavior === "strict";
+    const noLastDecodeTimestamp = track.lastDecodeTimestamp === -1;
+    const timestampNonZero = decodeTimestamp !== 0;
+    if (strictTimestampBehavior && noLastDecodeTimestamp && timestampNonZero) {
+      throw new Error(
+        `The first chunk for your media track must have a timestamp of 0 (received DTS=${decodeTimestamp}).Non-zero first timestamps are often caused by directly piping frames or audio data from a MediaStreamTrack into the encoder. Their timestamps are typically relative to the age of thedocument, which is probably what you want.
+
+If you want to offset all timestamps of a track such that the first one is zero, set firstTimestampBehavior: 'offset' in the options.
+`
+      );
+    } else if (__privateGet(this, _options).firstTimestampBehavior === "offset" || __privateGet(this, _options).firstTimestampBehavior === "cross-track-offset") {
+      if (track.firstDecodeTimestamp === void 0) {
+        track.firstDecodeTimestamp = decodeTimestamp;
+      }
+      let baseDecodeTimestamp;
+      if (__privateGet(this, _options).firstTimestampBehavior === "offset") {
+        baseDecodeTimestamp = track.firstDecodeTimestamp;
+      } else {
+        baseDecodeTimestamp = Math.min(
+          __privateGet(this, _videoTrack)?.firstDecodeTimestamp ?? Infinity,
+          __privateGet(this, _audioTrack)?.firstDecodeTimestamp ?? Infinity
+        );
+      }
+      decodeTimestamp -= baseDecodeTimestamp;
+      presentationTimestamp -= baseDecodeTimestamp;
+    }
+    if (decodeTimestamp < track.lastDecodeTimestamp) {
+      throw new Error(
+        `Timestamps must be monotonically increasing (DTS went from ${track.lastDecodeTimestamp * 1e6} to ${decodeTimestamp * 1e6}).`
+      );
+    }
+    track.lastDecodeTimestamp = decodeTimestamp;
+    return { presentationTimestamp, decodeTimestamp };
+  };
+  _finalizeCurrentChunk = new WeakSet();
+  finalizeCurrentChunk_fn = function(track) {
+    if (__privateGet(this, _options).fastStart === "fragmented") {
+      throw new Error("Can't finalize individual chunks if 'fastStart' is set to 'fragmented'.");
+    }
+    if (!track.currentChunk)
+      return;
+    track.finalizedChunks.push(track.currentChunk);
+    __privateGet(this, _finalizedChunks).push(track.currentChunk);
+    if (track.compactlyCodedChunkTable.length === 0 || last(track.compactlyCodedChunkTable).samplesPerChunk !== track.currentChunk.samples.length) {
+      track.compactlyCodedChunkTable.push({
+        firstChunk: track.finalizedChunks.length,
+        // 1-indexed
+        samplesPerChunk: track.currentChunk.samples.length
+      });
+    }
+    if (__privateGet(this, _options).fastStart === "in-memory") {
+      track.currentChunk.offset = 0;
+      return;
+    }
+    track.currentChunk.offset = __privateGet(this, _writer).pos;
+    for (let sample of track.currentChunk.samples) {
+      __privateGet(this, _writer).write(sample.data);
+      sample.data = null;
+    }
+    __privateMethod(this, _maybeFlushStreamingTargetWriter, maybeFlushStreamingTargetWriter_fn).call(this);
+  };
+  _finalizeFragment = new WeakSet();
+  finalizeFragment_fn = function(flushStreamingWriter = true) {
+    if (__privateGet(this, _options).fastStart !== "fragmented") {
+      throw new Error("Can't finalize a fragment unless 'fastStart' is set to 'fragmented'.");
+    }
+    let tracks = [__privateGet(this, _videoTrack), __privateGet(this, _audioTrack)].filter((track) => track && track.currentChunk);
+    if (tracks.length === 0)
+      return;
+    let fragmentNumber = __privateWrapper(this, _nextFragmentNumber)._++;
+    if (fragmentNumber === 1) {
+      let movieBox = moov(tracks, __privateGet(this, _creationTime), true);
+      __privateGet(this, _writer).writeBox(movieBox);
+    }
+    let moofOffset = __privateGet(this, _writer).pos;
+    let moofBox = moof(fragmentNumber, tracks);
+    __privateGet(this, _writer).writeBox(moofBox);
+    {
+      let mdatBox = mdat(false);
+      let totalTrackSampleSize = 0;
+      for (let track of tracks) {
+        for (let sample of track.currentChunk.samples) {
+          totalTrackSampleSize += sample.size;
+        }
+      }
+      let mdatSize = __privateGet(this, _writer).measureBox(mdatBox) + totalTrackSampleSize;
+      if (mdatSize >= 2 ** 32) {
+        mdatBox.largeSize = true;
+        mdatSize = __privateGet(this, _writer).measureBox(mdatBox) + totalTrackSampleSize;
+      }
+      mdatBox.size = mdatSize;
+      __privateGet(this, _writer).writeBox(mdatBox);
+    }
+    for (let track of tracks) {
+      track.currentChunk.offset = __privateGet(this, _writer).pos;
+      track.currentChunk.moofOffset = moofOffset;
+      for (let sample of track.currentChunk.samples) {
+        __privateGet(this, _writer).write(sample.data);
+        sample.data = null;
+      }
+    }
+    let endPos = __privateGet(this, _writer).pos;
+    __privateGet(this, _writer).seek(__privateGet(this, _writer).offsets.get(moofBox));
+    let newMoofBox = moof(fragmentNumber, tracks);
+    __privateGet(this, _writer).writeBox(newMoofBox);
+    __privateGet(this, _writer).seek(endPos);
+    for (let track of tracks) {
+      track.finalizedChunks.push(track.currentChunk);
+      __privateGet(this, _finalizedChunks).push(track.currentChunk);
+      track.currentChunk = null;
+    }
+    if (flushStreamingWriter) {
+      __privateMethod(this, _maybeFlushStreamingTargetWriter, maybeFlushStreamingTargetWriter_fn).call(this);
+    }
+  };
+  _maybeFlushStreamingTargetWriter = new WeakSet();
+  maybeFlushStreamingTargetWriter_fn = function() {
+    if (__privateGet(this, _writer) instanceof StreamTargetWriter) {
+      __privateGet(this, _writer).flush();
+    }
+  };
+  _ensureNotFinalized = new WeakSet();
+  ensureNotFinalized_fn = function() {
+    if (__privateGet(this, _finalized)) {
+      throw new Error("Cannot add new video or audio chunks after the file has been finalized.");
+    }
+  };
+  return __toCommonJS(src_exports);
+})();
+if (typeof module === "object" && typeof module.exports === "object") Object.assign(module.exports, Mp4Muxer)
+</script>
+<script>
+const SHOM_BREST = [
+  ["2026-11-06T01:38:00Z","PM",6.33,71],
+  ["2026-11-06T07:53:00Z","BM",1.92,null],
+  ["2026-11-06T13:58:00Z","PM",6.57,75],
+  ["2026-11-06T20:21:00Z","BM",1.69,null],
+  ["2026-11-07T02:21:00Z","PM",6.60,78],
+  ["2026-11-07T08:38:00Z","BM",1.69,null],
+  ["2026-11-07T14:40:00Z","PM",6.73,81],
+  ["2026-11-07T21:02:00Z","BM",1.57,null],
+  ["2026-11-08T03:00:00Z","PM",6.77,83],
+  ["2026-11-08T09:19:00Z","BM",1.57,null],
+  ["2026-11-08T15:18:00Z","PM",6.79,84],
+  ["2026-11-08T21:40:00Z","BM",1.55,null],
+  ["2026-11-09T03:36:00Z","PM",6.86,84],
+  ["2026-11-09T09:56:00Z","BM",1.54,null],
+  ["2026-11-09T15:52:00Z","PM",6.78,84],
+  ["2026-11-09T22:14:00Z","BM",1.60,null],
+  ["2026-11-10T04:09:00Z","PM",6.86,83],
+  ["2026-11-10T10:31:00Z","BM",1.60,null],
+  ["2026-11-10T16:25:00Z","PM",6.69,82],
+  ["2026-11-10T22:47:00Z","BM",1.72,null],
+  ["2026-11-11T04:41:00Z","PM",6.78,80],
+  ["2026-11-11T11:05:00Z","BM",1.71,null],
+  ["2026-11-11T16:58:00Z","PM",6.53,77],
+  ["2026-11-11T23:20:00Z","BM",1.90,null],
+  ["2026-11-12T05:14:00Z","PM",6.63,74],
+  ["2026-11-12T11:40:00Z","BM",1.89,null],
+  ["2026-11-12T17:30:00Z","PM",6.32,71],
+  ["2026-11-12T23:53:00Z","BM",2.13,null],
+  ["2026-11-13T05:47:00Z","PM",6.41,67],
+  ["2026-11-13T12:15:00Z","BM",2.13,null],
+  ["2026-11-13T18:03:00Z","PM",6.05,63],
+  ["2026-11-14T00:27:00Z","BM",2.39,null],
+  ["2026-11-14T06:22:00Z","PM",6.14,58],
+  ["2026-11-14T12:52:00Z","BM",2.39,null],
+  ["2026-11-14T18:40:00Z","PM",5.77,54],
+  ["2026-11-15T01:04:00Z","BM",2.67,null],
+  ["2026-11-15T07:01:00Z","PM",5.85,49],
+  ["2026-11-15T13:33:00Z","BM",2.65,null],
+  ["2026-11-15T19:23:00Z","PM",5.48,45],
+  ["2026-11-16T01:47:00Z","BM",2.93,null],
+  ["2026-11-16T07:50:00Z","PM",5.58,41],
+  ["2026-11-16T14:21:00Z","BM",2.87,null],
+  ["2026-11-16T20:18:00Z","PM",5.25,38],
+  ["2026-11-17T02:42:00Z","BM",3.12,null],
+  ["2026-11-17T08:53:00Z","PM",5.39,35],
+  ["2026-11-17T15:22:00Z","BM",3.00,null],
+  ["2026-11-17T21:30:00Z","PM",5.14,34],
+  ["2026-11-18T03:51:00Z","BM",3.19,null],
+  ["2026-11-18T10:09:00Z","PM",5.37,35],
+  ["2026-11-18T16:33:00Z","BM",2.96,null],
+  ["2026-11-18T22:48:00Z","PM",5.24,37],
+  ["2026-11-19T05:07:00Z","BM",3.05,null],
+  ["2026-11-19T11:19:00Z","PM",5.54,41],
+  ["2026-11-19T17:42:00Z","BM",2.74,null],
+  ["2026-11-19T23:54:00Z","PM",5.53,46],
+  ["2026-11-20T06:13:00Z","BM",2.75,null],
+  ["2026-11-20T12:19:00Z","PM",5.86,51],
+  ["2026-11-20T18:40:00Z","BM",2.40,null],
+  ["2026-11-21T00:49:00Z","PM",5.91,57],
+  ["2026-11-21T07:08:00Z","BM",2.35,null],
+  ["2026-11-21T13:12:00Z","PM",6.23,64],
+  ["2026-11-21T19:32:00Z","BM",2.02,null],
+  ["2026-11-22T01:37:00Z","PM",6.32,70],
+  ["2026-11-22T07:57:00Z","BM",1.95,null],
+  ["2026-11-22T14:00:00Z","PM",6.60,76],
+  ["2026-11-22T20:19:00Z","BM",1.67,null],
+  ["2026-11-23T02:23:00Z","PM",6.71,81],
+  ["2026-11-23T08:44:00Z","BM",1.58,null],
+  ["2026-11-23T14:46:00Z","PM",6.91,86],
+  ["2026-11-23T21:05:00Z","BM",1.40,null]
+];const OSM_POLY = [[[-4.23847,48.2906],[-4.23823,48.29065],[-4.23957,48.2916],[-4.24066,48.29157],[-4.24086,48.29149],[-4.24118,48.29158],[-4.24118,48.29167],[-4.24094,48.29187],[-4.2611,48.29344],[-4.26093,48.29331],[-4.26096,48.29317],[-4.26131,48.29282],[-4.26238,48.29233],[-4.26365,48.29215],[-4.26448,48.29225],[-4.26482,48.2921],[-4.26534,48.29122],[-4.26532,48.29078],[-4.26503,48.29053],[-4.26469,48.29047],[-4.26447,48.29012],[-4.26447,48.28948],[-4.26418,48.28904],[-4.26405,48.28851],[-4.26415,48.2881],[-4.26464,48.28779],[-4.2648,48.28748],[-4.2651,48.28653],[-4.2653,48.28524],[-4.26558,48.28467],[-4.26614,48.28433],[-4.26712,48.28401],[-4.26795,48.28393],[-4.26864,48.28413],[-4.26946,48.28449],[-4.27081,48.28531],[-4.27143,48.28582],[-4.27227,48.28674],[-4.27263,48.28747],[-4.27279,48.28808],[-4.27305,48.28844],[-4.27298,48.28875],[-4.27315,48.28887],[-4.27366,48.28891],[-4.27454,48.28926],[-4.27499,48.28929],[-4.27556,48.28949],[-4.27613,48.2896],[-4.27663,48.28998],[-4.27689,48.29003],[-4.27753,48.2899],[-4.2804,48.28969],[-4.2814,48.28951],[-4.28289,48.28869],[-4.28337,48.28866],[-4.28355,48.2886],[-4.28362,48.28841],[-4.28371,48.28837],[-4.28409,48.28838],[-4.28448,48.28824],[-4.28443,48.28792],[-4.2848,48.2875],[-4.28498,48.2867],[-4.28535,48.28592],[-4.28543,48.28556],[-4.28579,48.28497],[-4.28621,48.28345],[-4.28643,48.28302],[-4.28776,48.28215],[-4.28892,48.28156],[-4.2889,48.28145],[-4.2879,48.28141],[-4.28706,48.28104],[-4.286,48.28031],[-4.28504,48.27951],[-4.28444,48.27793],[-4.2847,48.27671],[-4.28424,48.27655],[-4.28446,48.27635],[-4.28595,48.27552],[-4.28656,48.27501],[-4.28698,48.2748],[-4.28758,48.27461],[-4.28779,48.27446],[-4.28836,48.27427],[-4.2887,48.27421],[-4.28907,48.27424],[-4.28904,48.274],[-4.28877,48.27403],[-4.28875,48.27399],[-4.28895,48.27396],[-4.28893,48.27386],[-4.28903,48.27396],[-4.28903,48.27384],[-4.28893,48.27385],[-4.2889,48.27371],[-4.289,48.2737],[-4.28899,48.27333],[-4.28718,48.27335],[-4.28483,48.27434],[-4.28432,48.27474],[-4.28399,48.27476],[-4.28329,48.27506],[-4.28317,48.27517],[-4.28308,48.27512],[-4.28264,48.27524],[-4.28177,48.27531],[-4.28072,48.27499],[-4.27892,48.27393],[-4.27845,48.27349],[-4.27824,48.27257],[-4.27843,48.27211],[-4.27869,48.27175],[-4.2786,48.27169],[-4.27805,48.27199],[-4.27665,48.27208],[-4.27569,48.27194],[-4.27376,48.27145],[-4.27232,48.27097],[-4.27207,48.27098],[-4.2711,48.27061],[-4.27102,48.27026],[-4.27021,48.26988],[-4.27021,48.26971],[-4.26856,48.26906],[-4.26854,48.2688],[-4.26808,48.26889],[-4.26626,48.26825],[-4.26511,48.26794],[-4.26426,48.26783],[-4.26368,48.26783],[-4.26328,48.26766],[-4.26096,48.26711],[-4.26003,48.26667],[-4.25927,48.26585],[-4.25813,48.26527],[-4.25666,48.26404],[-4.25556,48.2634],[-4.25531,48.26317],[-4.2551,48.26274],[-4.25547,48.26041],[-4.25489,48.25975],[-4.25381,48.25889],[-4.25367,48.25866],[-4.25319,48.25843],[-4.25301,48.25815],[-4.25292,48.25758],[-4.25293,48.25692],[-4.25354,48.25672],[-4.25385,48.25654],[-4.25448,48.25646],[-4.25508,48.25628],[-4.25661,48.25604],[-4.2568,48.25613],[-4.25668,48.25597],[-4.25675,48.25593],[-4.25467,48.25578],[-4.254,48.25586],[-4.25217,48.25584],[-4.25091,48.25552],[-4.25055,48.2555],[-4.24817,48.2548],[-4.24773,48.25477],[-4.24754,48.25467],[-4.24669,48.25446],[-4.24616,48.25427],[-4.24592,48.25411],[-4.24516,48.25389],[-4.24501,48.25372],[-4.24498,48.25325],[-4.24471,48.25292],[-4.24469,48.25237],[-4.24489,48.25225],[-4.24542,48.2521],[-4.24552,48.25201],[-4.24787,48.25117],[-4.24809,48.25106],[-4.2483,48.25083],[-4.2484,48.25055],[-4.24773,48.25073],[-4.2472,48.25074],[-4.2464,48.25086],[-4.24586,48.25089],[-4.2456,48.25083],[-4.24471,48.25081],[-4.2444,48.25058],[-4.24429,48.25034],[-4.24409,48.25016],[-4.2437,48.24918],[-4.24352,48.24901],[-4.24313,48.24892],[-4.24333,48.24932],[-4.24304,48.25013],[-4.24276,48.25034],[-4.24236,48.25052],[-4.24162,48.25075],[-4.24091,48.25088],[-4.23884,48.25092],[-4.23814,48.25102],[-4.23733,48.25085],[-4.23693,48.25053],[-4.23583,48.25027],[-4.23502,48.25016],[-4.23296,48.25018],[-4.23268,48.25025],[-4.23275,48.25035],[-4.23264,48.25037],[-4.23255,48.2503],[-4.2317,48.25046],[-4.22885,48.25125],[-4.22817,48.25153],[-4.22721,48.25224],[-4.2265,48.25296],[-4.22581,48.25331],[-4.22561,48.2535],[-4.22478,48.25494],[-4.22433,48.25538],[-4.2238,48.25561],[-4.22347,48.25594],[-4.22335,48.25619],[-4.22315,48.25624],[-4.22293,48.25679],[-4.22266,48.25704],[-4.22257,48.25722],[-4.22075,48.25824],[-4.22004,48.25853],[-4.21972,48.2586],[-4.21837,48.25863],[-4.21783,48.25845],[-4.21761,48.25824],[-4.2174,48.25817],[-4.21748,48.258],[-4.21725,48.25781],[-4.21688,48.25728],[-4.21659,48.25655],[-4.21689,48.25579],[-4.21683,48.2553],[-4.21635,48.25522],[-4.21587,48.25507],[-4.21573,48.25491],[-4.21566,48.25435],[-4.2154,48.25413],[-4.21493,48.25353],[-4.21483,48.2533],[-4.21411,48.25276],[-4.21406,48.25261],[-4.21482,48.25085],[-4.21481,48.25065],[-4.21453,48.24971],[-4.21428,48.24947],[-4.21384,48.24935],[-4.21371,48.24922],[-4.21382,48.24906],[-4.21445,48.249],[-4.21469,48.24881],[-4.21447,48.24862],[-4.21462,48.24831],[-4.21449,48.24814],[-4.21362,48.24835],[-4.21278,48.24823],[-4.21273,48.2481],[-4.21141,48.24761],[-4.21071,48.24736],[-4.21043,48.24737],[-4.20936,48.24675],[-4.20558,48.246],[-4.205,48.24563],[-4.20401,48.24528],[-4.20367,48.24504],[-4.20339,48.24499],[-4.20312,48.24503],[-4.20294,48.24513],[-4.20217,48.24531],[-4.20144,48.24531],[-4.2013,48.24542],[-4.20132,48.24554],[-4.20009,48.24577],[-4.19977,48.24574],[-4.19879,48.24584],[-4.19632,48.24639],[-4.19421,48.24662],[-4.19373,48.24677],[-4.1935,48.2467],[-4.19297,48.24689],[-4.19193,48.24692],[-4.19174,48.24683],[-4.19142,48.24679],[-4.19132,48.24685],[-4.19057,48.24677],[-4.19021,48.24664],[-4.18968,48.24657],[-4.18946,48.24674],[-4.18843,48.24665],[-4.18806,48.24678],[-4.18744,48.2467],[-4.18613,48.24685],[-4.18517,48.24679],[-4.18401,48.24658],[-4.18371,48.2466],[-4.18257,48.24631],[-4.18147,48.24618],[-4.18103,48.24606],[-4.18056,48.24565],[-4.18063,48.24558],[-4.18055,48.24515],[-4.18067,48.24515],[-4.18066,48.24507],[-4.18044,48.24493],[-4.18044,48.24483],[-4.18039,48.24493],[-4.18021,48.24489],[-4.18003,48.24477],[-4.18015,48.24438],[-4.1805,48.24407],[-4.18061,48.24375],[-4.18013,48.2442],[-4.18001,48.24404],[-4.17982,48.24427],[-4.17965,48.24468],[-4.17987,48.24504],[-4.18025,48.24508],[-4.18033,48.2456],[-4.1793,48.24565],[-4.17897,48.24583],[-4.17861,48.24587],[-4.17547,48.24517],[-4.17523,48.24519],[-4.17494,48.24532],[-4.17416,48.24536],[-4.17329,48.24528],[-4.17183,48.24552],[-4.17066,48.24558],[-4.16938,48.24549],[-4.16839,48.24526],[-4.16611,48.24523],[-4.1645,48.245],[-4.16353,48.24506],[-4.16318,48.245],[-4.16277,48.24505],[-4.16233,48.24498],[-4.16234,48.24493],[-4.16271,48.24494],[-4.16286,48.24486],[-4.16295,48.24457],[-4.16275,48.24489],[-4.16234,48.24485],[-4.16222,48.24494],[-4.16182,48.24505],[-4.16096,48.24507],[-4.1565,48.24463],[-4.15416,48.24463],[-4.15335,48.24458],[-4.15179,48.2442],[-4.15015,48.24334],[-4.14796,48.24189],[-4.14811,48.2418],[-4.1482,48.24163],[-4.14779,48.24181],[-4.14757,48.2418],[-4.14664,48.2411],[-4.14662,48.24096],[-4.14679,48.24093],[-4.14625,48.24055],[-4.14574,48.24026],[-4.1455,48.24021],[-4.14325,48.23884],[-4.14293,48.23875],[-4.14268,48.23839],[-4.14262,48.23817],[-4.14221,48.23764],[-4.14213,48.23768],[-4.14155,48.23745],[-4.14154,48.23739],[-4.14077,48.23702],[-4.1401,48.23695],[-4.13938,48.23656],[-4.13897,48.23644],[-4.13813,48.23632],[-4.13584,48.23627],[-4.13572,48.2361],[-4.13564,48.23551],[-4.13561,48.23594],[-4.13542,48.23622],[-4.1348,48.23654],[-4.133,48.23664],[-4.1309,48.23707],[-4.13047,48.2372],[-4.13046,48.23727],[-4.12969,48.23764],[-4.12873,48.23839],[-4.12778,48.23864],[-4.12756,48.23859],[-4.1279,48.23889],[-4.12708,48.2395],[-4.12692,48.23951],[-4.12698,48.23965],[-4.12668,48.2398],[-4.12643,48.24012],[-4.12627,48.24016],[-4.12625,48.24029],[-4.12605,48.24048],[-4.12587,48.24082],[-4.12574,48.24082],[-4.12575,48.24102],[-4.12532,48.24164],[-4.12521,48.2416],[-4.12526,48.24181],[-4.12496,48.2418],[-4.12515,48.24191],[-4.12511,48.24205],[-4.12482,48.24247],[-4.12472,48.24242],[-4.12477,48.24254],[-4.12474,48.24259],[-4.12465,48.24257],[-4.12467,48.24266],[-4.12449,48.24286],[-4.12441,48.24284],[-4.12442,48.24298],[-4.12391,48.24342],[-4.1236,48.2436],[-4.12354,48.24343],[-4.12346,48.24353],[-4.12348,48.24369],[-4.12286,48.24407],[-4.12131,48.24466],[-4.1212,48.24442],[-4.12118,48.24463],[-4.12111,48.24465],[-4.12097,48.24451],[-4.12102,48.24476],[-4.11943,48.24516],[-4.11936,48.24503],[-4.11933,48.24518],[-4.11909,48.24524],[-4.11905,48.24516],[-4.11903,48.24525],[-4.11849,48.24536],[-4.11838,48.24511],[-4.11833,48.2454],[-4.11751,48.24561],[-4.11725,48.24562],[-4.11723,48.24569],[-4.11627,48.246],[-4.11596,48.24604],[-4.1155,48.2458],[-4.11528,48.24576],[-4.11565,48.24603],[-4.1159,48.24612],[-4.11395,48.24673],[-4.11404,48.24644],[-4.11379,48.24676],[-4.11322,48.2469],[-4.11201,48.24703],[-4.11144,48.24697],[-4.1107,48.2467],[-4.11078,48.24656],[-4.11076,48.24628],[-4.11113,48.24613],[-4.11102,48.24585],[-4.11117,48.24571],[-4.11099,48.24582],[-4.11109,48.2461],[-4.1107,48.24626],[-4.11066,48.24649],[-4.11046,48.24658],[-4.10979,48.24613],[-4.10914,48.24537],[-4.10893,48.24503],[-4.1091,48.24493],[-4.10886,48.24494],[-4.10869,48.24462],[-4.10864,48.24355],[-4.10904,48.24254],[-4.10946,48.24205],[-4.11146,48.24034],[-4.11205,48.23974],[-4.11332,48.2373],[-4.11418,48.23432],[-4.11462,48.2333],[-4.11476,48.2333],[-4.11485,48.2331],[-4.11476,48.23301],[-4.11512,48.23221],[-4.1153,48.23216],[-4.11538,48.23204],[-4.11525,48.23194],[-4.11555,48.23038],[-4.11544,48.22976],[-4.11581,48.22965],[-4.11582,48.22951],[-4.11568,48.22946],[-4.11536,48.22946],[-4.11503,48.22849],[-4.11523,48.22834],[-4.11499,48.2283],[-4.11489,48.22789],[-4.11483,48.2274],[-4.11494,48.22658],[-4.11503,48.22654],[-4.11496,48.22644],[-4.11508,48.22578],[-4.11527,48.22572],[-4.11511,48.22565],[-4.11533,48.22493],[-4.11564,48.22406],[-4.11579,48.22406],[-4.11566,48.22396],[-4.11676,48.22155],[-4.11712,48.22027],[-4.11755,48.21954],[-4.11809,48.21831],[-4.11835,48.21806],[-4.11842,48.2178],[-4.11835,48.21755],[-4.11856,48.21666],[-4.11852,48.21638],[-4.1184,48.21627],[-4.11831,48.21598],[-4.11846,48.21585],[-4.11831,48.21586],[-4.11841,48.21544],[-4.11816,48.21437],[-4.1173,48.21279],[-4.11627,48.21167],[-4.11633,48.21161],[-4.11625,48.21138],[-4.11601,48.21133],[-4.11585,48.21144],[-4.11577,48.21141],[-4.11517,48.21068],[-4.11487,48.21044],[-4.11483,48.2103],[-4.11468,48.21029],[-4.11417,48.21],[-4.11341,48.20929],[-4.11308,48.20885],[-4.11304,48.2086],[-4.11206,48.20758],[-4.11103,48.20674],[-4.11027,48.20637],[-4.10997,48.20637],[-4.10922,48.2061],[-4.10896,48.20612],[-4.10884,48.20633],[-4.10803,48.20641],[-4.10787,48.20663],[-4.10758,48.20668],[-4.10746,48.20663],[-4.1075,48.20678],[-4.10724,48.20684],[-4.10708,48.20701],[-4.10563,48.20756],[-4.10442,48.20769],[-4.10344,48.20792],[-4.10265,48.20819],[-4.10016,48.20945],[-4.0981,48.21017],[-4.09646,48.21092],[-4.09629,48.2111],[-4.09396,48.21212],[-4.09463,48.21275],[-4.09507,48.21255],[-4.09542,48.21228],[-4.09508,48.21259],[-4.09453,48.21284],[-4.09461,48.21292],[-4.09565,48.21246],[-4.09565,48.21238],[-4.09685,48.21174],[-4.09797,48.21105],[-4.09879,48.21066],[-4.10018,48.21017],[-4.10234,48.20908],[-4.1034,48.20863],[-4.10485,48.20829],[-4.10599,48.20822],[-4.10829,48.20713],[-4.10881,48.20697],[-4.10972,48.20689],[-4.11012,48.20699],[-4.11081,48.20732],[-4.11077,48.20745],[-4.11101,48.20748],[-4.11139,48.20785],[-4.11195,48.20851],[-4.11192,48.20857],[-4.11209,48.20867],[-4.1127,48.20962],[-4.11477,48.21131],[-4.11559,48.2122],[-4.11545,48.21231],[-4.11572,48.21234],[-4.11583,48.21255],[-4.11592,48.21255],[-4.11626,48.21291],[-4.11674,48.21358],[-4.11667,48.21381],[-4.11699,48.2139],[-4.11725,48.21449],[-4.11721,48.21467],[-4.11734,48.21533],[-4.1172,48.21537],[-4.11743,48.21574],[-4.11732,48.21591],[-4.11744,48.21649],[-4.11688,48.21667],[-4.11729,48.21667],[-4.11742,48.21673],[-4.11746,48.2173],[-4.11737,48.21785],[-4.11721,48.21799],[-4.11692,48.21881],[-4.1167,48.21902],[-4.11677,48.21922],[-4.11657,48.21918],[-4.11647,48.21936],[-4.11658,48.21948],[-4.11645,48.21971],[-4.1163,48.21979],[-4.11559,48.2221],[-4.11544,48.2221],[-4.1154,48.22226],[-4.11547,48.22234],[-4.11525,48.22259],[-4.11461,48.22405],[-4.11422,48.22551],[-4.11406,48.22566],[-4.11417,48.22581],[-4.11395,48.22659],[-4.11368,48.22658],[-4.11366,48.22688],[-4.11374,48.22698],[-4.11364,48.22702],[-4.11363,48.22726],[-4.11377,48.22743],[-4.11362,48.22751],[-4.11362,48.22763],[-4.11378,48.22768],[-4.11372,48.22797],[-4.11386,48.2281],[-4.11434,48.22949],[-4.11461,48.23054],[-4.11452,48.23127],[-4.11422,48.23189],[-4.11407,48.23196],[-4.11392,48.23224],[-4.11401,48.23233],[-4.11377,48.23261],[-4.11328,48.23383],[-4.11232,48.23708],[-4.11209,48.23712],[-4.11198,48.23699],[-4.1118,48.23694],[-4.11155,48.23708],[-4.11165,48.23727],[-4.11201,48.23722],[-4.11224,48.23731],[-4.11217,48.23751],[-4.11203,48.23748],[-4.112,48.23781],[-4.11172,48.23842],[-4.11128,48.23903],[-4.11106,48.23905],[-4.11094,48.23898],[-4.11101,48.23922],[-4.11114,48.23927],[-4.10994,48.24053],[-4.10964,48.24066],[-4.10948,48.24086],[-4.10807,48.24195],[-4.10812,48.24206],[-4.10767,48.24298],[-4.10764,48.24395],[-4.10783,48.24477],[-4.10827,48.24553],[-4.10914,48.24639],[-4.10923,48.24658],[-4.10914,48.2469],[-4.10944,48.24717],[-4.10963,48.24718],[-4.11119,48.24775],[-4.11179,48.24781],[-4.11184,48.2482],[-4.11202,48.24824],[-4.11221,48.2482],[-4.11292,48.24884],[-4.11334,48.24901],[-4.11373,48.24931],[-4.11403,48.24942],[-4.11407,48.2497],[-4.11429,48.24985],[-4.11468,48.24982],[-4.11488,48.24985],[-4.11498,48.24992],[-4.11497,48.24985],[-4.11543,48.25006],[-4.11548,48.25017],[-4.11542,48.25026],[-4.11529,48.25026],[-4.11536,48.25035],[-4.11519,48.25048],[-4.11526,48.25068],[-4.11555,48.25089],[-4.11536,48.25104],[-4.11514,48.25108],[-4.11489,48.2513],[-4.11493,48.2515],[-4.11498,48.25131],[-4.11562,48.25091],[-4.11563,48.25081],[-4.1154,48.25071],[-4.11531,48.25054],[-4.11541,48.25038],[-4.11575,48.2504],[-4.11561,48.25003],[-4.11529,48.24978],[-4.11471,48.24968],[-4.11467,48.24973],[-4.11442,48.24971],[-4.1143,48.24964],[-4.11439,48.2494],[-4.11409,48.24918],[-4.11389,48.24915],[-4.11363,48.24887],[-4.11357,48.24891],[-4.11357,48.24879],[-4.11367,48.24877],[-4.11371,48.24866],[-4.11347,48.24858],[-4.11322,48.2487],[-4.11284,48.24803],[-4.11269,48.24794],[-4.11223,48.24787],[-4.11233,48.24781],[-4.11353,48.24773],[-4.11545,48.24727],[-4.11549,48.24732],[-4.11562,48.24729],[-4.11576,48.24734],[-4.11587,48.2473],[-4.11578,48.24716],[-4.11589,48.24711],[-4.11596,48.24724],[-4.11619,48.24737],[-4.11636,48.24727],[-4.1163,48.24721],[-4.11607,48.24725],[-4.11611,48.24703],[-4.11675,48.24685],[-4.11679,48.24697],[-4.11692,48.24697],[-4.11706,48.24685],[-4.11708,48.24671],[-4.11789,48.2465],[-4.11803,48.24658],[-4.11816,48.24656],[-4.11812,48.24644],[-4.11852,48.24632],[-4.11956,48.24612],[-4.1197,48.24619],[-4.11992,48.24609],[-4.12008,48.24613],[-4.12024,48.24601],[-4.12079,48.24586],[-4.12155,48.24571],[-4.12172,48.24573],[-4.12171,48.24566],[-4.12181,48.24566],[-4.12178,48.24557],[-4.12291,48.24519],[-4.12331,48.2452],[-4.12327,48.24502],[-4.12395,48.24468],[-4.12526,48.24385],[-4.12552,48.24395],[-4.12535,48.24378],[-4.12586,48.24331],[-4.12699,48.24185],[-4.1274,48.24188],[-4.12726,48.24173],[-4.12747,48.24161],[-4.12788,48.24159],[-4.128,48.24153],[-4.12815,48.24163],[-4.1283,48.2416],[-4.12837,48.24166],[-4.12874,48.24173],[-4.12846,48.24166],[-4.12823,48.24138],[-4.1285,48.2413],[-4.1286,48.24113],[-4.12882,48.24098],[-4.12934,48.24079],[-4.12886,48.24092],[-4.12804,48.24139],[-4.1277,48.24146],[-4.1273,48.24136],[-4.12745,48.24109],[-4.12777,48.24072],[-4.1292,48.23946],[-4.13034,48.23868],[-4.13114,48.23826],[-4.13145,48.23869],[-4.13137,48.23895],[-4.13161,48.23905],[-4.13167,48.23919],[-4.1316,48.23895],[-4.13144,48.23889],[-4.13159,48.23872],[-4.13144,48.23829],[-4.1324,48.23785],[-4.1332,48.23762],[-4.13358,48.23795],[-4.1334,48.23767],[-4.1334,48.23761],[-4.13358,48.23754],[-4.13468,48.23744],[-4.13589,48.23741],[-4.13626,48.23774],[-4.13622,48.23796],[-4.13634,48.23837],[-4.13633,48.23789],[-4.13643,48.23764],[-4.13632,48.23746],[-4.13799,48.23745],[-4.13857,48.23754],[-4.13962,48.23787],[-4.14066,48.23845],[-4.14061,48.23857],[-4.14104,48.23906],[-4.14106,48.2392],[-4.1412,48.23927],[-4.14127,48.23947],[-4.14106,48.2395],[-4.14093,48.2393],[-4.14079,48.23924],[-4.14035,48.23933],[-4.14021,48.23925],[-4.14031,48.23934],[-4.14014,48.23957],[-4.14015,48.23987],[-4.14034,48.24001],[-4.14048,48.24037],[-4.14036,48.23996],[-4.14021,48.23987],[-4.14022,48.23961],[-4.14039,48.23941],[-4.14081,48.23935],[-4.14097,48.23961],[-4.14131,48.2397],[-4.14149,48.23996],[-4.14182,48.24011],[-4.14222,48.24058],[-4.14234,48.24097],[-4.14262,48.24125],[-4.14261,48.24151],[-4.14235,48.24163],[-4.14211,48.24153],[-4.14237,48.24168],[-4.14278,48.24151],[-4.14308,48.24167],[-4.14355,48.24212],[-4.1445,48.24283],[-4.14449,48.24293],[-4.14466,48.24293],[-4.1455,48.24345],[-4.14592,48.24374],[-4.14617,48.24408],[-4.14651,48.24422],[-4.14661,48.24435],[-4.14849,48.24569],[-4.14954,48.24632],[-4.1511,48.24699],[-4.15267,48.24747],[-4.15301,48.24746],[-4.15328,48.24752],[-4.15315,48.24758],[-4.15343,48.24787],[-4.15284,48.24812],[-4.15169,48.24891],[-4.1516,48.24912],[-4.15134,48.2493],[-4.15082,48.2493],[-4.15063,48.24938],[-4.15062,48.24969],[-4.15053,48.24985],[-4.15082,48.24966],[-4.15082,48.24934],[-4.15144,48.24935],[-4.15133,48.24939],[-4.15134,48.24945],[-4.15158,48.24947],[-4.15267,48.24892],[-4.15361,48.24826],[-4.15384,48.24806],[-4.15389,48.24788],[-4.15414,48.24777],[-4.15435,48.24752],[-4.15599,48.24745],[-4.15735,48.24733],[-4.15804,48.24721],[-4.15923,48.24721],[-4.16067,48.24733],[-4.16672,48.24807],[-4.16773,48.24808],[-4.16951,48.24831],[-4.17013,48.24833],[-4.17114,48.2485],[-4.17147,48.24873],[-4.17177,48.24861],[-4.17202,48.24876],[-4.17249,48.24863],[-4.17311,48.24875],[-4.17382,48.24878],[-4.17392,48.24884],[-4.17407,48.2488],[-4.1748,48.24899],[-4.17554,48.24897],[-4.17572,48.24906],[-4.17608,48.24899],[-4.17632,48.24907],[-4.17665,48.24909],[-4.17747,48.24895],[-4.17809,48.24893],[-4.17934,48.24911],[-4.17967,48.24914],[-4.1799,48.2491],[-4.18036,48.24919],[-4.18186,48.24929],[-4.18277,48.2495],[-4.1839,48.24954],[-4.18424,48.24963],[-4.18504,48.24971],[-4.18847,48.24997],[-4.19141,48.25045],[-4.19154,48.25052],[-4.1918,48.2505],[-4.19212,48.25059],[-4.19249,48.25084],[-4.19267,48.25084],[-4.19273,48.25076],[-4.19312,48.25069],[-4.19347,48.25076],[-4.19534,48.25092],[-4.19589,48.25086],[-4.19623,48.25095],[-4.19684,48.2509],[-4.19716,48.2508],[-4.1973,48.25062],[-4.19773,48.25053],[-4.19783,48.25045],[-4.19777,48.25041],[-4.19795,48.25035],[-4.19792,48.2503],[-4.19807,48.25031],[-4.19831,48.25019],[-4.19874,48.25021],[-4.19881,48.25025],[-4.1987,48.25089],[-4.19878,48.25111],[-4.19863,48.25115],[-4.19856,48.2513],[-4.19867,48.25141],[-4.19861,48.25168],[-4.19833,48.25187],[-4.1984,48.25236],[-4.19805,48.25263],[-4.19792,48.25303],[-4.19782,48.25307],[-4.19787,48.25324],[-4.19819,48.25319],[-4.19855,48.25277],[-4.19892,48.25252],[-4.19911,48.2522],[-4.19948,48.25185],[-4.20009,48.25151],[-4.19992,48.25104],[-4.20089,48.24938],[-4.20151,48.24918],[-4.20191,48.24927],[-4.20355,48.24916],[-4.20451,48.24924],[-4.20638,48.25],[-4.20702,48.25034],[-4.20743,48.2507],[-4.20767,48.2506],[-4.20843,48.25104],[-4.2089,48.25222],[-4.20894,48.25261],[-4.20887,48.2531],[-4.20873,48.25336],[-4.20852,48.25352],[-4.20856,48.2541],[-4.20879,48.25442],[-4.20919,48.25458],[-4.20923,48.25494],[-4.20916,48.25525],[-4.20887,48.25536],[-4.20888,48.25571],[-4.20967,48.25629],[-4.20982,48.25649],[-4.2097,48.25659],[-4.20984,48.25684],[-4.20998,48.25689],[-4.21027,48.25756],[-4.21096,48.25838],[-4.21435,48.26049],[-4.21495,48.26073],[-4.21611,48.26097],[-4.21705,48.26111],[-4.21792,48.26115],[-4.22045,48.26097],[-4.2213,48.26083],[-4.2217,48.26082],[-4.22239,48.26059],[-4.22331,48.26044],[-4.22394,48.26046],[-4.22497,48.26016],[-4.22501,48.26007],[-4.22556,48.2598],[-4.22614,48.25966],[-4.22628,48.25953],[-4.22651,48.25944],[-4.22676,48.25903],[-4.22719,48.25861],[-4.22724,48.25834],[-4.22751,48.25805],[-4.22784,48.25797],[-4.22813,48.2577],[-4.22922,48.25709],[-4.23023,48.25677],[-4.23094,48.25671],[-4.23146,48.25677],[-4.23215,48.25695],[-4.23235,48.25707],[-4.23236,48.25717],[-4.23285,48.25763],[-4.23312,48.25716],[-4.23301,48.25655],[-4.2328,48.2563],[-4.2329,48.2562],[-4.23311,48.25616],[-4.23481,48.25655],[-4.23528,48.25656],[-4.23566,48.25624],[-4.23617,48.25623],[-4.23616,48.2561],[-4.23603,48.25597],[-4.23552,48.25572],[-4.2355,48.25555],[-4.23611,48.25496],[-4.23636,48.25483],[-4.2369,48.25392],[-4.23789,48.25376],[-4.23943,48.25393],[-4.24018,48.25418],[-4.24071,48.25451],[-4.24226,48.25613],[-4.24368,48.25714],[-4.24392,48.25741],[-4.24457,48.25832],[-4.24521,48.25959],[-4.24589,48.26061],[-4.2465,48.26173],[-4.24791,48.26327],[-4.2486,48.26448],[-4.24875,48.26495],[-4.2486,48.26524],[-4.24879,48.2653],[-4.25001,48.26615],[-4.25021,48.2664],[-4.25072,48.2667],[-4.25125,48.26689],[-4.25229,48.26757],[-4.25342,48.26809],[-4.25508,48.26862],[-4.2555,48.26868],[-4.25583,48.2689],[-4.25809,48.26949],[-4.26084,48.26968],[-4.26191,48.26999],[-4.26279,48.27044],[-4.26336,48.27105],[-4.2639,48.27149],[-4.26442,48.27167],[-4.26485,48.27194],[-4.26616,48.27254],[-4.2667,48.27287],[-4.26906,48.27377],[-4.27125,48.27434],[-4.27219,48.27467],[-4.27307,48.27511],[-4.27335,48.27517],[-4.27376,48.27542],[-4.27412,48.27554],[-4.2743,48.27569],[-4.27668,48.27669],[-4.27911,48.27781],[-4.27947,48.27807],[-4.27981,48.27876],[-4.27999,48.27887],[-4.27969,48.27926],[-4.27833,48.28034],[-4.27789,48.28094],[-4.27736,48.28124],[-4.2767,48.28121],[-4.27573,48.281],[-4.27453,48.28038],[-4.2728,48.27983],[-4.2725,48.27984],[-4.27156,48.27953],[-4.27127,48.27954],[-4.26977,48.27927],[-4.26898,48.27919],[-4.26874,48.2792],[-4.26842,48.27978],[-4.26857,48.2798],[-4.26852,48.27986],[-4.26813,48.27983],[-4.26812,48.27977],[-4.26824,48.27977],[-4.26814,48.27934],[-4.26813,48.27947],[-4.26805,48.27947],[-4.26806,48.27926],[-4.26795,48.27922],[-4.26674,48.27919],[-4.26529,48.27922],[-4.26444,48.27934],[-4.26288,48.27939],[-4.26226,48.27951],[-4.26174,48.27967],[-4.26131,48.27967],[-4.26078,48.27983],[-4.26057,48.27984],[-4.25993,48.28004],[-4.25922,48.28043],[-4.25867,48.28065],[-4.25872,48.28069],[-4.2575,48.2811],[-4.25679,48.28125],[-4.25535,48.28191],[-4.25152,48.28338],[-4.25111,48.28359],[-4.25099,48.28377],[-4.25005,48.2844],[-4.24951,48.28461],[-4.24897,48.2847],[-4.24797,48.28452],[-4.24766,48.28459],[-4.24624,48.28531],[-4.24516,48.28618],[-4.24496,48.28626],[-4.24415,48.28628],[-4.24384,48.2864],[-4.24349,48.28636],[-4.2417,48.28711],[-4.24046,48.28787],[-4.23963,48.28865],[-4.2394,48.28866],[-4.23909,48.28895],[-4.23877,48.28946],[-4.23871,48.29027],[-4.23863,48.29049],[-4.23847,48.2906]],[[-4.19978,48.24961],[-4.19953,48.24947],[-4.19952,48.24938],[-4.19993,48.24947],[-4.19994,48.24961],[-4.19978,48.24961]],[[-4.27769,48.28189],[-4.27828,48.28194],[-4.2805,48.28233],[-4.28091,48.28248],[-4.28162,48.28287],[-4.28193,48.28322],[-4.28189,48.28376],[-4.28173,48.28411],[-4.28151,48.28437],[-4.28099,48.28486],[-4.28067,48.28503],[-4.28037,48.28511],[-4.27887,48.28507],[-4.27797,48.28471],[-4.27737,48.28429],[-4.27705,48.28383],[-4.27691,48.28342],[-4.27693,48.28313],[-4.277,48.28273],[-4.27741,48.28208],[-4.27769,48.28189]]];const AXIS_REAL = [[-4.264,48.312,null],[-4.26302,48.31086,null],[-4.26198,48.30964,null],[-4.26088,48.30832,null],[-4.25976,48.30692,null],[-4.25866,48.30549,null],[-4.2575,48.30403,null],[-4.25602,48.30244,null],[-4.25412,48.30059,null],[-4.25278,48.29819,null],[-4.25241,48.29554,957],[-4.25121,48.29342,null],[-4.24961,48.29206,null],[-4.24985,48.29162,1313],[-4.25102,48.29155,1333],[-4.25192,48.29084,1407],[-4.25318,48.28983,1369],[-4.25499,48.28905,1288],[-4.25652,48.28819,1328],[-4.25745,48.28709,1223],[-4.25846,48.28599,1077],[-4.25995,48.28486,950],[-4.26192,48.2835,771],[-4.26455,48.28229,608],[-4.26773,48.28187,526],[-4.2708,48.2823,565],[-4.27295,48.28325,610],[-4.27401,48.28433,504],[-4.27453,48.28513,467],[-4.2749,48.28556,471],[-4.27516,48.28586,492],[-4.27542,48.28625,519],[-4.27599,48.28674,570],[-4.27722,48.28715,559],[-4.27896,48.28728,527],[-4.28075,48.28703,487],[-4.28217,48.28644,449],[-4.28305,48.28561,350],[-4.28358,48.28472,319],[-4.28392,48.28381,312],[-4.28409,48.28285,380],[-4.28385,48.28189,475],[-4.2829,48.28079,533],[-4.28207,48.27956,509],[-4.28226,48.27947,555],[-4.28258,48.28028,null],[-4.28244,48.27981,484],[-4.28229,48.27832,367],[-4.28232,48.27772,384],[-4.28215,48.27793,1189],[-4.28187,48.27789,800],[-4.28238,48.27757,809],[-4.28241,48.27686,854],[-4.28044,48.27614,339],[-4.2783,48.27557,342],[-4.27712,48.27488,364],[-4.27616,48.27424,452],[-4.27507,48.27373,423],[-4.27384,48.27332,390],[-4.27263,48.27294,371],[-4.27147,48.27259,376],[-4.27041,48.27223,379],[-4.26944,48.2718,408],[-4.26848,48.27131,436],[-4.26737,48.2708,421],[-4.266,48.27021,404],[-4.26428,48.26951,357],[-4.26207,48.2688,276],[-4.25946,48.26803,333],[-4.25683,48.26698,432],[-4.25442,48.26566,505],[-4.2526,48.26413,531],[-4.25149,48.26239,589],[-4.25051,48.26069,648],[-4.24942,48.25911,603],[-4.24821,48.25768,644],[-4.24658,48.25649,471],[-4.24477,48.25537,360],[-4.24327,48.25399,345],[-4.24171,48.25279,531],[-4.23938,48.25232,334],[-4.23666,48.25241,400],[-4.23408,48.25292,615],[-4.23161,48.25376,665],[-4.22923,48.25478,573],[-4.22702,48.25605,413],[-4.22493,48.25754,403],[-4.22261,48.25887,347],[-4.21988,48.25955,268],[-4.21724,48.25937,310],[-4.21528,48.25851,385],[-4.21407,48.25738,473],[-4.21318,48.25619,513],[-4.21228,48.25471,504],[-4.2114,48.25254,440],[-4.20971,48.25003,471],[-4.2065,48.24822,396],[-4.20317,48.24748,459],[-4.20105,48.24754,395],[-4.19944,48.24792,497],[-4.19698,48.24831,476],[-4.19327,48.24853,436],[-4.18899,48.24842,368],[-4.18501,48.24813,322],[-4.18184,48.24777,337],[-4.17954,48.24746,390],[-4.17797,48.24734,353],[-4.17692,48.24729,394],[-4.17615,48.24721,408],[-4.17523,48.24713,424],[-4.17362,48.24706,382],[-4.17107,48.24694,323],[-4.16773,48.24667,315],[-4.16397,48.24638,300],[-4.16011,48.24617,253],[-4.15633,48.24603,313],[-4.15288,48.24564,316],[-4.15005,48.24472,285],[-4.14784,48.24347,264],[-4.146,48.24221,244],[-4.14428,48.24088,244],[-4.14247,48.23938,180],[-4.14023,48.23794,130],[-4.1373,48.23715,129],[-4.13408,48.23722,101],[-4.13117,48.23793,140],[-4.12885,48.23907,128],[-4.1272,48.24045,120],[-4.12602,48.24186,121],[-4.12493,48.24312,115],[-4.12366,48.24411,104],[-4.12221,48.24482,109],[-4.12068,48.24533,110],[-4.11914,48.24571,104],[-4.11764,48.24607,106],[-4.11622,48.24648,110],[-4.11486,48.2469,99],[-4.1135,48.24728,95],[-4.11215,48.24741,137],[-4.11084,48.24712,85],[-4.10973,48.24648,85],[-4.10891,48.2456,63],[-4.1084,48.24455,67],[-4.10834,48.24339,77],[-4.10888,48.2422,95],[-4.10994,48.24103,81],[-4.11114,48.23981,84],[-4.11212,48.23846,72],[-4.11281,48.23703,78],[-4.11329,48.2356,77],[-4.11372,48.23423,76],[-4.11423,48.23295,86],[-4.11473,48.23173,72],[-4.11494,48.23053,68],[-4.11477,48.22933,75],[-4.11449,48.22815,79],[-4.11442,48.22696,87],[-4.11462,48.22576,74],[-4.11499,48.22458,72],[-4.11542,48.22341,73],[-4.11589,48.22228,75],[-4.11634,48.22119,72],[-4.11674,48.22017,71],[-4.11718,48.21923,70],[-4.11757,48.21835,71],[-4.11779,48.21749,69],[-4.11783,48.21664,116],[-4.1178,48.21577,69],[-4.1177,48.21487,75],[-4.11737,48.21393,64],[-4.11678,48.21298,75],[-4.11596,48.21206,78],[-4.11503,48.21115,61],[-4.11404,48.21027,61],[-4.1131,48.20935,63],[-4.11223,48.20837,63],[-4.11117,48.20745,54],[-4.10977,48.20689,61],[-4.10817,48.20697,77],[-4.10666,48.20745,69],[-4.10521,48.20789,76],[-4.1038,48.20824,74],[-4.10248,48.20869,68],[-4.10124,48.20925,65],[-4.10003,48.2098,70],[-4.09885,48.21028,72],[-4.09781,48.21072,75],[-4.09697,48.21115,85],[-4.09629,48.21154,84],[-4.0957,48.21186,89],[-4.09518,48.21211,75],[-4.09484,48.21238,96],[-4.09476,48.21269,null]];
+"use strict";
+// ======================= OUTILS =======================
+const $ = id => document.getElementById(id);
+const d2r = Math.PI / 180, Z0 = 4.10, T_M2 = 12.4206, H = 3600000;
+const LAT0 = 48.25, KX = 111320 * Math.cos(LAT0 * d2r), KY = 110950;
+const toXY = p => [(p[0] + 4.20) * KX, (p[1] - LAT0) * KY];
+const toLL = (x, y) => [x / KX - 4.20, y / KY + LAT0];
+const fmtN = (v, d = 2) => v.toFixed(d).replace(".", ",").replace("-", "−");
+const fmtH = h => { const sgn = h < 0 ? "− " : ""; h = Math.abs(h); let hh = Math.floor(h), mm = Math.round((h - hh) * 60); if (mm === 60) { hh++; mm = 0; } return `${sgn}${hh} h ${String(mm).padStart(2, "0")}`; };
+const fmtClock = ms => new Date(ms).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const fmtDate = ms => new Date(ms).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+
+// ======================= MARÉE DE BREST =======================
+// Extrema SHOM (UTC) + éventuels ajouts de l'utilisateur ; au-delà : harmonique approchée.
+let EXT = SHOM_BREST.map(([d, t, h, c]) => ({ t: Date.parse(d), high: t === "PM", h, c })).sort((a, b) => a.t - b.t);
+try { const saved = JSON.parse(localStorage.getItem("aulne.shom.extra") || "[]"); if (saved.length) { EXT = EXT.concat(saved).sort((a, b) => a.t - b.t); } } catch (e) { }
+const CONST = [["M2",2.041,101.6],["S2",0.738,139.6],["N2",0.423,82.6],["K2",0.212,137.4],["K1",0.065,72.7],["O1",0.070,327.5],["P1",0.021,61.0],["MU2",0.092,99.0],["NU2",0.085,86.0],["L2",0.060,115.0]];
+const DOOD = { M2:[2,0,0,0,0,0], S2:[2,2,-2,0,0,0], N2:[2,-1,0,1,0,0], K2:[2,2,0,0,0,0], K1:[1,1,0,0,0,90], O1:[1,-1,0,0,0,-90], P1:[1,1,-2,0,0,-90], MU2:[2,-2,2,0,0,0], NU2:[2,-1,2,-1,0,0], L2:[2,1,0,-1,0,180] };
+function astro(ms) { const T = (ms / 86400000 + 2440587.5 - 2451545.0) / 36525; const h = 280.4664567 + 36000.76982779 * T, s = 218.3164477 + 481267.88123421 * T, p = 83.3532465 + 4069.0137287 * T, N = 125.04452 - 1934.136261 * T, pp = 282.9404 + 1.7192 * T; return { h, s, p, N, pp, tau: ((ms / H) % 24) * 15 - s + h }; }
+function nodal(n, N) { N *= d2r; switch (n) { case "M2": case "N2": case "MU2": case "NU2": case "L2": return [1 - 0.037 * Math.cos(N), -2.1 * Math.sin(N)]; case "K2": return [1 + 0.286 * Math.cos(N), -17.7 * Math.sin(N)]; case "K1": return [1 + 0.115 * Math.cos(N), -8.9 * Math.sin(N)]; case "O1": return [1 + 0.189 * Math.cos(N), 10.8 * Math.sin(N)]; default: return [1, 0]; } }
+// Correction calée sur les 70 extrema SHOM du 6 au 23 nov. 2026 : phase +7,5° sur les ondes semi-diurnes, niveau +0,09 m (écart résiduel ±15 min, ±0,15 m)
+const HARM_DPHI = 7.5, HARM_DZ = 0.09;
+function harmonic(ms) { const a = astro(ms); let z = Z0 + HARM_DZ; for (const [n, A, g] of CONST) { const D = DOOD[n], [f, u] = nodal(n, a.N); const V = D[0] * a.tau + D[1] * a.s + D[2] * a.h + D[3] * a.p + D[4] * a.pp + D[5]; z += f * A * Math.cos((V + u - g - (D[0] === 2 ? HARM_DPHI : 0)) * d2r); } return z; }
+function harmonicExtrema(ms0, ms1) { const out = []; const st = 60000; let p = harmonic(ms0 - st), c = harmonic(ms0); for (let t = ms0 + st; t <= ms1; t += st) { const n = harmonic(t); if ((c - p) * (n - c) < 0) out.push({ t: t - st, high: c > p, h: c, c: null, approx: true }); p = c; c = n; } return out; }
+// liste d'extrema couvrant [ms-30h, ms+30h], SHOM si disponible, sinon harmonique
+function extremaAround(ms) {
+  const lo = ms - 30 * H, hi = ms + 30 * H;
+  const shom = EXT.filter(e => e.t >= lo - 7 * H && e.t <= hi + 7 * H);
+  if (shom.length && shom[0].t <= lo && shom[shom.length - 1].t >= hi) return shom;
+  let out = shom.slice();
+  const first = shom.length ? shom[0].t : hi + 7 * H, last = shom.length ? shom[shom.length - 1].t : lo - 7 * H;
+  if (first > lo) out = harmonicExtrema(lo - 7 * H, first - H).concat(out);
+  if (last < hi) out = out.concat(harmonicExtrema(last + H, hi + 7 * H));
+  // coefficient approché pour les PM harmoniques
+  for (let i = 0; i < out.length; i++) if (out[i].high && out[i].c == null) { const prev = out[i - 1], next = out[i + 1]; const lw = prev && next ? (prev.h + next.h) / 2 : (prev || next || { h: Z0 - 2 }).h; out[i].c = Math.round((out[i].h - lw) / 6.25 * 100); out[i].approx = true; }
+  return out.sort((a, b) => a.t - b.t);
+}
+// niveau de Brest : cosinus entre extrema successifs
+function brestCtx(ms) {
+  const ex = extremaAround(ms); let i = 0; while (i < ex.length - 1 && ex[i + 1].t <= ms) i++;
+  const a = ex[i], b = ex[Math.min(ex.length - 1, i + 1)];
+  const f = b.t > a.t ? (ms - a.t) / (b.t - a.t) : 0;
+  const h = a.h + (b.h - a.h) * (1 - Math.cos(Math.PI * f)) / 2;
+  const hPM = a.high ? a.h : b.h, hBM = a.high ? b.h : a.h;
+  const pm = a.high ? a : b; const bm = a.high ? b : a;
+  return { h, hPM, hBM, a, b, ex, coef: pm.c, approx: !!(a.approx || b.approx), lastBM: a.high ? ex[i - 1] : a, nextBM: a.high ? b : ex[i + 2] || b, nextPM: a.high ? ex[i + 2] || a : b, pm, bm };
+}
+const brestLevel = ms => brestCtx(ms).h;
+
+// ======================= GÉOMÉTRIE DU CHENAL =======================
+function catmull(pts, nSeg) { const out = []; for (let i = 0; i < pts.length - 1; i++) { const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)]; for (let k = 0; k < nSeg; k++) { const t = k / nSeg, t2 = t * t, t3 = t2 * t; const q = [0, 1].map(j => 0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3)); q.push((p1[2] != null && p2[2] != null) ? p1[2] * (1 - t) + p2[2] * t : null); out.push(q); } } out.push(pts[pts.length - 1].slice()); return out; }
+// AXIS_REAL : [lon, lat, largeurPM|null] ; largeur nulle (hors polygone OSM, aval de Térénez) -> schéma
+const axisPts = AXIS_REAL.map((p, i) => { const [x, y] = toXY(p); return [x, y, p[2]]; });
+// lissage des largeurs et comblement
+(() => { const w = axisPts.map(p => p[2]); for (let i = 0; i < w.length; i++) if (w[i] == null) { let j = i; while (j < w.length && w[j] == null) j++; if (i === 0 || j >= w.length) continue; } for (let k = 0; k < 2; k++) for (let i = 1; i < w.length - 1; i++) if (w[i] != null && w[i - 1] != null && w[i + 1] != null) w[i] = (w[i - 1] + 2 * w[i] + w[i + 1]) / 4; axisPts.forEach((p, i) => p[2] = w[i]); })();
+const dense = catmull(axisPts, 4);
+const cum = [0]; for (let i = 1; i < dense.length; i++) cum.push(cum[i - 1] + Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1]));
+function insideRing(p, ring) { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const A = ring[i], B = ring[j]; if ((A[1] > p[1]) !== (B[1] > p[1]) && p[0] < (B[0] - A[0]) * (p[1] - A[1]) / (B[1] - A[1]) + A[0]) c = !c; } return c; }
+const insidePoly = ll => insideRing(ll, OSM_POLY[0]) && !OSM_POLY.slice(1).some(r => insideRing(ll, r));
+let i0 = dense.findIndex(p => insidePoly(toLL(p[0], p[1]))); if (i0 < 0) i0 = 0;
+const S0 = cum[i0]; // PK 0 : entrée de l'axe dans l'emprise, sur la droite Landévennec – Le Seillou
+const L = cum[cum.length - 1] - S0;
+function pointAtS(s) { const c = s + S0; let lo = 0, hi = cum.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= c) lo = m; else hi = m; } const f = Math.min(1, Math.max(0, (c - cum[lo]) / (cum[hi] - cum[lo] || 1))); const a = dense[lo], b = dense[hi]; const dx = b[0] - a[0], dy = b[1] - a[1], n = Math.hypot(dx, dy) || 1; const w = (a[2] != null && b[2] != null) ? a[2] * (1 - f) + b[2] * f : null; return { x: a[0] + dx * f, y: a[1] + dy * f, nx: -dy / n, ny: dx / n, w }; }
+const N = 240;
+const sN = Array.from({ length: N }, (_, i) => (i / (N - 1)) * L);
+const nodeM = sN.map(s => pointAtS(s));
+const geo = sN.map((si, i) => { const r = si / L; const sch = 75 + 1000 * Math.exp(-si / 6200); const bhw = nodeM[i].w != null ? Math.max(40, nodeM[i].w) : (i > 0 ? null : sch); return { bhw, blw: Math.max(25, bhw * (0.32 + 0.28 * r)), zb: -9.0 + 9.6 * Math.pow(r, 0.85), real: nodeM[i].w != null }; });
+// lissage des largeurs le long de l'axe (éviter les sauts aux raccords)
+for (let i = 1; i < N; i++) if (geo[i].bhw == null) geo[i].bhw = geo[i - 1].bhw, geo[i].blw = geo[i - 1].blw;
+{ const med = geo.map((g, i) => { const win = []; for (let k = -2; k <= 2; k++) win.push(geo[Math.min(N - 1, Math.max(0, i + k))].bhw); return win.sort((p, q) => p - q)[2]; }); geo.forEach((g, i) => { const r = sN[i] / L; g.bhw = med[i]; g.blw = Math.max(25, med[i] * (0.32 + 0.28 * r)); }); }
+for (let k = 0; k < 3; k++) for (let i = 1; i < N - 1; i++) { geo[i].bhw = (geo[i - 1].bhw + 2 * geo[i].bhw + geo[i + 1].bhw) / 4; geo[i].blw = (geo[i - 1].blw + 2 * geo[i].blw + geo[i + 1].blw) / 4; }
+
+// ======================= MODÈLE DE MARÉE 1D =======================
+// Onde de Brest retardée d'un temps dépendant du niveau (quasi nul à la crête, long au creux), amortie, bornée par l'étiage.
+const app = { offH: 0, playing: false, animMode: false, secPerSec: 900, Q: 20, gg: null };
+function etaAt(i, ms) {
+  const r = sN[i] / L;
+  let c = brestCtx(ms); let hb = c.h; const hPM = c.hPM, hBM = c.hBM;
+  for (let k = 0; k < 4; k++) { const q = Math.min(1, Math.max(0, (hPM - hb) / Math.max(0.5, hPM - hBM))); const tau = r * (0.2 + 1.8 * q * q); hb = brestLevel(ms - tau * H); }
+  let e = Z0 + (hb - Z0) * (1 - 0.12 * r);
+  const plateau = 2.15 + 0.05 * Math.sqrt(app.Q);
+  const zr = geo[0].zb + (plateau - geo[0].zb) * Math.pow(r, 0.7);
+  const kk = 0.12, d = e - zr; return zr + kk * Math.log(1 + Math.exp(d / kk));
+}
+function plateauAt(i) { const r = sN[i] / L; const plateau = 2.15 + 0.05 * Math.sqrt(app.Q); return geo[0].zb + (plateau - geo[0].zb) * Math.pow(r, 0.7); }
+function widthAt(i, eta) { const g = geo[i], zl = Z0 - 3.2, zh = Z0 + 3.4; const f = Math.min(1, Math.max(0, (eta - zl) / (zh - zl))); return g.blw + (g.bhw - g.blw) * Math.pow(f, 0.8); }
+function areaAt(i, eta) { const g = geo[i], h = Math.max(0.15, eta - g.zb), zl = Z0 - 3.2; return g.blw * 0.62 * h + Math.max(0, widthAt(i, eta) - g.blw) * Math.max(0, eta - zl) * 0.45; }
+const ST = { eta: new Float64Array(N), deta: new Float64Array(N), w: new Float64Array(N), q: new Float64Array(N), u: new Float64Array(N) };
+function stateAt(ms) {
+  const dt = 60000;
+  for (let i = 0; i < N; i++) { ST.eta[i] = etaAt(i, ms); ST.deta[i] = (etaAt(i, ms + dt) - etaAt(i, ms - dt)) / (2 * dt / 1000); ST.w[i] = widthAt(i, ST.eta[i]); }
+  ST.q[N - 1] = -app.Q;
+  for (let i = N - 2; i >= 0; i--) ST.q[i] = ST.q[i + 1] + 0.5 * (ST.w[i] * ST.deta[i] + ST.w[i + 1] * ST.deta[i + 1]) * (sN[i + 1] - sN[i]);
+  for (let i = 0; i < N; i++) ST.u[i] = ST.q[i] / areaAt(i, ST.eta[i]);
+  return ST;
+}
+const uAtS = s => { const x = Math.min(N - 1, Math.max(0, s / L * (N - 1))); const i = Math.min(N - 2, Math.floor(x)), f = x - i; return ST.u[i] * (1 - f) + ST.u[i + 1] * f; };
+function renverse() { if (ST.u[0] <= 0) return null; for (let i = 1; i < N - 2; i++) if (ST.u[i] <= 0) { const f = ST.u[i - 1] / (ST.u[i - 1] - ST.u[i]); return sN[i - 1] + f * (sN[i] - sN[i - 1]); } return L; }
+const GAUGE_ZERO = 2.85; // zéro de l'échelle de Guily-Glaz ≈ 2,85 m au-dessus du zéro hydrographique (calé sur le marégraphe)
+const GAUGE_FLOOR = -0.64; // fond de l'échelle
+const ggGauge = etaCM => Math.max(GAUGE_FLOOR, etaCM - GAUGE_ZERO);
+const PM_LAG_MIN = 12, PM_DROP = 0.28, BM_RISE_H = 2.6;
+
+// ======================= CARTE =======================
+const map = new maplibregl.Map({
+  container: "map", center: [-4.19, 48.25], zoom: 11.5, minZoom: 9, maxZoom: 16, attributionControl: false, preserveDrawingBuffer: true, dragRotate: false, pitchWithRotate: false, touchPitch: false,
+  style: { version: 8, glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    sources: { osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256, attribution: "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors · emprise de l'Aulne maritime : relation OSM 9871" } },
+    layers: [{ id: "osm", type: "raster", source: "osm", paint: { "raster-saturation": -0.12, "raster-brightness-max": 1, "raster-contrast": 0 } }] }
+});
+map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: false, showCompass: false }), matchMedia("(max-width: 900px)").matches ? "bottom-left" : "bottom-right"); // le coin haut droit porte la mini-courbe de marée
+map.addControl(new maplibregl.ScaleControl({ maxWidth: 160, unit: "metric" }), "bottom-right");
+const PLACES = [["Landévennec", -4.2669, 48.2908, innerWidth <= 900 ? "bottom" : "right", innerWidth <= 900 ? 0 : -8, innerWidth <= 900 ? -6 : 0], ["Le Seillou", -4.2406, 48.2838], ["Pont de Térénez", -4.2625, 48.2697, "left", 8, -14], ["Trégarvan", -4.2297, 48.2497, innerWidth <= 900 ? "right" : "left", innerWidth <= 900 ? -8 : 8, 22], ["Rosnoën", -4.1955, 48.2668], ["Le Passage", -4.2005, 48.2453, "left", 8, 12], ["Dinéault", -4.1630, 48.2195], ["Écluse de Guily-Glaz n° 237", -4.0948, 48.2129, innerWidth <= 900 ? "right" : "left", innerWidth <= 900 ? -8 : 8, 0], ["Port-Launay", -4.0800, 48.2098, innerWidth <= 900 ? "top" : "left", innerWidth <= 900 ? 0 : 8, innerWidth <= 900 ? 8 : 0], ["Châteaulin", -4.0901, 48.1976]];
+function ribbonGeo(widths, from, to) { const left = [], right = []; for (let i = from; i < to; i++) { const n = nodeM[i], hw = widths[i] / 2; left.push(toLL(n.x + n.nx * hw, n.y + n.ny * hw)); right.push(toLL(n.x - n.nx * hw, n.y - n.ny * hw)); } return { type: "Feature", geometry: { type: "Polygon", coordinates: [left.concat(right.reverse(), [left[0]])] } }; }
+const firstReal = geo.findIndex(g => g.real), lastReal = N - 1 - geo.slice().reverse().findIndex(g => g.real);
+let mapReady = false;
+const AULNE_BOUNDS = [[-4.296, 48.191], [-4.0715, 48.300]]; // +1 km au sud et +1 km à l'est de Guily-Glaz
+const AULNE_BOUNDS_SMALL = [[-4.312, 48.187], [-4.0465, 48.300]]; // smartphone : jusqu'à Port-Launay inclus, écluse lisible
+// Emprise maximale de navigation : le secteur de l'Aulne maritime, avec une marge d'environ 2 km
+const AULNE_MAX_BOUNDS = [[-4.335, 48.182], [-4.050, 48.322]];
+function fitAulne() { map.resize(); map.setMaxBounds(null); map.setMinZoom(9); const small = innerWidth <= 900; map.fitBounds(small ? AULNE_BOUNDS_SMALL : AULNE_BOUNDS, { padding: small ? { top: 16, bottom: 28, left: 10, right: 10 } : { top: 84, bottom: 36, left: 24, right: 24 }, duration: 0 });
+  // on ne peut ni dézoomer au-delà du cadrage initial, ni sortir du rectangle affiché au départ
+  map.setMinZoom(map.getZoom()); map.setMaxBounds(map.getBounds()); }
+map.on("load", () => {
+  // vasière = emprise OSM (amont de Térénez) + ruban schématique à l'aval
+  map.addSource("osm-water", { type: "geojson", data: { type: "Feature", geometry: { type: "Polygon", coordinates: OSM_POLY } } });
+  map.addLayer({ id: "mud-osm", type: "fill", source: "osm-water", paint: { "fill-color": "#cdb98a", "fill-opacity": 0.85 } });
+  map.addLayer({ id: "osm-outline", type: "line", source: "osm-water", paint: { "line-color": "#a08c5c", "line-width": 0.8, "line-opacity": 0.7 } });
+  // bornes kilométriques : étiquettes DOM repositionnées à chaque image hors du plan d'eau, du côté haut de l'écran
+  // le PK 0 est porté par l'étiquette « Embouchure · PK 0 »
+  for (const k of [5, 10, 15, 20]) { const i = Math.round(k * 1000 / L * (N - 1)); const d = document.createElement("div"); d.className = "lbl pk"; d.style.cssText = "font:600 11px 'IBM Plex Mono',monospace;color:#b35c00;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 2px #fff;white-space:nowrap;pointer-events:none;"; d.textContent = "PK " + k; const mk = new maplibregl.Marker({ element: d, anchor: "center" }).setLngLat(toLL(nodeM[i].x, nodeM[i].y)).addTo(map); PK_MARKERS.push({ i, mk, el: d }); }
+  for (let k = PLACES.length - 1; k >= 0; k--) if (PLACES[k][0] !== "Pont de Térénez") PLACES.splice(k, 1); // seul nom conservé sur la carte (les autres sont lisibles sur le fond OSM)
+  const MINOR = [];
+  for (const [name, lon, lat, anchor = "left", dx = 8, dy = 0] of PLACES) { const d = document.createElement("div"); d.className = "lbl" + (MINOR.includes(name) ? " minor" : ""); d.style.cssText = "font:500 12px 'IBM Plex Sans',sans-serif;color:#17313d;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;white-space:nowrap;pointer-events:none;" + (name.startsWith("Écluse") ? "color:#b35c00;font-weight:600;" : ""); d.textContent = name; new maplibregl.Marker({ element: d, anchor, offset: [dx, dy] }).setLngLat([lon, lat]).addTo(map); if (name !== "Embouchure") { const dot = document.createElement("div"); dot.style.cssText = "width:7px;height:7px;border-radius:50%;background:#17313d;border:1.5px solid #fff;pointer-events:none;"; new maplibregl.Marker({ element: dot }).setLngLat([lon, lat]).addTo(map); } }
+  mapReady = true; map.on("move", clearTrail); resize();
+  fitAulne(); addEventListener("resize", () => setTimeout(fitAulne, 50));
+});
+
+// --------- calque canvas : eau, particules, renverse ---------
+const cv = $("flow"), ctx = cv.getContext("2d"), trail = document.createElement("canvas"), tctx = trail.getContext("2d"), waterCv = document.createElement("canvas"), wctx = waterCv.getContext("2d");
+let VW = 0, VH = 0, DPR = 1;
+function resize() { const r = cv.parentElement.getBoundingClientRect(); VW = r.width; VH = r.height; DPR = Math.min(2, devicePixelRatio || 1); cv.width = trail.width = waterCv.width = Math.round(VW * DPR); cv.height = trail.height = waterCv.height = Math.round(VH * DPR); clearTrail(); }
+function clearTrail() { tctx.setTransform(1, 0, 0, 1, 0, 0); tctx.clearRect(0, 0, trail.width, trail.height); for (let k = 0; k < NP; k++) P.px[k] = NaN; }
+addEventListener("resize", resize);
+const BUCKETS = 15;
+const WATER_COL = "#1f6596"; // bleu d'eau franc sur fond clair
+const bucketColor = (() => { const stops = [[-1.2, [246, 182, 173]], [-0.75, [230, 103, 103]], [-0.25, [140, 82, 82]], [0, [100, 116, 122]], [0.25, [61, 111, 158]], [0.75, [134, 182, 239]], [1.2, [227, 240, 255]]]; return Array.from({ length: BUCKETS }, (_, b) => { const u = -1.2 + 2.4 * b / (BUCKETS - 1); let j = 0; while (j < stops.length - 2 && u > stops[j + 1][0]) j++; const [u0, c0] = stops[j], [u1, c1] = stops[j + 1]; const f = (u - u0) / (u1 - u0); return `rgb(${c0.map((v, m) => Math.round(v + (c1[m] - v) * f)).join(",")})`; }); })();
+const bucketOf = u => Math.max(0, Math.min(BUCKETS - 1, Math.round((u + 1.2) / 2.4 * (BUCKETS - 1))));
+let nodePx = [];
+const PK_MARKERS = [];
+function placePK() { for (const m of PK_MARKERS) { const n = nodeM[m.i], p = nodePx[m.i]; if (!p) continue; // côté dont la normale pointe vers le haut de l'écran
+    const up = p.ny < 0 ? 1 : -1; const bank = up > 0 ? BANK[m.i].L : BANK[m.i].R; const dist = bank + 25 + 14 / Math.max(p.ppm, 1e-6); m.mk.setLngLat(toLL(n.x + up * n.nx * dist, n.y + up * n.ny * dist)); } }
+// Sas de l'écluse n° 237 (OSM way 254166998, lock=yes) : du barrage vers Port-Launay, 43 m ; largeur retenue 8 m
+const LOCK_AXIS = [toXY([-4.09502, 48.21268]), toXY([-4.09455, 48.21289])];
+const ZH_IGN69 = 3.635; // Brest : zéro IGN69 à 3,635 m au-dessus du zéro hydrographique (Shom)
+const LOCK_SILL_NGF = 0.4; // cote du radier de l'écluse (m NGF-IGN69)
+const LOCK_SILL_GAUGE = LOCK_SILL_NGF + ZH_IGN69 - GAUGE_ZERO; // ≈ 1,19 m à l'échelle de Guily-Glaz
+const LOCK_POLY = (() => { const [A, B] = LOCK_AXIS; const dx = B[0] - A[0], dy = B[1] - A[1], l = Math.hypot(dx, dy); const nx = -dy / l * 4, ny = dx / l * 4; const ex = dx / l * 6, ey = dy / l * 6; // prolongé de 6 m vers l'aval pour toucher le barrage
+  return [[A[0] - ex + nx, A[1] - ey + ny], [B[0] + nx, B[1] + ny], [B[0] - nx, B[1] - ny], [A[0] - ex - nx, A[1] - ey - ny]].map(p => toLL(p[0], p[1])); })();
+// Chenal d'accès aval de l'écluse (langue du polygone OSM entre le barrage et la porte aval)
+const LOCK_CHANNEL = [[-4.09565, 48.21238], [-4.09565, 48.21246], [-4.09461, 48.21292], [-4.09463, 48.21275], [-4.09508, 48.21259], [-4.09542, 48.21228]];
+function drawLockChannel(c) {
+  const i = N - 1; const above = ST.eta[i] - plateauAt(i); const f = Math.min(1, Math.max(0, (above - 0.02) / 0.6)); if (f <= 0) return;
+  const pts = LOCK_CHANNEL.map(ll => map.project(ll));
+  // l'eau progresse du barrage (côté rivière, sommets 0,5) vers la porte (sommets 2,3)
+  const sx = (pts[0].x + pts[5].x) / 2, sy = (pts[0].y + pts[5].y) / 2, gx = (pts[2].x + pts[3].x) / 2, gy = (pts[2].y + pts[3].y) / 2;
+  const fx = sx + (gx - sx) * f, fy = sy + (gy - sy) * f; const dx = gx - sx, dy = gy - sy;
+  c.save(); c.beginPath(); pts.forEach((p, k) => k ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)); c.closePath(); c.clip();
+  // demi-plan en deçà du front d'eau
+  const R = 4000; c.beginPath(); c.moveTo(fx - dy * R, fy + dx * R); c.lineTo(fx + dy * R, fy - dx * R); c.lineTo(fx + dy * R - dx * R, fy - dx * R - dy * R); c.lineTo(fx - dy * R - dx * R, fy + dx * R - dy * R); c.closePath();
+  c.fillStyle = WATER_COL; c.globalAlpha = 0.9; c.fill(); c.globalAlpha = 1; c.restore();
+}
+function drawLock(c) {
+  const pts = LOCK_POLY.map(ll => map.project(ll)); const [A, B] = LOCK_AXIS;
+  const gauge = ggGauge(ST.eta[N - 1]); const fill = Math.min(1, Math.max(0, (gauge - LOCK_SILL_GAUGE) / 0.3));
+  c.save(); c.beginPath(); pts.forEach((p, k) => k ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)); c.closePath();
+  c.fillStyle = "#9a937c"; c.fill(); // radier du sas
+  if (fill > 0) { // l'eau entre par la porte aval et remplit le sas
+    const pA = map.project(toLL(A[0], A[1])), pB = map.project(toLL(B[0], B[1])); const f = fill;
+    c.clip(); c.beginPath(); const wx = pB.x - pA.x, wy = pB.y - pA.y; const half = Math.hypot(pts[0].x - pts[3].x, pts[0].y - pts[3].y);
+    const px = -wy, py = wx; const pl = Math.hypot(px, py) || 1; const ox = px / pl * half, oy = py / pl * half;
+    const x0 = pts[0].x, y0 = pts[0].y; const x1 = pA.x + wx * f + ox, y1 = pA.y + wy * f + oy;
+    c.moveTo(pts[0].x, pts[0].y); c.lineTo(x1, y1); c.lineTo(x1 - 2 * ox, y1 - 2 * oy); c.lineTo(pts[3].x, pts[3].y); c.closePath();
+    c.fillStyle = WATER_COL; c.globalAlpha = 0.95; c.fill(); c.globalAlpha = 1;
+  }
+  c.restore();
+  c.beginPath(); pts.forEach((p, k) => k ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)); c.closePath(); c.lineWidth = 1.2; c.strokeStyle = "#d47f00"; c.stroke();
+  // portes
+  const pA = map.project(toLL(A[0], A[1])), pB = map.project(toLL(B[0], B[1])); const wx = pB.x - pA.x, wy = pB.y - pA.y; const l = Math.hypot(wx, wy) || 1; const half = Math.hypot(pts[0].x - pts[3].x, pts[0].y - pts[3].y) / 2;
+  for (const g of [pA, pB]) { c.beginPath(); c.moveTo(g.x - wy / l * half, g.y + wx / l * half); c.lineTo(g.x + wy / l * half, g.y - wx / l * half); c.lineWidth = 2; c.strokeStyle = "#e3ebe8"; c.stroke(); }
+}
+// Barrage / seuil de Guily-Glaz : segment de fermeture amont de l'emprise OSM
+const WEIR = [toXY([-4.09463, 48.21275]), toXY([-4.09396, 48.21212])];
+(() => {
+  const mx = (WEIR[0][0] + WEIR[1][0]) / 2, my = (WEIR[0][1] + WEIR[1][1]) / 2;
+  const dx = WEIR[0][0] - WEIR[1][0], dy = WEIR[0][1] - WEIR[1][1], l = Math.hypot(dx, dy) || 1;
+  const wx = dx / l, wy = dy / l; // direction du barrage = normale de la dernière section
+  const last = nodeM[N - 1]; const sgn = (last.nx * wx + last.ny * wy) >= 0 ? 1 : -1;
+  last.x = mx; last.y = my; last.nx = sgn * wx; last.ny = sgn * wy; last.weirHalf = l / 2;
+  // les 6 nœuds précédents glissent vers l'axe perpendiculaire au barrage
+  const ax = -sgn * wy, ay = sgn * wx; // direction d'écoulement (perpendiculaire au barrage)
+  for (let k = 1; k <= 6; k++) { const i = N - 1 - k; const t = k / 7; const n = nodeM[i]; const px = mx - ax * (sN[N - 1] - sN[i]), py = my - ay * (sN[N - 1] - sN[i]); n.x = n.x * t + px * (1 - t); n.y = n.y * t + py * (1 - t); n.nx = n.nx * t + sgn * wx * (1 - t); n.ny = n.ny * t + sgn * wy * (1 - t); const nl = Math.hypot(n.nx, n.ny) || 1; n.nx /= nl; n.ny /= nl; }
+})();
+(() => { // lissage des normales le long de l'axe (sauf les 7 dernières, calées sur le barrage)
+  const nx = nodeM.map(n => n.nx), ny = nodeM.map(n => n.ny);
+  for (let i = 0; i < N - 7; i++) { let sx = 0, sy = 0; for (let k = -3; k <= 3; k++) { const j = Math.min(N - 1, Math.max(0, i + k)); sx += nx[j]; sy += ny[j]; } const l = Math.hypot(sx, sy) || 1; nodeM[i].nx = sx / l; nodeM[i].ny = sy / l; }
+})();
+// distance de l'axe à chaque rive (m) le long de la normale, mesurée dans l'emprise OSM
+const RINGS_M = OSM_POLY.map(r => r.map(toXY));
+function segT(p, d, A, B) { const ex = B[0] - A[0], ey = B[1] - A[1]; const den = d[0] * ey - d[1] * ex; if (Math.abs(den) < 1e-9) return null; const t = ((A[0] - p[0]) * ey - (A[1] - p[1]) * ex) / den; const u = ((A[0] - p[0]) * d[1] - (A[1] - p[1]) * d[0]) / den; return (u >= 0 && u <= 1) ? t : null; }
+const BANK = nodeM.map((n, i) => { let tp = Infinity, tn = -Infinity; const p = [n.x, n.y], d = [n.nx, n.ny]; for (const ring of RINGS_M) for (let k = 0; k < ring.length - 1; k++) { const t = segT(p, d, ring[k], ring[k + 1]); if (t === null) continue; if (t >= 0 && t < tp) tp = t; if (t < 0 && t > tn) tn = t; } const half = geo[i].bhw / 2; return { L: isFinite(tp) && tp < 1500 ? tp : half, R: isFinite(tn) && -tn < 1500 ? -tn : half }; });
+for (let k = 0; k < 2; k++) for (let i = 1; i < N - 1; i++) { BANK[i].L = (BANK[i - 1].L + 2 * BANK[i].L + BANK[i + 1].L) / 4; BANK[i].R = (BANK[i - 1].R + 2 * BANK[i].R + BANK[i + 1].R) / 4; }
+BANK[N - 1].L = BANK[N - 1].R = nodeM[N - 1].weirHalf; // la dernière section couvre tout le barrage
+// fraction de la section couverte par l'eau (1 à l'emprise OSM, blw/bhw à basse mer)
+// Pour chaque sommet de l'emprise OSM : nœud d'axe le plus proche, rive (gauche/droite) et distance à l'axe
+const MOUTH_LINE = [toXY([-4.2611, 48.2934]), toXY([-4.2409, 48.2919])];
+function distToMouthLine(p) { const [A, B] = MOUTH_LINE; const dx = B[0] - A[0], dy = B[1] - A[1]; const t = Math.max(0, Math.min(1, ((p[0] - A[0]) * dx + (p[1] - A[1]) * dy) / (dx * dx + dy * dy))); return Math.hypot(p[0] - A[0] - t * dx, p[1] - A[1] - t * dy); }
+const VERT = RINGS_M.map(ring => ring.map(p => { const onMouth = distToMouthLine(p) < 25; let bi = 0, bd = Infinity; for (let i = 0; i < N; i++) { const n = nodeM[i]; const d = (n.x - p[0]) ** 2 + (n.y - p[1]) ** 2; if (d < bd) { bd = d; bi = i; } } const n = nodeM[bi]; const side = ((p[0] - n.x) * n.nx + (p[1] - n.y) * n.ny) >= 0 ? "L" : "R"; return { i: bi, side, dist: Math.sqrt(bd), onMouth }; }));
+// fraction de la section en eau : 1 à l'emprise OSM ; chenal à basse mer ; filet d'eau seulement quand le niveau est sur le palier d'étiage (bief à sec)
+const coverFrac = i => { const sea = Math.max(0, 1 - sN[i] / 2500); const base = Math.min(1, Math.max(sea, ST.w[i] / geo[i].bhw)); const above = ST.eta[i] - plateauAt(i); const thread = 0.06 + 0.94 * Math.min(1, Math.max(0, (above - 0.04) / 0.5)); return base * thread; };
+// ===== Particules libres sur tout l'estuaire =====
+// Position (x, y) en mètres ; direction = tangente lissée du chenal au nœud le plus proche ; vitesse = celle de ce nœud,
+// modulée par un profil transversal ; tirage uniforme sur la surface en eau (nœud pondéré par la largeur, offset latéral, test dans l'emprise).
+const NP = 6000;
+const P = { x: new Float32Array(NP), y: new Float32Array(NP), age: new Float32Array(NP), life: new Float32Array(NP), px: new Float32Array(NP), py: new Float32Array(NP), i: new Int16Array(NP) };
+const TANG = nodeM.map((n, i) => { let sx = 0, sy = 0; for (let k = -4; k <= 4; k++) { const j = Math.min(N - 1, Math.max(0, i + k)); const a = nodeM[Math.max(0, j - 1)], b = nodeM[Math.min(N - 1, j + 1)]; sx += b.x - a.x; sy += b.y - a.y; } const l = Math.hypot(sx, sy) || 1; return [sx / l, sy / l]; });
+const CDF = (() => { const c = [0]; for (let i = 1; i < N; i++) c.push(c[i - 1] + (BANK[i].L + BANK[i].R + BANK[i - 1].L + BANK[i - 1].R) / 2); return c.map(v => v / c[N - 1]); })();
+function sampleNode() { const u = Math.random(); let lo = 0, hi = N - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (CDF[m] <= u) lo = m; else hi = m; } return lo; }
+// grille d'accélération pour le nœud le plus proche
+const GRID = (() => { const cell = 400; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const n of nodeM) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y); } x0 -= 1500; y0 -= 1500; x1 += 1500; y1 += 1500; const nx = Math.ceil((x1 - x0) / cell), ny = Math.ceil((y1 - y0) / cell); const cells = new Array(nx * ny); for (let cx = 0; cx < nx; cx++) for (let cy = 0; cy < ny; cy++) { const px = x0 + (cx + 0.5) * cell, py = y0 + (cy + 0.5) * cell; const near = []; for (let i = 0; i < N; i++) { const d = Math.hypot(nodeM[i].x - px, nodeM[i].y - py); if (d < 1700) near.push(i); } cells[cy * nx + cx] = near.length ? near : null; } return { cell, x0, y0, nx, ny, cells }; })();
+function nearestNode(x, y) { const cx = Math.floor((x - GRID.x0) / GRID.cell), cy = Math.floor((y - GRID.y0) / GRID.cell); let list = null; if (cx >= 0 && cy >= 0 && cx < GRID.nx && cy < GRID.ny) list = GRID.cells[cy * GRID.nx + cx]; let bi = 0, bd = Infinity; if (list) { for (const i of list) { const n = nodeM[i]; const d = (n.x - x) ** 2 + (n.y - y) ** 2; if (d < bd) { bd = d; bi = i; } } } else { for (let i = 0; i < N; i++) { const n = nodeM[i]; const d = (n.x - x) ** 2 + (n.y - y) ** 2; if (d < bd) { bd = d; bi = i; } } } return bi; }
+// bassin de l'embouchure (s < 2,5 km) : toute la surface du polygone est animée, y compris les angles hors des sections
+const I_SEA = Math.round(2500 / L * (N - 1));
+const seaBox = (() => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (let i = 0; i <= I_SEA; i++) { const n = nodeM[i]; const r = Math.max(BANK[i].L, BANK[i].R) + 400; x0 = Math.min(x0, n.x - r); y0 = Math.min(y0, n.y - r); x1 = Math.max(x1, n.x + r); y1 = Math.max(y1, n.y + r); } return { x0, y0, x1, y1 }; })();
+const SEA_SHARE = 0.22; // part des particules tirées dans le bassin
+function spawn(k, init) {
+  if (Math.random() < SEA_SHARE) { for (let t = 0; t < 30; t++) { const x = seaBox.x0 + Math.random() * (seaBox.x1 - seaBox.x0), y = seaBox.y0 + Math.random() * (seaBox.y1 - seaBox.y0); const i = nearestNode(x, y); if (i <= I_SEA && insidePoly(toLL(x, y))) { P.x[k] = x; P.y[k] = y; P.i[k] = i; P.life[k] = 2 + Math.random() * 3; P.age[k] = init ? Math.random() * P.life[k] : 0; P.px[k] = NaN; return; } } }
+  for (let t = 0; t < 12; t++) {
+    const i = sampleNode(); const n = nodeM[i]; const side = Math.random() < BANK[i].L / (BANK[i].L + BANK[i].R) ? 1 : -1; const d = side * Math.random() * (side > 0 ? BANK[i].L : BANK[i].R) * 0.97;
+    const x = n.x + n.nx * d, y = n.y + n.ny * d;
+    if (insidePoly(toLL(x, y))) { P.x[k] = x; P.y[k] = y; P.i[k] = i; break; }
+  }
+  P.life[k] = 2 + Math.random() * 3; P.age[k] = init ? Math.random() * P.life[k] : 0; P.px[k] = NaN;
+}
+for (let k = 0; k < NP; k++) spawn(k, true);
+// profil transversal : plus rapide au milieu du chenal
+function inWater(x, y, i, strict) { const n = nodeM[i]; const d = (x - n.x) * n.nx + (y - n.y) * n.ny; const bank = d >= 0 ? BANK[i].L : BANK[i].R; if (i <= I_SEA) { const along = (x - n.x) * TANG[i][0] + (y - n.y) * TANG[i][1]; if (i === 0 && along < 0) return false; return insidePoly(toLL(x, y)); } if (Math.abs(d) > bank) return false; const along = (x - n.x) * TANG[i][0] + (y - n.y) * TANG[i][1]; if (i === 0 && along < 0) return false; if (i === N - 1 && along > 0) return false; return strict ? insidePoly(toLL(x, y)) : true; }
+function lateralFactor(x, y, i) { const n = nodeM[i]; const d = (x - n.x) * n.nx + (y - n.y) * n.ny; const bank = d >= 0 ? BANK[i].L : BANK[i].R; const r = Math.abs(d) / Math.max(1, bank); if (r > 1) return Math.max(0.12, 0.5 - 0.4 * (r - 1)); return (1 - 0.6 * r * r) / 0.8; }
+let AFF = { ox: 0, oy: 0, ax: 1, ay: 0, bx: 0, by: -1 };
+function updateAffine() { const o = map.project(toLL(0, 0)), px = map.project(toLL(1000, 0)), py = map.project(toLL(0, 1000)); AFF = { ox: o.x, oy: o.y, ax: (px.x - o.x) / 1000, ay: (px.y - o.y) / 1000, bx: (py.x - o.x) / 1000, by: (py.y - o.y) / 1000 }; }
+const projX = (x, y) => AFF.ox + AFF.ax * x + AFF.bx * y, projY = (x, y) => AFF.oy + AFF.ay * x + AFF.by * y;
+function projectNodes() { updateAffine(); nodePx = nodeM.map(n => { const p = map.project(toLL(n.x, n.y)); const q = map.project(toLL(n.x + n.nx * 100, n.y + n.ny * 100)); const dx = q.x - p.x, dy = q.y - p.y, l = Math.hypot(dx, dy) || 1; return { x: p.x, y: p.y, nx: dx / l, ny: dy / l, ppm: l / 100 }; }); }
+function sToPx(s, nLat, widthArr) { const x = Math.min(N - 1, Math.max(0, s / L * (N - 1))); const i = Math.min(N - 2, Math.floor(x)), f = x - i; const a = nodePx[i], b = nodePx[i + 1]; const cf = coverFrac(i) * (1 - f) + coverFrac(i + 1) * f; const bank = nLat >= 0 ? BANK[i].L * (1 - f) + BANK[i + 1].L * f : BANK[i].R * (1 - f) + BANK[i + 1].R * f; const hw = bank * cf * 0.92 * (a.ppm * (1 - f) + b.ppm * f); const nx = a.nx * (1 - f) + b.nx * f, ny = a.ny * (1 - f) + b.ny * f; return [a.x + (b.x - a.x) * f + nx * nLat * hw, a.y + (b.y - a.y) * f + ny * nLat * hw]; }
+function clipPath(c) { // emprise OSM + ruban aval
+  c.beginPath();
+  for (const ring of OSM_POLY) { ring.forEach((ll, k) => { const p = map.project(ll); k ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y); }); c.closePath(); }
+}
+function waterPoly(c) {
+  // 1) tout le polygone en eau
+  c.beginPath(); for (const ring of OSM_POLY) { ring.forEach((ll, k) => { const p = map.project(ll); k ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y); }); c.closePath(); } c.fill("evenodd");
+  // 2) vasière découverte : bande rongée depuis chaque rive, profondeur = (1 - fraction en eau) × distance rive-axe
+  const cov = new Float32Array(N); for (let i = 0; i < N; i++) cov[i] = coverFrac(i);
+  c.save(); c.globalCompositeOperation = "destination-out"; c.strokeStyle = "#000"; c.lineCap = "round"; c.lineJoin = "round";
+  const px = OSM_POLY.map(ring => ring.map(ll => map.project(ll)));
+  for (let r = 0; r < OSM_POLY.length; r++) {
+    const ring = px[r], V = VERT[r];
+    const band = k => { const v = V[k]; const bank = v.side === "L" ? BANK[v.i].L : BANK[v.i].R; return Math.min(v.dist, bank) * (1 - cov[v.i]) * nodePx[v.i].ppm; };
+    let prev = band(0);
+    for (let k = 1; k < ring.length; k++) { const b = band(k); const w = (prev + b); prev = b; if (w < 0.6 || (V[k - 1].onMouth && V[k].onMouth)) continue; c.lineWidth = w; c.beginPath(); c.moveTo(ring[k - 1].x, ring[k - 1].y); c.lineTo(ring[k].x, ring[k].y); c.stroke(); }
+  }
+  c.restore();
+  // 3) liseré du front d'eau
+  c.strokeStyle = "rgba(134,182,239,.45)"; c.lineWidth = 1;
+  c.beginPath();
+  for (let i = 0; i < N; i++) { const n = nodePx[i], d = BANK[i].L * cov[i] * n.ppm; const x = n.x + n.nx * d, y = n.y + n.ny * d; i ? c.lineTo(x, y) : c.moveTo(x, y); }
+  c.stroke(); c.beginPath();
+  for (let i = 0; i < N; i++) { const n = nodePx[i], d = BANK[i].R * cov[i] * n.ppm; const x = n.x - n.nx * d, y = n.y - n.ny * d; i ? c.lineTo(x, y) : c.moveTo(x, y); }
+  c.stroke();
+}
+
+let lastTS = 0, realNow = Date.now(), frameNo = 0;
+const modelTime = () => realNow + app.offH * H;
+function frame(ts) {
+  const dtReal = REC.active && REC.mode === "hme" ? 1 / 30 : (lastTS ? Math.min(0.1, (ts - lastTS) / 1000) : 0); lastTS = ts; frameNo++; // encodeur logiciel : pas de temps fixe = 1 image vidéo
+  if (app.playing) app.offH += dtReal * app.secPerSec / 3600; else realNow = Date.now();
+  if (app.playing && !REC.active && app.playEnd && modelTime() >= app.playEnd) { app.offH = (app.playEnd - realNow) / H; app.playing = false; app.playEnd = null; $("recMsg").textContent = "Animation terminée à la fin choisie."; updateModeUI(); }
+  const ms = modelTime();
+  stateAt(ms);
+  const dtH = app.playing ? dtReal * app.secPerSec / 3600 : dtReal * 0.07;
+  if (mapReady) { projectNodes(); placePK(); draw(dtH); }
+  updateUI(ms);
+  drawTideMini(ms);
+  if (REC.active) { try { recCompose(); } catch (e) { if (!REC.err) REC.err = "composition : " + e.message; } recFrame(); recWatchdog(); if (!REC.active) { } else if (REC.err && REC.mode !== "mr") recStop(); else { const pct = Math.min(100, Math.round((ms - REC.start) / (REC.end - REC.start) * 100)); $("recMsg").textContent = `Enregistrement en cours${REC.mode === "hme" ? " (encodeur logiciel, rendu plus lent)" : ""}… ${pct} % · ${fmtDate(ms)} ${fmtClock(ms)}`; if (ms >= REC.end) recStop(); } }
+  requestAnimationFrame(frame);
+}
+function draw(dtH) {
+  // épaisseurs et densité adaptées au zoom : fines et clairsemées quand la rivière ne fait que quelques pixels de large
+  const zs = Math.min(1, Math.max(0, (map.getZoom() - 10.5) / 3.5));
+  const trailW = 0.5 + 0.9 * zs, dotR = 0.55 + 0.6 * zs, keep = Math.max(1, Math.round(3 - 2 * zs)), fade = 0.2 - 0.08 * zs;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, VW, VH);
+  wctx.setTransform(DPR, 0, 0, DPR, 0, 0); wctx.clearRect(0, 0, VW, VH);
+  wctx.fillStyle = WATER_COL; wctx.globalAlpha = 0.9; waterPoly(wctx); wctx.globalAlpha = 1;
+  // trainées
+  tctx.setTransform(DPR, 0, 0, DPR, 0, 0); tctx.globalCompositeOperation = "destination-out"; tctx.fillStyle = `rgba(0,0,0,${fade.toFixed(3)})`; tctx.fillRect(0, 0, VW, VH); tctx.globalCompositeOperation = "source-over";
+  const paths = Array.from({ length: BUCKETS }, () => []); const dts = dtH * 3600;
+  const umaxAbs = Math.max(0.05, Math.max(-Math.min(...ST.u), Math.max(...ST.u)) * 1.25);
+  const nSub = Math.max(1, Math.min(12, Math.ceil(umaxAbs * dts / 40))); const dsub = dts / nSub;
+  for (let k = 0; k < NP; k++) {
+    P.age[k] += dtH * 4; if (P.age[k] > P.life[k]) spawn(k, false);
+    if (isNaN(P.px[k])) { P.px[k] = projX(P.x[k], P.y[k]); P.py[k] = projY(P.x[k], P.y[k]); }
+    let u = 0; const strict = (k + frameNo) % 7 === 0;
+    for (let m = 0; m < nSub; m++) {
+      const i = nearestNode(P.x[k], P.y[k]); P.i[k] = i;
+      u = ST.u[i] * lateralFactor(P.x[k], P.y[k], i);
+      const tg = TANG[i];
+      P.x[k] += tg[0] * u * dsub; P.y[k] += tg[1] * u * dsub;
+      if (!inWater(P.x[k], P.y[k], i, strict && m === nSub - 1)) { spawn(k, false); P.px[k] = projX(P.x[k], P.y[k]); P.py[k] = projY(P.x[k], P.y[k]); break; }
+      const x = projX(P.x[k], P.y[k]), y = projY(P.x[k], P.y[k]);
+      if (dts > 0 && k % keep === 0) paths[bucketOf(u)].push(P.px[k], P.py[k], x, y);
+      P.px[k] = x; P.py[k] = y;
+    }
+  }
+  tctx.lineWidth = trailW; tctx.lineCap = "round";
+  paths.forEach((arr, b) => { if (!arr.length) return; tctx.strokeStyle = bucketColor[b]; tctx.beginPath(); for (let j = 0; j < arr.length; j += 4) { tctx.moveTo(arr[j], arr[j + 1]); tctx.lineTo(arr[j + 2], arr[j + 3]); } tctx.stroke(); });
+  // composition : le plan d'eau sert de masque, traînées et points n'apparaissent que sur l'eau
+  ctx.drawImage(waterCv, 0, 0, VW, VH);
+  ctx.globalCompositeOperation = "source-atop";
+  ctx.drawImage(trail, 0, 0, VW, VH);
+  for (let k = 0; k < NP; k += keep) { ctx.fillStyle = bucketColor[bucketOf(ST.u[P.i[k]])]; ctx.fillRect(P.px[k] - dotR, P.py[k] - dotR, 2 * dotR, 2 * dotR); }
+  ctx.globalCompositeOperation = "source-over";
+  drawLock(ctx);
+  const rv = app.rv;
+  if (rv != null && rv < L - 400) { const [x0, y0] = sToPx(rv, -1.4, ST.w), [x1, y1] = sToPx(rv, 1.4, ST.w); ctx.strokeStyle = "#fab219"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.font = "700 13px 'Barlow Condensed', sans-serif"; ctx.lineWidth = 3.5; ctx.strokeStyle = "#fff"; ctx.strokeText("renverse", x1 + 6, y1 + 4); ctx.fillStyle = "#b35c00"; ctx.fillText("renverse", x1 + 6, y1 + 4); }
+}
+
+
+// ======================= MINI-COURBE DE MARÉE (coin haut droit de la carte) =======================
+const TM = { cv: $("tideMini"), pts: null, c: 0, span: 7 * H, n: 48 };
+function drawTideMini(ms) {
+  const cvm = TM.cv, w = cvm.clientWidth, h = cvm.clientHeight; if (!w || !h) return;
+  const d = Math.min(2, devicePixelRatio || 1);
+  if (cvm.width !== Math.round(w * d) || cvm.height !== Math.round(h * d)) { cvm.width = Math.round(w * d); cvm.height = Math.round(h * d); TM.pts = null; }
+  if (!TM.pts || frameNo % 4 === 0) { // fenêtre de ± 7 h autour de l'instant affiché
+    TM.c = ms; TM.pts = [];
+    for (let k = 0; k < TM.n; k++) { const t = ms - TM.span + 2 * TM.span * k / (TM.n - 1); TM.pts.push([t, brestLevel(t)]); }
+    TM.ex = brestCtx(ms).ex.filter(e => Math.abs(e.t - ms) < TM.span - 0.6 * H);
+  }
+  const g = cvm.getContext("2d"); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, w, h);
+  const small = w < 190, fs = small ? 9 : 10, x0 = 7, x1 = w - 7, y0 = small ? 30 : 34, y1 = h - (small ? 14 : 16), yMax = 8.2;
+  const X = t => x0 + (x1 - x0) * (t - (TM.c - TM.span)) / (2 * TM.span), Y = v => y1 - (y1 - y0) * Math.max(0, Math.min(yMax, v)) / yMax;
+  g.textBaseline = "middle";
+  // titre : instant affiché + passé / temps réel / futur
+  g.font = `600 ${fs + 1}px 'IBM Plex Mono', monospace`; g.fillStyle = "#e3ebe8"; g.textAlign = "left"; g.fillText(fmtDate(ms) + " · " + fmtClock(ms), x0, 10);
+  if (!small) { const st = Math.abs(app.offH) < 1 / 60 ? "temps réel" : app.offH > 0 ? "futur" : "passé"; g.font = `500 ${fs}px 'IBM Plex Sans', sans-serif`; g.fillStyle = "#a9bbbc"; g.textAlign = "right"; g.fillText(st, x1, 10); }
+  // légende directe
+  g.font = `500 ${fs}px 'IBM Plex Sans', sans-serif`; g.textAlign = "left";
+  g.fillStyle = "#86b6ef"; g.fillRect(x0, 21, 10, 2); g.fillStyle = "#c9d6d6"; { const cf = brestCtx(ms).coef; g.fillText("Brest · " + fmtN(brestLevel(ms)) + " m" + (cf != null ? " · coef " + cf : ""), x0 + 14, 22.5); }
+  // ligne de base, aire de Brest, courbes
+  g.strokeStyle = "#2c4350"; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, y1 + 0.5); g.lineTo(x1, y1 + 0.5); g.stroke();
+  g.beginPath(); TM.pts.forEach((p, k) => k ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.lineTo(x1, y1); g.lineTo(x0, y1); g.closePath(); g.fillStyle = "rgba(134,182,239,.16)"; g.fill();
+  g.lineJoin = "round"; g.lineWidth = 2;
+  g.strokeStyle = "#86b6ef"; g.beginPath(); TM.pts.forEach((p, k) => k ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.stroke();
+  // heures des pleines et basses mers de Brest
+  g.font = `500 ${fs - 0.5}px 'IBM Plex Mono', monospace`; g.textAlign = "center"; g.fillStyle = "#a9bbbc";
+  for (const e of TM.ex) { const x = X(e.t); g.fillText((small ? "" : e.high ? "PM " : "BM ") + fmtClock(e.t), Math.max(x0 + 22, Math.min(x1 - 22, x)), h - 7); g.fillRect(x - 0.5, y1 - 2, 1, 4); }
+  // curseur : instant affiché
+  const xc = X(ms), b = brestLevel(ms);
+  g.strokeStyle = "rgba(227,235,232,.85)"; g.lineWidth = 1; g.beginPath(); g.moveTo(xc, y0 - 3); g.lineTo(xc, y1); g.stroke();
+  for (const [v, col] of [[b, "#86b6ef"]]) { g.beginPath(); g.arc(xc, Y(v), 3.5, 0, 2 * Math.PI); g.fillStyle = col; g.fill(); g.lineWidth = 1.5; g.strokeStyle = "#101b22"; g.stroke(); }
+}
+// ======================= UI =======================
+function updateModeUI() {
+  const anim = app.animMode || app.playing || REC.active;
+  const flood = anim && app.sel === "flood"; // « Prochain flot » : même règle que « Animer », réglages préremplis
+  $("bPlay").classList.toggle("primary", anim && !flood); $("bFlood").classList.toggle("primary", flood); $("bNow").classList.toggle("primary", !anim);
+  $("bPlay").setAttribute("aria-pressed", String(anim && !flood)); $("bFlood").setAttribute("aria-pressed", String(flood));
+  const running = app.playing || REC.active, rec = $("recOn").checked;
+  $("recFields").hidden = !rec; $("recOn").disabled = running; $("recStart").disabled = $("recEnd").disabled = running;
+  const go = $("bGo"); go.classList.toggle("stop", running);
+  go.textContent = running ? (REC.active ? "■ Arrêter l'animation et l'enregistrement" : "■ Arrêter l'animation") : (rec ? "▶ Lancer l'animation et l'enregistrement" : "▶ Lancer l'animation");
+  $("animOpts").hidden = !anim; $("seeAt").hidden = anim;
+}
+function updateUI(ms) {
+  updateModeUI();
+  const c = brestCtx(ms);
+  $("hNow").textContent = fmtDate(ms) + " · " + fmtClock(ms) + (Math.abs(app.offH) >= 1 / 60 ? (app.offH > 0 ? " (dans " + fmtH(app.offH) + ")" : " (il y a " + fmtH(-app.offH) + ")") : "");
+  $("oOff").textContent = Math.abs(app.offH) < 1 / 60 ? "maintenant" : (app.offH > 0 ? "dans " + fmtH(app.offH) : "il y a " + fmtH(-app.offH)); $("off").value = Math.max(-48, Math.min(240, app.offH));
+  if (document.activeElement !== $("atTime")) { const v = localInput(ms); if ($("atTime").value !== v) $("atTime").value = v; }
+  const lb = $("liveBadge"); lb.className = "live" + (app.offH ? " off" : ""); lb.innerHTML = "<i></i>" + (app.offH ? (app.offH > 0 ? "Futur" : "Passé") : "Temps réel");
+  $("srcBadge").textContent = c.approx ? "calcul approché" : "SHOM Brest"; $("srcBadge").className = "badge " + (c.approx ? "approx" : "shom");
+  const rising = c.b.high; $("kBrest").textContent = fmtN(c.h) + " m"; $("kBrestb").textContent = (rising ? "monte · PM " : "descend · BM ") + fmtClock(c.b.t) + " · coef " + (c.coef ?? "—") + (c.approx ? " (approx.)" : "");
+  const eGG = ST.eta[N - 1], gGG = ggGauge(eGG), rate = ST.deta[N - 1] * 360000;
+  $("kHL").textContent = fmtN(gGG) + " m"; $("kHLb").textContent = (gGG <= GAUGE_FLOOR + 0.005 ? "sous l'échelle · " : (rate > 1 ? "monte " + fmtN(rate, 0) + " cm/h · " : rate < -1 ? "descend " + fmtN(-rate, 0) + " cm/h · " : "étale · ")) + (gGG >= LOCK_SILL_GAUGE ? "eau dans le sas" : "sas vide · radier 0,4 m NGF = " + fmtN(LOCK_SILL_GAUGE) + " m échelle");
+  $("ggModel").textContent = fmtN(gGG) + " m";
+  if (app.gg) { const d = gGG - app.gg.h; $("ggDiff").textContent = (d >= 0 ? "+" : "") + fmtN(d) + " m" + (Math.abs(ms - app.gg.t) > 2 * H ? " (instants différents)" : ""); }
+  let um = 0, im = 0, un = 0, inn = 0; for (let i = 0; i < N - 3; i++) { if (ST.u[i] > um) { um = ST.u[i]; im = i; } if (ST.u[i] < un) { un = ST.u[i]; inn = i; } }
+  const rv = renverse(); app.rv = rv; const pk = s => fmtN(s / 1000, 1);
+  if (rv === null) { $("kU").textContent = "jusant " + fmtN(-un) + " m/s"; $("kUb").textContent = `max au PK ${pk(sN[inn])} · ${fmtN(-un * 1.944, 1)} nd`; }
+  else if (rv >= L - 400) { $("kU").textContent = "flot " + fmtN(um) + " m/s"; $("kUb").textContent = `max au PK ${pk(sN[im])} · ${fmtN(um * 1.944, 1)} nd · flot jusqu'à l'écluse`; }
+  else { $("kU").textContent = "flot " + fmtN(um) + " m/s"; $("kUb").textContent = `renverse au PK ${pk(rv)} · jusant en amont`; }
+}
+function buildTable() {
+  const ms = modelTime(); const tb = $("tideTable").querySelector("tbody"); tb.innerHTML = "";
+  const ex = extremaAround(ms + 6 * H).filter(e => e.t >= ms - 14 * H && e.t <= ms + 36 * H);
+  let marked = false;
+  for (const e of ex) {
+    const tr = document.createElement("tr"); if (!marked && e.t > ms) { tr.className = "cur"; marked = true; }
+    const gg = e.high ? `${fmtClock(e.t + PM_LAG_MIN * 60000)} · ${fmtN(e.h - PM_DROP - GAUGE_ZERO)} m` : `remonte ${fmtClock(e.t + BM_RISE_H * H)}`;
+    tr.innerHTML = `<td>${fmtDate(e.t)}</td><td>${fmtClock(e.t)}</td><td>${e.high ? "PM" : "BM"}</td><td>${fmtN(e.h)} m</td><td class="${e.approx ? "dim" : ""}">${e.high ? (e.c ?? "") + (e.approx ? "≈" : "") : ""}</td><td class="${e.high ? "" : "dim"}">${gg}</td>`;
+    tb.appendChild(tr);
+  }
+}
+$("bNow").addEventListener("click", () => { if (REC.active) recStop(); REC.done = false; app.animMode = false; app.sel = null; app.offH = 0; app.playing = false; app.playEnd = null; updateModeUI(); buildTable(); });
+$("bPlay").addEventListener("click", () => { if (REC.active || app.playing) return; resetAnimRange(); $("recMsg").textContent = ""; app.sel = "anim"; app.animMode = true; updateModeUI(); }); // ouvre le mode animation sans démarrer
+$("recOn").addEventListener("change", updateModeUI);
+$("bGo").addEventListener("click", () => {
+  if (REC.active) { recStop(); updateModeUI(); return; }
+  if (app.playing) { app.playing = false; updateModeUI(); return; }
+  if ($("recOn").checked) recStart(); else {
+    const t0 = new Date($("recStart").value).getTime(), t1 = new Date($("recEnd").value).getTime();
+    if (!(t1 > t0)) { $("recMsg").textContent = "La fin doit être postérieure au début."; return; }
+    app.offH = (t0 - realNow) / H; app.playEnd = t1; app.playing = true; clearTrail(); buildTable(); $("recMsg").textContent = "";
+  }
+  updateModeUI();
+});
+$("bFlood").addEventListener("click", () => { // préremplit début (basse mer) et fin (pleine mer suivante) sans démarrer
+  if (REC.active || app.playing) return;
+  const c = brestCtx(Date.now()); const bm = c.b.high ? c.a : c.b; const t1 = bm.t + Math.round(T_M2 * H / 2);
+  $("recStart").value = localInput(bm.t); $("recEnd").value = localInput(t1);
+  app.offH = (bm.t - realNow) / H; app.sel = "flood"; app.animMode = true; $("recMsg").textContent = ""; clearTrail(); updateModeUI(); buildTable();
+});
+$("off").addEventListener("input", e => { app.offH = +e.target.value; buildTable(); });
+$("atTime").addEventListener("change", e => { const t = new Date(e.target.value).getTime(); if (!isFinite(t)) return; app.offH = Math.max(-48, Math.min(240, (t - realNow) / H)); buildTable(); });
+$("speed").addEventListener("input", e => { app.secPerSec = +e.target.value; $("oSpeed").textContent = (app.secPerSec / 60) + " min de marée par seconde"; });
+$("q").addEventListener("input", e => { app.Q = +e.target.value; $("oQ").textContent = app.Q + " m³/s · manuel"; });
+const MOIS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+function parseShomPaste(txt) {
+  const out = []; let cur = null;
+  for (const raw of txt.split(/\n+/)) {
+    const l = raw.trim(); if (!l) continue;
+    let m = l.match(/(\d{1,2})\s+([a-zéû]+)\s+(\d{4})/i); if (m && MOIS.includes(m[2].toLowerCase())) { cur = { d: +m[1], m: MOIS.indexOf(m[2].toLowerCase()), y: +m[3] }; continue; }
+    m = l.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2})[:h](\d{2})\s+(PM|BM)\s+([\d.,]+)(?:\s+(\d+))?/i);
+    if (m) { out.push({ t: new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]).getTime(), high: m[6].toUpperCase() === "PM", h: parseFloat(m[7].replace(",", ".")), c: m[8] ? +m[8] : null }); continue; }
+    m = l.match(/^(PM|BM)\s+(\d{1,2})[:h](\d{2})\s+([\d.,]+)\s*(\d+|---)?/i);
+    if (m && cur) out.push({ t: new Date(cur.y, cur.m, cur.d, +m[2], +m[3]).getTime(), high: m[1].toUpperCase() === "PM", h: parseFloat(m[4].replace(",", ".")), c: m[5] && m[5] !== "---" ? +m[5] : null });
+  }
+  return out.filter(e => isFinite(e.t) && isFinite(e.h));
+}
+const bPaste = $("bPaste"); if (bPaste) bPaste.addEventListener("click", () => {
+  const added = parseShomPaste($("paste").value);
+  if (!added.length) { $("pasteMsg").textContent = "Aucune ligne reconnue : copiez le tableau de maree.shom.fr (jours + lignes PM/BM)."; return; }
+  EXT = EXT.filter(e => !added.some(a => Math.abs(a.t - e.t) < 30 * 60000)).concat(added).sort((a, b) => a.t - b.t);
+  try { const prev = JSON.parse(localStorage.getItem("aulne.shom.extra") || "[]"); localStorage.setItem("aulne.shom.extra", JSON.stringify(prev.filter(e => !added.some(a => Math.abs(a.t - e.t) < 30 * 60000)).concat(added))); } catch (e) { }
+  $("pasteMsg").textContent = `${added.length} extrema ajoutés (du ${fmtDate(added[0].t)} au ${fmtDate(added[added.length - 1].t)}).`; $("paste").value = ""; buildTable(); updateShomLink();
+});
+function shomCoverageEnd() { return EXT.length ? EXT[EXT.length - 1].t : 0; }
+function updateShomLink() { const end = shomCoverageEnd(); const el = $("srcText"); if (el && end) el.textContent = `Prédictions officielles du SHOM pour Brest (port de référence), chargées jusqu'au ${fmtDate(end)} ; au-delà, calcul harmonique calé sur ces horaires (± 15 min, ± 0,15 m). À Guily-Glaz, d'après le marégraphe : pleine mer 12 min après Brest et 0,3 m plus bas ; la basse mer y est un palier (eau sous l'échelle) qui ne se relève que 2 h 30 à 3 h après la BM de Brest.`; }
+async function fetchGG() {
+  $("ggMsg").textContent = "Interrogation de Hub'Eau…";
+  try {
+    const r = await fetch("https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=J382183001&size=1&grandeur_hydro=H&fields=date_obs,resultat_obs&sort=desc");
+    const j = await r.json(); const d = j.data && j.data[0]; if (!d) throw new Error("pas de donnée");
+    app.gg = { t: Date.parse(d.date_obs), h: d.resultat_obs / 1000 };
+    $("ggMeas").textContent = `${fmtN(app.gg.h)} m à ${fmtClock(app.gg.t)}`;
+    $("ggMsg").textContent = `Dernière mesure ${fmtDate(app.gg.t)} ${fmtClock(app.gg.t)} (Hub'Eau, J382183001). Le palier à −0,64 m est le fond de l'échelle.`;
+  } catch (e) { $("ggMeas").textContent = "indisponible"; $("ggMsg").textContent = "Hub'Eau injoignable depuis cette page (" + e.message + "). La mesure est aussi visible sur le widget Antreizh."; }
+}
+async function fetchQ() {
+  $("hubMsg").textContent = "Interrogation de Hub'Eau…";
+  try {
+    const r = await fetch("https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=J382182001&size=1&grandeur_hydro=Q&fields=date_obs,resultat_obs&sort=desc");
+    const j = await r.json(); const d = j.data && j.data[0]; if (!d) throw new Error("pas de donnée");
+    const qm = d.resultat_obs / 1000; const q = Math.max(1, Math.min(150, Math.round(qm)));
+    app.Q = q; app.qLive = { t: Date.parse(d.date_obs), q: qm }; $("q").value = q; $("oQ").textContent = fmtN(qm, 1) + " m³/s · mesuré";
+    $("hubMsg").textContent = `Débit mesuré ${fmtN(qm, 1)} m³/s le ${fmtDate(app.qLive.t)} à ${fmtClock(app.qLive.t)} (Hub'Eau, station J382182001, Châteaulin). Mise à jour toutes les 10 min ; le curseur permet d'essayer d'autres valeurs.`;
+    buildTable();
+  } catch (e) { $("hubMsg").textContent = "Hub'Eau injoignable (" + e.message + "). Réglez le débit à la main (vigicrues.gouv.fr, station Châteaulin)."; }
+}
+
+// ======================= ENREGISTREMENT VIDÉO =======================
+const REC = { active: false, done: false, mode: null, recorder: null, chunks: [], canvas: document.createElement("canvas"), end: 0, start: 0, encoder: null, muxer: null, t0: 0, lastTs: -1 };
+function recMime() { if (!window.MediaRecorder) return null; for (const m of ["video/mp4;codecs=avc1.42E01E", "video/mp4;codecs=avc1", "video/mp4"]) if (MediaRecorder.isTypeSupported(m)) return m; return null; }
+function loadMuxer() { return new Promise((res, rej) => { if (window.Mp4Muxer) return res(); const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js"; s.onload = () => res(); s.onerror = () => rej(new Error("bibliothèque MP4 non chargée")); document.head.appendChild(s); }); }
+function localInput(ms) { const d = new Date(ms); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+function resetAnimRange() { const s = new Date(); s.setDate(s.getDate() - 2); s.setHours(0, 0, 0, 0); $("recStart").value = localInput(s.getTime()); $("recEnd").value = localInput(Date.now()); } // par défaut : de J−2 à 0 h jusqu'au moment de la demande
+resetAnimRange();
+function recCompose() {
+  const c = REC.canvas, g = c.getContext("2d"); const w = c.width, h = c.height;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = "#eef0ec"; g.fillRect(0, 0, w, h);
+  if (!REC.noMap) try { g.drawImage(map.getCanvas(), 0, 0, w, h); } catch (e) { }
+  g.drawImage(cv, 0, 0, w, h);
+  const k = w / VW; g.setTransform(k, 0, 0, k, 0, 0);
+  // étiquettes des lieux et bornes PK
+  g.font = "500 12px 'IBM Plex Sans', sans-serif"; g.textBaseline = "middle"; g.lineWidth = 3; g.strokeStyle = "#fff"; g.lineJoin = "round";
+  for (const [name, lon, lat, anchor = "left", dx = 8, dy = 0] of PLACES) { const p = map.project([lon, lat]); g.textAlign = anchor === "right" ? "right" : "left"; g.fillStyle = name.startsWith("Écluse") ? "#b35c00" : "#17313d"; g.strokeText(name, p.x + dx, p.y + dy); g.fillText(name, p.x + dx, p.y + dy); if (name !== "Embouchure") { g.beginPath(); g.arc(p.x, p.y, 3.5, 0, Math.PI * 2); g.fillStyle = "#17313d"; g.fill(); g.lineWidth = 1.5; g.stroke(); g.lineWidth = 3; } }
+  g.font = "600 11px 'IBM Plex Mono', monospace"; g.textAlign = "center"; g.fillStyle = "#b35c00";
+  for (const m of PK_MARKERS) { const ll = m.mk.getLngLat(); const p = map.project(ll); g.strokeText(m.el.textContent, p.x, p.y); g.fillText(m.el.textContent, p.x, p.y); }
+  // cartouche : date, heure, Brest, Guily-Glaz, courant
+  const ms = modelTime(); const lines = [fmtDate(ms) + " · " + fmtClock(ms), "Brest " + $("kBrest").textContent + " · " + $("kBrestb").textContent, "Guily-Glaz " + $("kHL").textContent + " · " + $("kHLb").textContent, $("kU").textContent + " · " + $("kUb").textContent];
+  g.textAlign = "left"; g.font = "500 13px 'IBM Plex Mono', monospace"; let tw = 0; for (const l of lines) tw = Math.max(tw, g.measureText(l).width);
+  g.fillStyle = "rgba(16,27,34,.88)"; g.fillRect(10, 10, tw + 20, 18 * lines.length + 12); g.fillStyle = "#e3ebe8"; lines.forEach((l, i) => g.fillText(l, 20, 25 + 18 * i));
+  { const m = TM.cv, mw = m.clientWidth, mh = m.clientHeight; if (mw && m.width) { g.fillStyle = "rgba(16,27,34,.92)"; g.fillRect(VW - mw - 10, 10, mw, mh); g.drawImage(m, VW - mw - 10, 10, mw, mh); } }
+  g.font = "600 11px 'IBM Plex Sans', sans-serif"; g.textAlign = "right"; g.lineWidth = 3; g.strokeStyle = "rgba(255,255,255,.9)"; g.fillStyle = "#3b4a52"; const cr = "Fond © OpenStreetMap · horaires Shom · marégraphe Hub'Eau · © antreizh.fr · modèle de démonstration"; g.strokeText(cr, VW - 10, VH - 12); g.fillText("Fond © OpenStreetMap · horaires Shom · marégraphe Hub'Eau · © antreizh.fr · modèle de démonstration", VW - 10, VH - 12);
+}
+let DL = null; // capacité « downloads » de la visionneuse d'artefacts (null hors artefact)
+if (window.claude && typeof window.claude.use === "function") window.claude.use("downloads").then(ns => { DL = ns; }).catch(() => { });
+function fileDownload(blob, name) { const u = URL.createObjectURL(blob), a = document.createElement("a"); a.href = u; a.download = name; a.style.display = "none"; document.body.appendChild(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(u); }, 60000); }
+async function saveVideo() {
+  if (!REC.blob) return;
+  if (DL) {
+    try { await DL.save({ filename: REC.fname, data: REC.blob }); $("recMsg").textContent = `Vidéo enregistrée dans vos téléchargements : ${REC.fname}`; }
+    catch (e) { $("recMsg").textContent = e && e.code === "declined" ? "Téléchargement annulé. Vous pouvez recliquer sur le bouton." : "Téléchargement impossible ici (" + (e && e.code || e) + "). Ouvrez le fichier HTML hors de Claude."; }
+  } else { fileDownload(REC.blob, REC.fname); $("recMsg").textContent = `Vidéo envoyée dans vos téléchargements : ${REC.fname}`; }
+}
+function recFinish(blob) {
+  const t0 = REC.start, t1 = REC.end;
+  if (!REC.outBytes || blob.size < 2048) { REC.blob = null; $("recLink").hidden = true; $("recMsg").textContent = "La vidéo n'a pas pu être encodée. Détail : " + recDiag(); return; }
+  if (REC.mode === "wc") try { localStorage.setItem("aulneRecCodec", REC.codec); } catch (e) { }
+  REC.blob = blob; REC.fname = `aulne-maree_${localInput(t0).replace(/[:T]/g, "-")}_${localInput(t1).replace(/[:T]/g, "-")}.mp4`;
+  const b = $("recLink"); b.hidden = false; b.textContent = `⬇ Télécharger la vidéo MP4 (${(blob.size / 1048576).toFixed(1)} Mo)`;
+  $("recMsg").textContent = `Enregistrement terminé : ${fmtDate(t0)} ${fmtClock(t0)} → ${fmtDate(t1)} ${fmtClock(t1)}.`; REC.done = true;
+  if (!DL) saveVideo(); // fichier HTML ouvert directement : téléchargement automatique
+}
+function mapReadable() { // le fond de carte peut « contaminer » le canevas (tuiles sans CORS) : on le teste avant d'enregistrer
+  try { const t = document.createElement("canvas"); t.width = t.height = 2; const g = t.getContext("2d"); g.drawImage(map.getCanvas(), 0, 0, 2, 2); g.getImageData(0, 0, 1, 1); return true; } catch (e) { return false; }
+}
+const AVC_CODECS = ["avc1.640028", "avc1.4d0028", "avc1.42e028", "avc1.640033", "avc1.4d0033", "avc1.42e033", "avc1.42e01f"];
+async function pickCodec(W, Hh) {
+  if (!window.VideoEncoder || !window.VideoFrame) return null;
+  for (const c of AVC_CODECS.slice(REC.codecFrom || 0)) {
+    try { const s = await VideoEncoder.isConfigSupported({ codec: c, width: W, height: Hh, bitrate: 6e6, framerate: 30, avc: { format: "avc" } }); if (s.supported) return c; } catch (e) { }
+  }
+  return null;
+}
+const HME_URL = "https://unpkg.com/h264-mp4-encoder@1.0.12/embuild/dist/h264-mp4-encoder.web.js";
+function loadHME() { return new Promise((res, rej) => { if (window.HME) return res(); const s = document.createElement("script"); s.src = HME_URL; s.onload = () => window.HME ? res() : rej(new Error("encodeur logiciel absent")); s.onerror = () => rej(new Error("encodeur logiciel non chargé")); document.head.appendChild(s); }); }
+// ---- H.264 → MP4 : Firefox livre parfois un flux « Annex B » et une description avcC défectueuse
+// (en-tête de NAL doublé, champs réservés à 0) que le lecteur de Windows refuse : on reconstruit tout proprement.
+const isAnnexB = d => d.length > 4 && d[0] === 0 && d[1] === 0 && (d[2] === 1 || (d[2] === 0 && d[3] === 1));
+function nalsFromAnnexB(d) {
+  const out = []; let i = 0, start = -1;
+  while (i + 2 < d.length) {
+    if (d[i] === 0 && d[i + 1] === 0 && d[i + 2] === 1) { if (start >= 0) { let e = i; while (e > start && d[e - 1] === 0) e--; out.push(d.subarray(start, e)); } i += 3; start = i; }
+    else i++;
+  }
+  if (start >= 0 && start < d.length) out.push(d.subarray(start));
+  return out.filter(n => n.length);
+}
+function nalsFromAvcc(d, strict) { // strict : null si le tampon n'est pas exactement une suite « longueur + NAL »
+  const out = []; let i = 0;
+  while (i + 4 <= d.length) { const l = ((d[i] << 24) >>> 0) + (d[i + 1] << 16) + (d[i + 2] << 8) + d[i + 3]; if (!l || i + 4 + l > d.length || (d[i + 4] & 0x80)) break; out.push(d.subarray(i + 4, i + 4 + l)); i += 4 + l; }
+  return strict && i !== d.length ? null : out;
+}
+function toAvcc(nals) { const n = nals.reduce((s, x) => s + 4 + x.length, 0), out = new Uint8Array(n); let o = 0; for (const x of nals) { out[o] = x.length >>> 24; out[o + 1] = (x.length >>> 16) & 255; out[o + 2] = (x.length >>> 8) & 255; out[o + 3] = x.length & 255; out.set(x, o + 4); o += 4 + x.length; } return out; }
+function buildAvcC(sps, pps) {
+  const out = new Uint8Array(11 + sps.length + pps.length);
+  out.set([1, sps[1], sps[2], sps[3], 0xff, 0xe1, sps.length >> 8, sps.length & 255]); out.set(sps, 8);
+  const o = 8 + sps.length; out.set([1, pps.length >> 8, pps.length & 255], o); out.set(pps, o + 3); return out.buffer;
+}
+function cleanAvcC(buf) { // relit la description du navigateur et la réécrit (en-tête de NAL doublé retiré)
+  if (!buf) return null;
+  const d = new Uint8Array(buf.buffer ? buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) : buf);
+  if (d.length < 8 || d[0] !== 1 || (d[5] & 31) < 1) return null;
+  const rd = o => { const l = (d[o] << 8) + d[o + 1]; let n = d.subarray(o + 2, o + 2 + l); if (n.length > 1 && n[0] === n[1] && ((n[0] & 31) === 7 || (n[0] & 31) === 8)) n = n.subarray(1); return [n, o + 2 + l]; };
+  const s = rd(6); if (d[s[1]] < 1) return null; return buildAvcC(s[0], rd(s[1] + 1)[0]);
+}
+function recOnChunk(chunk, meta) {
+  let data = new Uint8Array(chunk.byteLength); chunk.copyTo(data);
+  // format MP4 (longueurs) d'abord : une longueur de 256 à 511 octets commence par 00 00 01 et ressemble à un code de début
+  let nals = nalsFromAvcc(data, true), annexB = false;
+  if (!nals) { if (!isAnnexB(data)) throw new Error("flux H.264 illisible"); nals = nalsFromAnnexB(data); annexB = true; }
+  if (annexB) data = toAvcc(nals.filter(n => (n[0] & 31) !== 9)); // délimiteurs d'unité d'accès retirés
+  for (const n of nals) { const ty = n[0] & 31; if (ty === 7 && !REC.sps) REC.sps = n.slice(); else if (ty === 8 && !REC.pps) REC.pps = n.slice(); }
+  if (REC.first) {
+    const dc0 = (meta && meta.decoderConfig) || {};
+    const desc = REC.sps && REC.pps ? buildAvcC(REC.sps, REC.pps) : cleanAvcC(dc0.description);
+    if (!desc) throw new Error("description H.264 absente");
+    const cs = dc0.colorSpace || {};
+    meta = Object.assign({}, meta || {}, { decoderConfig: Object.assign({ codec: REC.codec, codedWidth: REC.canvas.width, codedHeight: REC.canvas.height }, dc0, { description: desc, colorSpace: { primaries: cs.primaries || "bt709", transfer: cs.transfer || "bt709", matrix: cs.matrix || "bt709", fullRange: !!cs.fullRange } }) });
+    REC.first = false;
+  }
+  const du = Number.isFinite(chunk.duration) && chunk.duration > 0 ? chunk.duration : 33333;
+  REC.muxer.addVideoChunkRaw(data, chunk.type, chunk.timestamp, du, meta);
+}
+const REC_MODES = ["wc", "mr", "hme"]; // WebCodecs → MediaRecorder MP4 → encodeur logiciel WebAssembly
+function recSize(cap) { const k = Math.min(DPR, cap / VW, cap * 9 / 16 / VH); return [Math.max(2, Math.round(VW * k / 2) * 2), Math.max(2, Math.round(VH * k / 2) * 2)]; }
+function recTeardown() {
+  try { if (REC.recorder && REC.recorder.state !== "inactive") { REC.recorder.onstop = null; REC.recorder.stop(); } } catch (e) { }
+  try { if (REC.encoder && REC.encoder.state !== "closed") REC.encoder.close(); } catch (e) { }
+  try { if (REC.hme) REC.hme.delete(); } catch (e) { }
+  if (REC.canvas && REC.canvas.parentNode) REC.canvas.remove();
+  REC.recorder = REC.encoder = REC.muxer = REC.target = REC.hme = null;
+}
+async function recSetup(mode) {
+  const cv2 = document.createElement("canvas"); REC.canvas = cv2;
+  if (mode === "wc") {
+    const [W, Hh] = recSize(1920), codec = await pickCodec(W, Hh); if (!codec) throw new Error("H.264 non proposé");
+    cv2.width = W; cv2.height = Hh;
+    REC.target = new Mp4Muxer.ArrayBufferTarget(); REC.muxer = new Mp4Muxer.Muxer({ target: REC.target, video: { codec: "avc", width: W, height: Hh, frameRate: 30 }, fastStart: "in-memory", firstTimestampBehavior: "offset" });
+    REC.encoder = new VideoEncoder({ output: (chunk, meta) => { REC.outBytes += chunk.byteLength; try { recOnChunk(chunk, meta); } catch (e) { if (!REC.err) REC.err = "assemblage : " + e.message; } }, error: e => { if (!REC.err) REC.err = "encodeur : " + e.message; } });
+    REC.encoder.configure({ codec, width: W, height: Hh, bitrate: 6e6, framerate: 30, avc: { format: "avc" } });
+    REC.codec = codec; REC.sps = REC.pps = null; REC.first = true;
+  } else if (mode === "mr") {
+    const mime = recMime(); if (!mime) throw new Error("MP4 non proposé");
+    const [W, Hh] = recSize(1920); cv2.width = W; cv2.height = Hh;
+    // le canevas doit être dans la page pour que le navigateur en capture les images
+    cv2.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1"; document.body.appendChild(cv2);
+    REC.chunks = [];
+    REC.recorder = new MediaRecorder(cv2.captureStream(30), { mimeType: mime, videoBitsPerSecond: 6e6 });
+    REC.recorder.ondataavailable = ev => { if (ev.data && ev.data.size) { REC.chunks.push(ev.data); REC.outBytes += ev.data.size; } };
+    REC.recorder.onstop = () => recFinish(new Blob(REC.chunks, { type: "video/mp4" }));
+    REC.codec = mime;
+  } else {
+    $("recMsg").textContent = "Chargement de l'encodeur vidéo logiciel (1,7 Mo)…";
+    await loadHME(); const [W, Hh] = recSize(1280); cv2.width = W; cv2.height = Hh; cv2.getContext("2d", { willReadFrequently: true });
+    const e = await HME.createH264MP4Encoder(); e.width = W; e.height = Hh; e.frameRate = 30; e.speed = 10; e.quantizationParameter = 27; e.groupOfPictures = 60; e.initialize(); REC.hme = e; REC.codec = "wasm";
+  }
+  REC.mode = mode;
+}
+function recDiag() { return `${REC.diag.join(" | ")}${REC.diag.length ? " | " : ""}mode ${REC.mode || "—"} ${REC.codec || ""} ${REC.canvas ? REC.canvas.width + "×" + REC.canvas.height : ""}, ${REC.frames} images, ${REC.outBytes} octets${REC.err ? ", " + REC.err : ""}`; }
+async function recStart(from = 0, keep = false) {
+  const t0 = new Date($("recStart").value).getTime(), t1 = new Date($("recEnd").value).getTime();
+  if (!(t1 > t0)) { $("recMsg").textContent = "La fin doit être postérieure au début."; return; }
+  if (from === 0 && !keep) { // réglage H.264 qui a fonctionné la dernière fois dans ce navigateur : on commence par lui
+    REC.diag = []; let saved = null; try { saved = localStorage.getItem("aulneRecCodec"); } catch (e) { }
+    REC.codecFrom = Math.max(0, AVC_CODECS.indexOf(saved));
+  }
+  REC.start = t0; REC.end = t1; REC.done = false; REC.err = ""; REC.frames = 0; REC.outBytes = 0; REC.lastTs = -1; REC.blob = null; REC.mode = null; REC.codec = "";
+  REC.noMap = !mapReadable();
+  $("bGo").disabled = true; $("recMsg").textContent = "Préparation de l'encodeur vidéo…";
+  let ok = false;
+  for (let m = from; m < REC_MODES.length && !ok; m++) {
+    try { await recSetup(REC_MODES[m]); ok = true; } catch (e) { REC.diag.push(REC_MODES[m] + " : " + (e && e.message || e)); recTeardown(); }
+  }
+  $("bGo").disabled = false;
+  if (!ok) { REC.mode = null; $("recMsg").textContent = "Impossible de préparer l'encodage MP4. Détail : " + REC.diag.join(" | "); updateModeUI(); return; }
+  recCompose();
+  app.offH = (t0 - realNow) / H; app.playing = true; clearTrail(); buildTable();
+  REC.active = true; REC.t0 = performance.now(); $("recLink").hidden = true; updateModeUI();
+  if (REC.mode === "mr") REC.recorder.start(250);
+  $("recMsg").textContent = "Enregistrement MP4 en cours…";
+}
+function recWatchdog() { // encodeur muet après ~2,5 s, ou en échec en cours de route : on essaie le suivant, depuis le début
+  if (!REC.active || REC.mode === "hme") return;
+  if (REC.mode === "wc" && REC.err) { // échec en cours de route (cas de certains Firefox) : profil H.264 suivant
+    REC.diag.push(`${REC.codec} : ${REC.err} (${REC.frames} images)`);
+    REC.codecFrom = AVC_CODECS.indexOf(REC.codec) + 1;
+    REC.active = false; app.playing = false; recTeardown(); recStart(0, true); return;
+  }
+  if (REC.outBytes > 0) return;
+  if (performance.now() - REC.t0 < 2500 && !REC.err) return;
+  REC.diag.push(`${REC.mode} : ${REC.err || "aucune donnée"} (${REC.frames} images)`);
+  const next = REC_MODES.indexOf(REC.mode) + 1;
+  REC.active = false; app.playing = false; recTeardown(); recStart(next);
+}
+function recFrame() { // WebCodecs : une image par rafraîchissement, horodatée en temps réel
+  if (REC.mode === "hme") { try { const c = REC.canvas; REC.hme.addFrameRgba(c.getContext("2d").getImageData(0, 0, c.width, c.height).data); REC.frames++; } catch (e) { if (!REC.err) REC.err = "image : " + e.message; } return; }
+  if (REC.mode !== "wc" || !REC.encoder || REC.encoder.state !== "configured") return;
+  const ts = Math.round((performance.now() - REC.t0) * 1000); if (ts <= REC.lastTs) return;
+  if (REC.encoder.encodeQueueSize > 6) return;
+  let f = null;
+  try { f = new VideoFrame(REC.canvas, { timestamp: ts }); REC.encoder.encode(f, { keyFrame: REC.frames % 60 === 0 }); REC.frames++; REC.lastTs = ts; }
+  catch (e) { if (!REC.err) REC.err = "image : " + e.message; }
+  finally { if (f) f.close(); }
+}
+async function recStop() {
+  if (!REC.active) return; REC.active = false; app.playing = false; updateModeUI();
+  if (REC.mode === "mr") { try { REC.recorder.stop(); } catch (e) { } setTimeout(() => { if (REC.canvas && REC.canvas.parentNode) REC.canvas.remove(); }, 1000); }
+  else if (REC.mode === "hme") { try { REC.hme.finalize(); const d = REC.hme.FS.readFile(REC.hme.outputFilename); try { REC.hme.FS.unlink(REC.hme.outputFilename); } catch (e) { } REC.hme.delete(); REC.hme = null; REC.outBytes = d.length; recFinish(new Blob([d], { type: "video/mp4" })); } catch (e) { $("recMsg").textContent = "Erreur de finalisation MP4 : " + e.message; } REC.frames = 0; }
+  else if (REC.mode === "wc") { try { if (REC.encoder.state === "configured") await REC.encoder.flush(); try { REC.encoder.close(); } catch (e) { } REC.muxer.finalize(); recFinish(new Blob([REC.target.buffer], { type: "video/mp4" })); } catch (e) { $("recMsg").textContent = "Erreur de finalisation MP4 : " + e.message; } REC.frames = 0; }
+}
+
+// sonde au survol
+map.getCanvas().addEventListener("pointermove", ev => {
+  if (!nodePx.length) return; const r = map.getCanvas().getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top; let bi = 0, bd = 1e12;
+  for (let i = 0; i < N; i += 2) { const d = (nodePx[i].x - x) ** 2 + (nodePx[i].y - y) ** 2; if (d < bd) { bd = d; bi = i; } }
+  const tip = $("tip"); const hwPx = Math.max(14, (geo[bi].bhw / 2 + 40) * nodePx[bi].ppm);
+  if (Math.sqrt(bd) > hwPx) { tip.style.display = "none"; return; }
+  const u = ST.u[bi], e = ST.eta[bi]; const dir = Math.abs(u) < 0.05 ? "étale" : u > 0 ? "flot" : "jusant";
+  tip.innerHTML = `<div class="t">PK ${fmtN(sN[bi] / 1000, 1)}</div>niveau   ${fmtN(e)} m CM<br>hauteur  ${fmtN(e - geo[bi].zb)} m<br>largeur  ${Math.round(ST.w[bi])} m${geo[bi].real ? " (PM : " + Math.round(geo[bi].bhw) + " m, OSM)" : ""}<br>courant  ${fmtN(Math.abs(u))} m/s · ${fmtN(Math.abs(u) * 1.944, 1)} nd · ${dir}<br>niveau   ${fmtN(ST.deta[bi] * 360000, 0)} cm/h`;
+  tip.style.display = "block"; let tx = x + 14, ty = y + 14; if (tx + 250 > VW) tx = Math.max(4, x - 260); if (ty + 110 > VH) ty = Math.max(4, y - 120); tip.style.left = tx + "px"; tip.style.top = ty + "px";
+});
+map.getCanvas().addEventListener("pointerleave", () => $("tip").style.display = "none");
+updateShomLink(); resize(); buildTable(); setInterval(buildTable, 60000); fetchGG(); setInterval(fetchGG, 5 * 60000); fetchQ(); setInterval(fetchQ, 10 * 60000);
+if (matchMedia("(prefers-reduced-motion: reduce)").matches) app.playing = false;
+requestAnimationFrame(frame);
+$("recLink").addEventListener("click", saveVideo);
+</script><script>
+  // Signale la hauteur du contenu à l'application pour que le cadre s'ajuste (pas de barre de défilement)
+  (function () {
+    if (window.parent === window) return;
+    var last = 0;
+    function envoyer() {
+      var h = Math.ceil(document.body.getBoundingClientRect().height);
+      if (h && h !== last) { last = h; window.parent.postMessage({ hydraulneHauteur: h }, "*"); }
+    }
+    if (window.ResizeObserver) new ResizeObserver(envoyer).observe(document.body);
+    window.addEventListener("load", envoyer);
+  })();
+</script>
+</body></html>

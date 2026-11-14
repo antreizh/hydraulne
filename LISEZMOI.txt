@@ -26,6 +26,8 @@ du doigt) ; l'onglet choisi est retenu pour la prochaine ouverture :
                              2026 comparé à 2005-2025, synthèse et rapport PDF (docs/)
   Nappes SS-SP relatif       nappes de Saint-Ségal et de Spézet sur un même graphe, en écart
                              à la moyenne 2005-2025 du jour, avec min-max relatifs de chacune
+  Onde marée                 carte animée de la marée dans l'Aulne maritime, de Landévennec à Guily Glaz :
+                             courants, vasières, courbe de Brest, vidéo MP4 (page widgets/onde-maree.html)
 Un onglet s'ouvre directement avec son adresse, par exemple
 https://appli.antreizh.fr/#correlation
 
@@ -83,10 +85,10 @@ Mettre à jour l'application
   - Remplacez index.html sur l'hébergement : l'application installée prendra
     la nouvelle version à sa prochaine ouverture avec du réseau.
   - Si vous modifiez les icônes ou le nom, changez aussi la ligne
-    const CACHE = "situation-hydro-v106"  dans sw.js (v107, v108…).
+    const CACHE = "situation-hydro-v107"  dans sw.js (v107, v108…).
 
   - À chaque nouvelle version, l'appli passe aussi un numéro aux tableaux
-    (adresse « meteo-….html?v=106 » dans index.html) : le téléphone recharge
+    (adresse « meteo-….html?v=107 » dans index.html) : le téléphone recharge
     alors forcément les nouveaux tableaux.
   - Si un téléphone affiche encore une ancienne version : fermez complètement
     l'application puis rouvrez-la deux fois (la 1re ouverture installe la mise
