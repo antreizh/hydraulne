@@ -11,7 +11,6 @@
 /* Plan : carte réelle (OpenStreetMap) à gauche, panneau de marée à droite. Palette sombre de carte marine.
    Données : horaires SHOM de Brest, marégraphe de Guily-Glaz (Hub'Eau), emprise OSM de l'Aulne maritime (relation 9871). */
 :root {
-  color-scheme: dark;
   --ink: #e3ebe8; --ink-2: #a9bbbc; --ink-3: #74898b;
   --bg: #0b1418; --panel: #101b22; --rule: #213139;
   --flood: #86b6ef; --ebb: #e66767; --warn: #fab219; --good: #0ca30c;
@@ -20,8 +19,9 @@
   --f-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); }
-.app { display: grid; grid-template-rows: auto auto auto; }
+html, body { margin: 0; background: transparent; } /* la page hôte garde son propre fond : seul le widget est sombre */
+body { font: 14px/1.45 var(--f-body); }
+.app { display: grid; grid-template-rows: auto auto auto; color-scheme: dark; background: var(--bg); color: var(--ink); border-radius: 12px; overflow: hidden; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; padding: 10px 16px; border-bottom: 1px solid var(--rule); background: var(--panel); }
 header h1 { font: 700 22px/1.1 var(--f-display); margin: 0; letter-spacing: .01em; }
 header .now { font: 500 13px var(--f-mono); color: var(--ink-2); }
