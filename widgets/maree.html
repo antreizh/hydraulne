@@ -249,20 +249,22 @@
         if (x.type === "PM" && x.coef != null && (coef == null || Math.abs(x.date - e.date) < Math.abs(e._b - e.date))) { coef = x.coef; e._b = x.date; }
       });
       var c = pr[e.type === "PM" ? "pm" : "bm"], f = Math.max(0, Math.min(1, ((coef == null ? 70 : coef) - 45) / 50));
-      return { type: e.type, coef: e.coef,
+      return { type: e.type, coef: e.coef, brest: e.date,                    // heure de Brest, pour le choix du coefficient
         date: new Date(e.date.getTime() + Math.round(c.me.dt + (c.ve.dt - c.me.dt) * f) * 60000),
         h: e.h != null ? e.h + c.me.dh + (c.ve.dh - c.me.dh) * f : null };
     });
   }
   // Règle « jour J d'abord » : coefficient = pleine mer du jour la plus proche de maintenant ;
   // si aucune n'est disponible aujourd'hui, celle de la prochaine pleine mer (lendemain).
+  // Le choix se fait sur les heures de Brest (e.brest quand l'heure affichée est corrigée pour un autre lieu) :
+  // tous les widgets changent ainsi de coefficient à la même minute.
   function choisirCoef(ev, now) {
-    var pm = null, jour = now.toDateString();
+    var pm = null, jour = now.toDateString(), hB = function (e) { return e.brest || e.date; };
     ev.forEach(function (e) {
-      if (e.type === "PM" && e.coef != null && e.date.toDateString() === jour &&
-          (!pm || Math.abs(e.date - now) < Math.abs(pm.date - now))) pm = e;
+      if (e.type === "PM" && e.coef != null && hB(e).toDateString() === jour &&
+          (!pm || Math.abs(hB(e) - now) < Math.abs(hB(pm) - now))) pm = e;
     });
-    if (!pm) for (var i = 0; i < ev.length; i++) if (ev[i].type === "PM" && ev[i].coef != null && ev[i].date > now) { pm = ev[i]; break; }
+    if (!pm) for (var i = 0; i < ev.length; i++) if (ev[i].type === "PM" && ev[i].coef != null && hB(ev[i]) > now) { pm = ev[i]; break; }
     return pm;
   }
   function estDemain(d, now) {
