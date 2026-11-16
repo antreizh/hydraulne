@@ -203,9 +203,12 @@ function dessiner(){
   {const a=P(-56,l0),b=P(62,l0);ctx.beginPath();ctx.moveTo(a[0],a[1]-2);ctx.lineTo(b[0],b[1]);ctx.strokeStyle=C.ink;ctx.lineWidth=1;ctx.globalAlpha=0.55;ctx.stroke();ctx.globalAlpha=1;
    poly([[b[0]-5,b[1]-9],[b[0]+5,b[1]-9],[b[0],b[1]-1]]);ctx.fillStyle=C.ink;ctx.fill();}
   // noms des rangs, à droite de la bulle
-  const xl=cx+R+10;
+  // décalés vers la droite pour ne pas chevaucher les colonnes qui dépassent de la bulle, sans sortir du cadre
+  const nomSt=s=>S<480?s.nom.replace('Saint-','St-'):s.nom;
+  font(S<400?10:11.5,true); const lmax=Math.max(...ST.map(s=>ctx.measureText(nomSt(s)).width));
+  const xl=Math.max(cx+R+10,Math.min(cx+R+(etroit?24:36),S-3-lmax));
   ST.forEach(s=>{const y0=cy-R*(Math.sin(s.lat*RAD)*ct), y=y0-(s.haut||0)*R;ctx.beginPath();ctx.moveTo(cx+R*Math.cos(s.lat*RAD)+2,y0);ctx.lineTo(xl-3,y);ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.stroke();
-    txt(etroit?s.nom.replace('Saint-','St-'):s.nom,xl,y,{a:"left",s:S<400?10:11.5,c:C.ink,b:true});});
+    txt(nomSt(s),xl,y,{a:"left",s:S<400?10:11.5,c:C.ink,b:true});});
   {const y=cy+R*0.42;txt("Guily Glaz",xl,y,{a:"left",s:S<400?10:11.5,c:C.eau,b:true});txt("hauteur d'eau",xl,y+14,{a:"left",s:S<400?9:10});}
   lire();
 }
