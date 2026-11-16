@@ -290,7 +290,7 @@ function charger(){
     fenetre();
     sel=auPresent?fin:new Date(Math.max(+debut+5*60e3,fin-ecart));
     curseur.value=Math.round((sel-debut)/(5*60e3));
-    if(!rafEau)dessiner();
+    dessiner();
   });
 }
 charger();
