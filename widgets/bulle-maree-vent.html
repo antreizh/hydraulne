@@ -9,17 +9,20 @@
 :root{
   --bg:#f4f7f9; --card:#ffffff; --ink:#0b3c5d; --muted:#5f7180; --line:#dde5eb;
   --eau:#1f7bb6; --main:#c2410c; --sol-jour:#f6ecc9; --sol-nuit:#d9e2ea;
-  --v1:#9fb7c6; --v2:#2a9d8f; --v3:#e9a23b; --v4:#e76f51; --v5:#b5179e;
+  --v1:#9fb7c6; --v2:#2a9d8f; --v3:#8cc152; --v4:#e9c23b; --v5:#e9a23b; --v6:#e76f51; --v7:#d62839; --v8:#b5179e;
+  --v9:#7b2cbf; --v10:#5a189a; --v11:#3c096c; --v12:#10002b;
   --font:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0c1820; --card:#11222d; --ink:#e3eef5; --muted:#93a8b6; --line:#24394a;
   --eau:#4fa8dd; --main:#fb923c; --sol-jour:#3a3a2a; --sol-nuit:#0a151c;
-  --v1:#6f8797; --v2:#3cc0b0; --v3:#f2b85a; --v4:#f08a70; --v5:#e05cc8; color-scheme:dark}}
+  --v1:#6f8797; --v2:#3cc0b0; --v3:#a3d46a; --v4:#f2d25a; --v5:#f2b85a; --v6:#f08a70; --v7:#ee5564; --v8:#e05cc8;
+  --v9:#a66be0; --v10:#8a4fd0; --v11:#6f3fb5; --v12:#e6d9fa; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0c1820; --card:#11222d; --ink:#e3eef5; --muted:#93a8b6; --line:#24394a;
   --eau:#4fa8dd; --main:#fb923c; --sol-jour:#3a3a2a; --sol-nuit:#0a151c;
-  --v1:#6f8797; --v2:#3cc0b0; --v3:#f2b85a; --v4:#f08a70; --v5:#e05cc8; color-scheme:dark}
+  --v1:#6f8797; --v2:#3cc0b0; --v3:#a3d46a; --v4:#f2d25a; --v5:#f2b85a; --v6:#f08a70; --v7:#ee5564; --v8:#e05cc8;
+  --v9:#a66be0; --v10:#8a4fd0; --v11:#6f3fb5; --v12:#e6d9fa; color-scheme:dark}
 html,body{margin:0;background:transparent}
 body{color:var(--ink);font-family:var(--font);padding:1px}
 .m3{max-width:560px;margin:0 auto;box-sizing:border-box;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 14px 12px}
@@ -38,7 +41,8 @@ body{color:var(--ink);font-family:var(--font);padding:1px}
 .m3-cmd button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 9px;cursor:pointer}
 .m3-cmd button:hover{border-color:var(--eau)}
 .m3-cmd button:focus-visible,.m3-cmd input:focus-visible{outline:2px solid var(--eau);outline-offset:2px}
-.m3-leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted);margin-top:8px;align-items:center}
+.m3-legt{font-size:12.5px;font-weight:700;margin-top:10px}
+.m3-leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted);margin-top:4px;align-items:center}
 .m3-leg i{display:inline-block;width:12px;height:10px;border-radius:2px 2px 0 0;vertical-align:-1px;margin-right:4px}
 .m3-note{font-size:11px;color:var(--muted);margin-top:10px;border-top:1px solid var(--line);padding-top:7px;line-height:1.45}
 </style>
@@ -65,6 +69,7 @@ body{color:var(--ink);font-family:var(--font);padding:1px}
     <button type="button" id="m3-o" aria-pressed="true">❚❚ Figer l'animation</button>
     <button type="button" id="m3-r">Revenir à maintenant</button>
   </div>
+  <div class="m3-legt">Vitesse du vent</div>
   <div class="m3-leg" id="m3-leg"></div>
   <div class="m3-note">Lecture : la bulle fait le tour des 24 dernières heures, comme un globe : chaque méridien est une heure, le temps avance vers la droite. L'heure qui vous fait face, sous le repère vertical, est celle dont les valeurs s'affichent. L'eau bleue du bas est la hauteur à Guily Glaz : son rivage monte et descend avec la marée, et un léger clapot l'anime (décoratif : il ne change pas les mesures). Au-dessus, trois rangs de colonnes en relief donnent le vent de chaque heure à Saint-Ségal, Lanvéoc puis la pointe Saint-Mathieu : la hauteur et la couleur de la colonne donnent le vent moyen, le mât monte jusqu'à la rafale, et la girouette en haut du mât pointe vers où souffle le vent (le nord est vers le pôle de la bulle). La girouette vibre d'autant plus que les rafales dépassent le vent moyen. Le bouton « Figer l'animation » arrête le clapot et les girouettes. Le méridien orange est le moment présent. Faites glisser la bulle pour la faire tourner.<br>Sources : marégraphe de Guily Glaz (Hub'Eau, HydroPortail) ; vent : stations Météo-France, mesures toutes les 6 minutes regroupées par heure. Actualisé toutes les 10 minutes.</div>
 </div>
@@ -83,8 +88,10 @@ const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim
 const nf=(v,d)=>v.toLocaleString("fr-FR",{minimumFractionDigits:d,maximumFractionDigits:d});
 const CARD=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"];
 const card=dd=>CARD[Math.round(dd/22.5)%16];
-const classe=nd=>nd<5?1:nd<10?2:nd<16?3:nd<22?4:5;
-const COUL=["","--v1","--v2","--v3","--v4","--v5"];
+// échelle du vent : les 12 classes du Cadran de marée (mêmes seuils en nœuds, mêmes couleurs)
+const SEUILS=[5,10,16,22,28,34,41,51,61,71];
+const classe=nd=>{for(let i=0;i<SEUILS.length;i++)if(nd<SEUILS[i])return i+1;return nd<=80?11:12;};
+const COUL=["","--v1","--v2","--v3","--v4","--v5","--v6","--v7","--v8","--v9","--v10","--v11","--v12"];
 const proche=(l,d)=>l.reduce((b,q)=>Math.abs(q.t-d)<Math.abs(b.t-d)?q:b);
 // fenêtre des 24 dernières heures, pleines et basses mers : recalculées à chaque actualisation
 function fenetre(){
@@ -151,7 +158,8 @@ function dessiner(){
   const N=14, RC=3.1;
   ST.forEach((st,si)=>st.v.forEach((v,vi)=>{
     const lo=lon(new Date(v.t-H/2)), la=st.lat, cl=Math.cos(la*RAD), col=C.v[classe(v.nd)];
-    const h=0.015+v.nd*0.011, hr=Math.max(h+0.045,0.015+v.raf*0.011);
+    const haut_=nd=>0.015+0.011*Math.min(nd,22)+0.004*Math.max(0,nd-22);   // au-delà de 22 nd la colonne grandit moins vite, pour rester dans le cadre jusqu'à plus de 80 nd
+    const h=haut_(v.nd), hr=Math.max(h+0.045,haut_(v.raf));
     const cercle=r=>{const q=[];for(let k=0;k<N;k++){const th=k/N*2*Math.PI;q.push(P(la+RC*Math.cos(th),lo+RC*Math.sin(th)*RAD/cl,r));}return q;};
     const bas=cercle(1), haut=cercle(1+h), c1=P(la,lo,1+h), c2=P(la,lo,1+hr);
     let b=((v.dd||0)+180)*RAD;
@@ -211,7 +219,7 @@ function lire(){
 }
 function choisir(t){sel=new Date(+debut+(((t-debut)%J)+J)%J||J);if(+sel>+fin)sel=fin;auPresent=+sel===+fin;curseur.value=Math.round((sel-debut)/(5*60e3));if(!rafEau)dessiner();}
 const lg=document.getElementById("m3-leg");
-[["< 5 nd",1],["5–9",2],["10–15",3],["16–21",4],["≥ 22 nd",5]].forEach(([l,k])=>{const s=document.createElement("span");s.innerHTML=`<i style="background:var(${COUL[k]});width:8px;height:${6+k*2}px;vertical-align:bottom"></i>${l}`;lg.appendChild(s)});
+[["< 5 nd",1],["5–9",2],["10–15",3],["16–21",4],["22–27",5],["28–33",6],["34–40",7],["41–50",8],["51–60",9],["61–70",10],["71–80",11],["> 80 nd",12]].forEach(([l,k])=>{const s=document.createElement("span");s.innerHTML=`<i style="background:var(${COUL[k]});width:8px;height:${6+k}px;vertical-align:bottom"></i>${l}`;lg.appendChild(s)});
 let drag=null;
 cv.addEventListener("pointerdown",e=>{arreter();drag={x:e.clientX,t:+sel};cv.setPointerCapture(e.pointerId)});
 cv.addEventListener("pointermove",e=>{if(!drag)return;choisir(drag.t-(e.clientX-drag.x)/R/(2*Math.PI)*J)});
