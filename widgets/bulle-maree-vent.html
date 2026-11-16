@@ -72,7 +72,7 @@ body{color:var(--ink);font-family:var(--font);padding:1px}
 (function(){
 const KT=1.94384, tz="Europe/Paris", H=3600e3, J=24*H, RAD=Math.PI/180;
 const cv=document.getElementById("m3-c"), ctx=cv.getContext("2d"), curseur=document.getElementById("m3-heure");
-const ST=[{nom:"Saint-Ségal",id:"29263002",lat:17,all:[],v:[]},{nom:"Lanvéoc",id:"29120001",lat:35,all:[],v:[]},{nom:"Saint-Mathieu",id:"29190001",lat:53,all:[],v:[]}];
+const ST=[{nom:"Saint-Ségal",id:"29263002",lat:17,all:[],v:[]},{nom:"Lanvéoc",id:"29120001",lat:35,all:[],v:[]},{nom:"Saint-Mathieu",id:"29190001",lat:53,haut:0.16,all:[],v:[]}];
 let ggAll=[], gg=[], fin=new Date(), debut=new Date(fin-J), hMin=0, hMax=1, ext=[], pret=false;
 const latEau=h=>-46+(h-hMin)/((hMax-hMin)||1)*44;            // rivage entre 46° sud et 2° sud
 const lon=t=>(t-fin)/J*2*Math.PI;
@@ -196,7 +196,7 @@ function dessiner(){
    poly([[b[0]-5,b[1]-9],[b[0]+5,b[1]-9],[b[0],b[1]-1]]);ctx.fillStyle=C.ink;ctx.fill();}
   // noms des rangs, à droite de la bulle
   const xl=cx+R+10;
-  ST.forEach(s=>{const y=cy-R*(Math.sin(s.lat*RAD)*ct);ctx.beginPath();ctx.moveTo(cx+R*Math.cos(s.lat*RAD)+2,y);ctx.lineTo(xl-3,y);ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.stroke();
+  ST.forEach(s=>{const y0=cy-R*(Math.sin(s.lat*RAD)*ct), y=y0-(s.haut||0)*R;ctx.beginPath();ctx.moveTo(cx+R*Math.cos(s.lat*RAD)+2,y0);ctx.lineTo(xl-3,y);ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.stroke();
     txt(etroit?s.nom.replace('Saint-','St-'):s.nom,xl,y,{a:"left",s:S<400?10:11.5,c:C.ink,b:true});});
   {const y=cy+R*0.42;txt("Guily Glaz",xl,y,{a:"left",s:S<400?10:11.5,c:C.eau,b:true});txt("hauteur d'eau",xl,y+14,{a:"left",s:S<400?9:10});}
   lire();
@@ -206,7 +206,7 @@ function lire(){
   const p=proche(gg,sel), i=gg.indexOf(p), q=gg[Math.max(0,i-3)], dh=p.h-q.h;
   const html=`<b>${+sel===+fin?"Maintenant · ":""}${fmtJ.format(p.t)} ${fmtH.format(p.t)}</b>`+
     `<span>Eau <b style="color:var(--eau)">${nf(p.h,2)} m</b> ${Math.abs(dh)<0.01?"étale":dh>0?"▲ montante":"▼ descendante"}</span>`+
-    ST.slice().reverse().map(s=>{if(!s.v.length)return `<span>${s.nom} : indisponible</span>`;const v=proche(s.v,new Date(Math.ceil(sel/H)*H));return `<span>${s.nom} <b>${v.nd<0.5?"calme":(v.dd!=null?card(v.dd)+" ":"")+Math.round(v.nd)+" nd"}</b> · raf. ${Math.round(v.raf)}</span>`}).join("");
+    ST.slice().reverse().map(s=>{if(!s.v.length)return `<span>${s.nom} : indisponible</span>`;const v=proche(s.v,new Date(Math.ceil(sel/H)*H));return `<span>${s.nom} <b>${v.nd<0.5?"calme":(v.dd!=null?card(v.dd)+" ":"")+Math.round(v.nd)+" nd"}</b> · raf. ${Math.round(v.raf)} nd</span>`}).join("");
   if(html!==lectAff){lectAff=html;document.getElementById("m3-lect").innerHTML=html;}
 }
 function choisir(t){sel=new Date(+debut+(((t-debut)%J)+J)%J||J);if(+sel>+fin)sel=fin;auPresent=+sel===+fin;curseur.value=Math.round((sel-debut)/(5*60e3));if(!rafEau)dessiner();}
