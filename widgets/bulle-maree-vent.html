@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bulle marée-vent · antreizh.fr</title>
+<style>
+/* Mise en page : une bulle-globe que l'on fait tourner ; un méridien par heure, l'eau en bas, le vent en rangs. */
+:root{
+  --bg:#f4f7f9; --card:#ffffff; --ink:#0b3c5d; --muted:#5f7180; --line:#dde5eb;
+  --eau:#1f7bb6; --main:#c2410c; --sol-jour:#f6ecc9; --sol-nuit:#d9e2ea;
+  --v1:#9fb7c6; --v2:#2a9d8f; --v3:#e9a23b; --v4:#e76f51; --v5:#b5179e;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0c1820; --card:#11222d; --ink:#e3eef5; --muted:#93a8b6; --line:#24394a;
+  --eau:#4fa8dd; --main:#fb923c; --sol-jour:#3a3a2a; --sol-nuit:#0a151c;
+  --v1:#6f8797; --v2:#3cc0b0; --v3:#f2b85a; --v4:#f08a70; --v5:#e05cc8; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c1820; --card:#11222d; --ink:#e3eef5; --muted:#93a8b6; --line:#24394a;
+  --eau:#4fa8dd; --main:#fb923c; --sol-jour:#3a3a2a; --sol-nuit:#0a151c;
+  --v1:#6f8797; --v2:#3cc0b0; --v3:#f2b85a; --v4:#f08a70; --v5:#e05cc8; color-scheme:dark}
+html,body{margin:0;background:transparent}
+body{color:var(--ink);font-family:var(--font);padding:1px}
+.m3{max-width:560px;margin:0 auto;box-sizing:border-box;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 14px 12px}
+.m3-t{font-size:16px;font-weight:700;margin:0}
+.m3-t b{color:var(--eau)}
+.m3-t span{font-weight:400;color:var(--muted);font-size:.85em}
+.m3-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.m3-lect{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:8px;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;min-height:36px}
+.m3-lect b{color:var(--ink)}
+.m3-vue{position:relative;margin-top:4px}
+.m3 canvas{display:block;width:100%;max-width:520px;margin:0 auto;touch-action:pan-y;cursor:grab;border-radius:6px}
+.m3 canvas:active{cursor:grabbing}
+.m3-cmd{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:8px;font-size:12px;color:var(--muted)}
+.m3-cmd label{display:flex;align-items:center;gap:8px;flex:1 1 240px;min-width:0}
+.m3-cmd input[type=range]{flex:1;min-width:0;accent-color:var(--main)}
+.m3-cmd button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 9px;cursor:pointer}
+.m3-cmd button:hover{border-color:var(--eau)}
+.m3-cmd button:focus-visible,.m3-cmd input:focus-visible{outline:2px solid var(--eau);outline-offset:2px}
+.m3-leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted);margin-top:8px;align-items:center}
+.m3-leg i{display:inline-block;width:12px;height:10px;border-radius:2px 2px 0 0;vertical-align:-1px;margin-right:4px}
+.m3-note{font-size:11px;color:var(--muted);margin-top:10px;border-top:1px solid var(--line);padding-top:7px;line-height:1.45}
+</style>
+</head>
+<body>
+<!-- Widget servi depuis https://appli.antreizh.fr/widgets/ : toujours à jour sur le site -->
+<!-- =====================================================================
+     Widget « Bulle marée-vent » — Guily Glaz, Port-Launay (29)
+     Bulle-globe en 3D des 24 dernières heures (un méridien par heure) : l'eau du bas est la hauteur mesurée à
+     Guily Glaz (clapot décoratif) ; au-dessus, trois rangs de colonnes donnent le vent heure par heure à
+     Saint-Ségal, Lanvéoc et la pointe Saint-Mathieu (hauteur et couleur = vent moyen, mât = rafale, girouette =
+     direction, qui vibre selon l'écart rafale / vent moyen). On fait tourner la bulle pour lire une autre heure.
+     Sources (les mêmes que le Cadran de marée) : marégraphe de Guily Glaz (J382183001) via Hub'Eau, trous comblés
+     par l'historique de l'appli ; vent : API Météo-France « Paquet Observations » v2 (mesures toutes les 6 minutes).
+     ===================================================================== -->
+<div class="m3">
+  <p class="m3-t">Marée et Vent <span>· <b>Guily Glaz</b>, bulle des dernières 24 heures</span></p>
+  <div class="m3-sub" id="m3-sub">Chargement des mesures…</div>
+  <div class="m3-lect" id="m3-lect" aria-live="polite"></div>
+  <div class="m3-vue"><canvas id="m3-c" role="img" aria-label="Bulle en 3D : l'eau de Guily Glaz remplit le bas de la bulle, le vent de Saint-Ségal, Lanvéoc et la pointe Saint-Mathieu forme trois rangs de colonnes surmontées de girouettes"></canvas></div>
+  <div class="m3-cmd">
+    <label for="m3-heure">Heure lue <input type="range" id="m3-heure" min="0" max="288" step="1" value="288"></label>
+    <button type="button" id="m3-a" aria-pressed="false">▶ Faire tourner</button>
+    <button type="button" id="m3-o" aria-pressed="true">❚❚ Figer l'animation</button>
+    <button type="button" id="m3-r">Revenir à maintenant</button>
+  </div>
+  <div class="m3-leg" id="m3-leg"></div>
+  <div class="m3-note">Lecture : la bulle fait le tour des 24 dernières heures, comme un globe : chaque méridien est une heure, le temps avance vers la droite. L'heure qui vous fait face, sous le repère vertical, est celle dont les valeurs s'affichent. L'eau bleue du bas est la hauteur à Guily Glaz : son rivage monte et descend avec la marée, et un léger clapot l'anime (décoratif : il ne change pas les mesures). Au-dessus, trois rangs de colonnes en relief donnent le vent de chaque heure à Saint-Ségal, Lanvéoc puis la pointe Saint-Mathieu : la hauteur et la couleur de la colonne donnent le vent moyen, le mât monte jusqu'à la rafale, et la girouette en haut du mât pointe vers où souffle le vent (le nord est vers le pôle de la bulle). La girouette vibre d'autant plus que les rafales dépassent le vent moyen. Le bouton « Figer l'animation » arrête le clapot et les girouettes. Le méridien orange est le moment présent. Faites glisser la bulle pour la faire tourner.<br>Sources : marégraphe de Guily Glaz (Hub'Eau, HydroPortail) ; vent : stations Météo-France, mesures toutes les 6 minutes regroupées par heure. Actualisé toutes les 10 minutes.</div>
+</div>
+<script>
+(function(){
+const KT=1.94384, tz="Europe/Paris", H=3600e3, J=24*H, RAD=Math.PI/180;
+const cv=document.getElementById("m3-c"), ctx=cv.getContext("2d"), curseur=document.getElementById("m3-heure");
+const ST=[{nom:"Saint-Ségal",id:"29263002",lat:17,all:[],v:[]},{nom:"Lanvéoc",id:"29120001",lat:35,all:[],v:[]},{nom:"Saint-Mathieu",id:"29190001",lat:53,all:[],v:[]}];
+let ggAll=[], gg=[], fin=new Date(), debut=new Date(fin-J), hMin=0, hMax=1, ext=[], pret=false;
+const latEau=h=>-46+(h-hMin)/((hMax-hMin)||1)*44;            // rivage entre 46° sud et 2° sud
+const lon=t=>(t-fin)/J*2*Math.PI;
+const fmtH=new Intl.DateTimeFormat("fr-FR",{timeZone:tz,hour:"2-digit",minute:"2-digit"});
+const fmtJ=new Intl.DateTimeFormat("fr-FR",{timeZone:tz,weekday:"short",day:"numeric",month:"short"});
+const hLoc=d=>+new Intl.DateTimeFormat("en-GB",{timeZone:tz,hour:"2-digit",hourCycle:"h23"}).format(d);
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const nf=(v,d)=>v.toLocaleString("fr-FR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const CARD=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"];
+const card=dd=>CARD[Math.round(dd/22.5)%16];
+const classe=nd=>nd<5?1:nd<10?2:nd<16?3:nd<22?4:5;
+const COUL=["","--v1","--v2","--v3","--v4","--v5"];
+const proche=(l,d)=>l.reduce((b,q)=>Math.abs(q.t-d)<Math.abs(b.t-d)?q:b);
+// fenêtre des 24 dernières heures, pleines et basses mers : recalculées à chaque actualisation
+function fenetre(){
+  fin=new Date(); debut=new Date(fin-J);
+  gg=ggAll.filter(p=>p.t>debut&&p.t<=fin);
+  ST.forEach(s=>s.v=s.all.filter(v=>v.t-H/2>debut&&v.t-H/2<=fin));   // 24 colonnes, centrées sur le milieu de chaque heure
+  const hs=gg.map(p=>p.h); hMin=hs.length?Math.min(...hs):0; hMax=hs.length?Math.max(...hs):1;
+  ext=[];
+  for(let i=6;i<gg.length-6;i++){
+    const w=gg.slice(Math.max(0,i-24),i+25).map(p=>p.h);
+    for(const [ty,v] of [["PM",Math.max(...w)],["BM",Math.min(...w)]])
+      if(gg[i].h===v&&!ext.some(e=>e.type===ty&&Math.abs(e.t-gg[i].t)<4*H))ext.push({type:ty,...gg[i]});
+  }
+  pret=gg.length>1;
+  document.getElementById("m3-sub").textContent=pret?`Du ${fmtJ.format(debut)} ${fmtH.format(debut)} au ${fmtJ.format(fin)} ${fmtH.format(fin)}, heure de Paris`:"Mesures du marégraphe indisponibles pour le moment.";
+}
+const TILT=14*RAD, ct=Math.cos(TILT), st_=Math.sin(TILT);
+let sel=fin, auPresent=true, S=0, R=0, cx=0, cy=0, anim=null, onde=0, eauVive=false, rafEau=null, lectAff="";
+
+function dessiner(){
+  const dpr=window.devicePixelRatio||1;
+  const larg=cv.clientWidth||480, Hc=Math.round(larg*0.9);
+  if(larg!==S||cv.width!==Math.round(larg*dpr)){S=larg;cv.style.height=Hc+"px";cv.width=Math.round(S*dpr);cv.height=Math.round(Hc*dpr);}
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,S,Hc);
+  // clapot : deux petites ondes qui courent en sens inverse le long du rivage (en degrés de latitude)
+  const clapot=lo=>eauVive?1.1*Math.sin(24*lo+onde*2.2)+0.6*Math.sin(13*lo-onde*1.5+1):0;
+  if(!pret){lire();return;}
+  const etroit=S<420; R=S*(etroit?0.33:0.36); cx=S*(etroit?0.37:0.42); cy=Hc*0.5;
+  const sombre=matchMedia('(prefers-color-scheme: dark)').matches?document.documentElement.dataset.theme!=='light':document.documentElement.dataset.theme==='dark', kb=sombre?0.35:1;
+  const C={ink:css("--ink"),muted:css("--muted"),line:css("--line"),eau:css("--eau"),main:css("--main"),card:css("--card"),v:COUL.map(c=>c?css(c):"")};
+  const l0=lon(sel);
+  const P=(latDeg,lo,r)=>{r=r||1;const la=latDeg*RAD,a=lo-l0,x=r*Math.cos(la)*Math.sin(a),y=r*Math.sin(la),z=r*Math.cos(la)*Math.cos(a);
+    return [cx+R*x, cy-R*(y*ct-z*st_), y*st_+z*ct];};
+  const poly=q=>{ctx.beginPath();q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();};
+  const font=(s,b)=>ctx.font=(b?"700 ":"")+s+"px "+getComputedStyle(document.body).fontFamily;
+  const txt=(t,x,y,o)=>{font(o.s||11,o.b);ctx.textAlign=o.a||"center";ctx.textBaseline="middle";ctx.lineWidth=3;ctx.lineJoin="round";ctx.strokeStyle=C.card;ctx.strokeText(t,x,y);ctx.fillStyle=o.c||C.muted;ctx.fillText(t,x,y);};
+
+  // ombre portée et corps de la bulle
+  ctx.beginPath();ctx.ellipse(cx,cy+R*1.07,R*0.62,R*0.07,0,0,7);ctx.fillStyle="rgba(0,0,0,.10)";ctx.fill();
+  const couches=[[],[]];                                   // 0 = face arrière, 1 = face avant
+  const ajoute=(z,f)=>couches[z>0?1:0].push({z,f});
+  const vive=eauVive;
+
+  // eau : une tranche toutes les 10 min, du pôle sud jusqu'au rivage
+  const pas=gg.filter((p,i)=>i%2===0||i===gg.length-1);
+  for(let i=0;i<pas.length-1;i++){
+    const a=pas[i],b=pas[i+1], la=latEau(a.h)+clapot(lon(a.t)), lb=latEau(b.h)+clapot(lon(b.t)), q=[P(-90,lon(a.t)),P(la,lon(a.t)),P(lb,lon(b.t)),P(-90,lon(b.t))];
+    const mid=P((la+lb)/2-20,(lon(a.t)+lon(b.t))/2), zc=mid[2];
+    // trois points intermédiaires pour suivre la courbure
+    const bord=(t,l)=>[-90,-70,-50].filter(x=>x<l).map(x=>P(x,lon(t))).concat([P(l,lon(t))]);
+    const g=bord(a.t,la).concat(bord(b.t,lb).reverse());
+    ajoute(zc,av=>{poly(g);ctx.fillStyle=C.eau;ctx.globalAlpha=av?0.78:0.2;ctx.fill();ctx.globalAlpha=1;});
+    ajoute(P((la+lb)/2,(lon(a.t)+lon(b.t))/2)[2],av=>{ctx.beginPath();ctx.moveTo(q[1][0],q[1][1]);ctx.lineTo(q[2][0],q[2][1]);ctx.strokeStyle=C.eau;ctx.lineWidth=av?2:1;ctx.globalAlpha=av?1:0.35;ctx.stroke();ctx.globalAlpha=1;});
+  }
+  // méridiens horaires fins et heures
+  for(let k=0;k<24;k++){
+    const t=new Date(Math.floor(fin/H)*H-k*H), lo=lon(t), h=hLoc(t);
+    const seg=[]; for(let la=-50;la<=62;la+=8)seg.push(P(la,lo));
+    ajoute(P(10,lo)[2],av=>{ctx.beginPath();seg.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.strokeStyle=C.line;ctx.lineWidth=h%3?0.5:1;ctx.globalAlpha=av?0.9:0.3;ctx.stroke();ctx.globalAlpha=1;});
+    if(h%3===0){const p=P(70,lo);if(p[2]>0.15)ajoute(9,av=>{txt(h+" h",p[0],p[1],{s:S<400?10:11.5,c:C.ink,b:h%6===0});});}
+  }
+  // vent en relief : une colonne par heure (hauteur et couleur = vent moyen), un mât jusqu'à la rafale,
+  // et en haut du mât une girouette tournée vers où souffle le vent, qui vibre d'autant plus que le vent est irrégulier
+  const N=14, RC=3.1;
+  ST.forEach((st,si)=>st.v.forEach((v,vi)=>{
+    const lo=lon(new Date(v.t-H/2)), la=st.lat, cl=Math.cos(la*RAD), col=C.v[classe(v.nd)];
+    const h=0.015+v.nd*0.011, hr=Math.max(h+0.045,0.015+v.raf*0.011);
+    const cercle=r=>{const q=[];for(let k=0;k<N;k++){const th=k/N*2*Math.PI;q.push(P(la+RC*Math.cos(th),lo+RC*Math.sin(th)*RAD/cl,r));}return q;};
+    const bas=cercle(1), haut=cercle(1+h), c1=P(la,lo,1+h), c2=P(la,lo,1+hr);
+    let b=((v.dd||0)+180)*RAD;
+    if(vive){const w=5+((si*7+vi*3)%5), ph=si*2.1+vi*1.7, amp=(5+16*Math.min(1,(v.raf-v.nd)/10))*RAD;
+      b+=amp*(0.7*Math.sin(onde*w+ph)+0.3*Math.sin(onde*w*2.3+ph*1.3));}
+    const g=(u,n)=>P(la+u*Math.cos(b)-n*Math.sin(b),lo+(u*Math.sin(b)+n*Math.cos(b))*RAD/cl,1+hr), L=4.4;
+    const fut=[g(-L,0),g(L,0)], pointe=[g(L+1.2,0),g(L-1.4,1.5),g(L-1.4,-1.5)], penne=[g(-L+1.8,0),g(-L-0.8,1.7),g(-L-0.8,-1.7)];
+    ajoute(P(la,lo,1+h/2)[2],av=>{
+      ctx.globalAlpha=av?1:0.2;
+      for(let k=0;k<N;k++){const k2=(k+1)%N;poly([bas[k],bas[k2],haut[k2],haut[k]]);ctx.fillStyle=col;ctx.fill();ctx.fillStyle="rgba(0,0,0,.22)";ctx.fill();}
+      poly(haut);ctx.fillStyle=col;ctx.fill();ctx.fillStyle="rgba(255,255,255,.18)";ctx.fill();
+      if(av){
+        ctx.strokeStyle=C.ink;ctx.lineCap="round";
+        ctx.beginPath();ctx.moveTo(c1[0],c1[1]);ctx.lineTo(c2[0],c2[1]);ctx.lineWidth=1;ctx.stroke();
+        if(v.nd>=0.5&&v.dd!=null){
+          ctx.beginPath();ctx.moveTo(fut[0][0],fut[0][1]);ctx.lineTo(fut[1][0],fut[1][1]);ctx.lineWidth=1.5;ctx.stroke();
+          ctx.fillStyle=C.ink;poly(pointe);ctx.fill();poly(penne);ctx.fill();
+        }
+        ctx.beginPath();ctx.arc(c2[0],c2[1],1.6,0,7);ctx.fillStyle=C.card;ctx.fill();ctx.lineWidth=1;ctx.stroke();
+      }
+      ctx.globalAlpha=1;});
+  }));
+  // pleines et basses mers
+  for(const e of ext){const p=P(latEau(e.h)+clapot(lon(e.t)),lon(e.t));ajoute(p[2],av=>{if(!av)return;
+    ctx.beginPath();ctx.arc(p[0],p[1],3.4,0,7);ctx.fillStyle=e.type==="PM"?C.eau:C.card;ctx.fill();ctx.strokeStyle=C.eau;ctx.lineWidth=1.5;ctx.stroke();
+    txt(fmtH.format(e.t),p[0],p[1]+(e.type==="PM"?-12:13),{s:10.5,c:C.ink});});}
+  // méridien orange : maintenant
+  {const seg=[];for(let la=-58;la<=64;la+=6)seg.push(P(la,0));
+   ajoute(P(0,0)[2],av=>{ctx.beginPath();seg.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.strokeStyle=C.main;ctx.lineWidth=av?2:1;ctx.setLineDash([5,4]);ctx.globalAlpha=av?1:0.35;ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;});}
+
+  couches.forEach(c=>c.sort((a,b)=>a.z-b.z));
+  couches[0].forEach(o=>o.f(false));
+  // verre de la bulle
+  let gr=ctx.createRadialGradient(cx-R*0.35,cy-R*0.45,R*0.05,cx,cy,R);
+  gr.addColorStop(0,"rgba(255,255,255,"+0.55*kb+")");gr.addColorStop(0.35,"rgba(255,255,255,"+0.10*kb+")");gr.addColorStop(1,"rgba(120,150,170,.16)");
+  ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.fillStyle=C.card;ctx.globalAlpha=0.45;ctx.fill();ctx.globalAlpha=1;ctx.fillStyle=gr;ctx.fill();
+  couches[1].forEach(o=>o.f(true));
+  ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.strokeStyle=C.muted;ctx.globalAlpha=0.55;ctx.lineWidth=1.3;ctx.stroke();ctx.globalAlpha=1;
+  ctx.beginPath();ctx.ellipse(cx-R*0.42,cy-R*0.55,R*0.16,R*0.07,-0.6,0,7);ctx.fillStyle="rgba(255,255,255,"+0.45*kb+")";ctx.fill();
+  // repère de lecture : le méridien qui fait face
+  {const a=P(-56,l0),b=P(62,l0);ctx.beginPath();ctx.moveTo(a[0],a[1]-2);ctx.lineTo(b[0],b[1]);ctx.strokeStyle=C.ink;ctx.lineWidth=1;ctx.globalAlpha=0.55;ctx.stroke();ctx.globalAlpha=1;
+   poly([[b[0]-5,b[1]-9],[b[0]+5,b[1]-9],[b[0],b[1]-1]]);ctx.fillStyle=C.ink;ctx.fill();}
+  // noms des rangs, à droite de la bulle
+  const xl=cx+R+10;
+  ST.forEach(s=>{const y=cy-R*(Math.sin(s.lat*RAD)*ct);ctx.beginPath();ctx.moveTo(cx+R*Math.cos(s.lat*RAD)+2,y);ctx.lineTo(xl-3,y);ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.stroke();
+    txt(etroit?s.nom.replace('Saint-','St-'):s.nom,xl,y,{a:"left",s:S<400?10:11.5,c:C.ink,b:true});});
+  {const y=cy+R*0.42;txt("Guily Glaz",xl,y,{a:"left",s:S<400?10:11.5,c:C.eau,b:true});txt("hauteur d'eau",xl,y+14,{a:"left",s:S<400?9:10});}
+  lire();
+}
+function lire(){
+  if(!pret){document.getElementById("m3-lect").textContent="";lectAff="";return;}
+  const p=proche(gg,sel), i=gg.indexOf(p), q=gg[Math.max(0,i-3)], dh=p.h-q.h;
+  const html=`<b>${+sel===+fin?"Maintenant · ":""}${fmtJ.format(p.t)} ${fmtH.format(p.t)}</b>`+
+    `<span>Eau <b style="color:var(--eau)">${nf(p.h,2)} m</b> ${Math.abs(dh)<0.01?"étale":dh>0?"▲ montante":"▼ descendante"}</span>`+
+    ST.slice().reverse().map(s=>{if(!s.v.length)return `<span>${s.nom} : indisponible</span>`;const v=proche(s.v,new Date(Math.ceil(sel/H)*H));return `<span>${s.nom} <b>${v.nd<0.5?"calme":(v.dd!=null?card(v.dd)+" ":"")+Math.round(v.nd)+" nd"}</b> · raf. ${Math.round(v.raf)}</span>`}).join("");
+  if(html!==lectAff){lectAff=html;document.getElementById("m3-lect").innerHTML=html;}
+}
+function choisir(t){sel=new Date(+debut+(((t-debut)%J)+J)%J||J);if(+sel>+fin)sel=fin;auPresent=+sel===+fin;curseur.value=Math.round((sel-debut)/(5*60e3));if(!rafEau)dessiner();}
+const lg=document.getElementById("m3-leg");
+[["< 5 nd",1],["5–9",2],["10–15",3],["16–21",4],["≥ 22 nd",5]].forEach(([l,k])=>{const s=document.createElement("span");s.innerHTML=`<i style="background:var(${COUL[k]});width:8px;height:${6+k*2}px;vertical-align:bottom"></i>${l}`;lg.appendChild(s)});
+let drag=null;
+cv.addEventListener("pointerdown",e=>{arreter();drag={x:e.clientX,t:+sel};cv.setPointerCapture(e.pointerId)});
+cv.addEventListener("pointermove",e=>{if(!drag)return;choisir(drag.t-(e.clientX-drag.x)/R/(2*Math.PI)*J)});
+["pointerup","pointercancel"].forEach(n=>cv.addEventListener(n,()=>drag=null));
+curseur.addEventListener("input",e=>{arreter();choisir(+debut+e.target.value*5*60e3)});
+const bA=document.getElementById("m3-a");
+function arreter(){if(anim){cancelAnimationFrame(anim);anim=null;bA.textContent="▶ Faire tourner";bA.setAttribute("aria-pressed","false");}}
+bA.addEventListener("click",()=>{if(anim){arreter();return;}bA.textContent="❚❚ Arrêter";bA.setAttribute("aria-pressed","true");
+  let t0=null,d0=+sel;const pasA=ts=>{if(t0==null)t0=ts;choisir(d0+(ts-t0)/1000*1.2*H);anim=requestAnimationFrame(pasA)};anim=requestAnimationFrame(pasA);});
+document.getElementById("m3-r").addEventListener("click",()=>{arreter();choisir(+fin)});
+// clapot : animation continue de l'eau (coupée si le système demande moins d'animations)
+const bO=document.getElementById("m3-o");
+function eau(marche){
+  eauVive=marche; bO.textContent=marche?"❚❚ Figer l'animation":"≈ Animer"; bO.setAttribute("aria-pressed",marche?"true":"false");
+  if(rafEau){cancelAnimationFrame(rafEau);rafEau=null;}
+  if(marche){const tour=ts=>{onde=ts/1000;dessiner();rafEau=requestAnimationFrame(tour)};rafEau=requestAnimationFrame(tour);} else dessiner();
+}
+bO.addEventListener("click",()=>eau(!eauVive));
+eau(!matchMedia("(prefers-reduced-motion: reduce)").matches);
+let tm;new ResizeObserver(()=>{clearTimeout(tm);tm=setTimeout(()=>{if(Math.abs(cv.clientWidth-S)>3&&!rafEau)dessiner()},60)}).observe(cv.parentElement);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",dessiner);
+new MutationObserver(dessiner).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+
+/* ---------------- mesures en direct : mêmes sources que le Cadran de marée ---------------- */
+const CFG={
+  maregraphe:"J382183001",                 // Aulne à Guily Glaz (Port-Launay), marégraphe Hub'Eau
+  // Clé du portail https://portail-api.meteofrance.fr (API « Paquet Observations » v2 ; la même que le Cadran de marée)
+  cleApiMeteoFrance:"eyJ4NXQiOiJZV0kxTTJZNE1qWTNOemsyTkRZeU5XTTRPV014TXpjek1UVmhNbU14T1RSa09ETXlOVEE0Tnc9PSIsImtpZCI6ImdhdGV3YXlfY2VydGlmaWNhdGVfYWxpYXMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhbnRyZWl6aEBjYXJib24uc3VwZXIiLCJhcHBsaWNhdGlvbiI6eyJvd25lciI6ImFudHJlaXpoIiwidGllclF1b3RhVHlwZSI6bnVsbCwidGllciI6IlVubGltaXRlZCIsIm5hbWUiOiJEZWZhdWx0QXBwbGljYXRpb24iLCJpZCI6NTExMTQsInV1aWQiOiI2M2EwYjc3ZS0zYTJmLTRmMjgtOGJkMS02MzEyOTcyYTEwNmMifSwiaXNzIjoiaHR0cHM6XC9cL3BvcnRhaWwtYXBpLm1ldGVvZnJhbmNlLmZyOjQ0M1wvb2F1dGgyXC90b2tlbiIsInRpZXJJbmZvIjp7IjEwMFJlcVBlck1pbiI6eyJ0aWVyUXVvdGFUeXBlIjoicmVxdWVzdENvdW50IiwiZ3JhcGhRTE1heENvbXBsZXhpdHkiOjAsImdyYXBoUUxNYXhEZXB0aCI6MCwic3RvcE9uUXVvdGFSZWFjaCI6dHJ1ZSwic3Bpa2VBcnJlc3RMaW1pdCI6MCwic3Bpa2VBcnJlc3RVbml0Ijoic2VjIn19LCJrZXl0eXBlIjoiUFJPRFVDVElPTiIsInN1YnNjcmliZWRBUElzIjpbeyJzdWJzY3JpYmVyVGVuYW50RG9tYWluIjoiY2FyYm9uLnN1cGVyIiwibmFtZSI6IkRvbm5lZXNQdWJsaXF1ZXNQYXF1ZXRPYnNlcnZhdGlvbiIsImNvbnRleHQiOiJcL3B1YmxpY1wvRFBQYXF1ZXRPYnNcL3YyIiwicHVibGlzaGVyIjoiYmFzdGllbmciLCJ2ZXJzaW9uIjoidjIiLCJzdWJzY3JpcHRpb25UaWVyIjoiMTAwUmVxUGVyTWluIn1dLCJleHAiOjE4MjQzOTQ3NjEsInRva2VuX3R5cGUiOiJhcGlLZXkiLCJpYXQiOjE3OTI4NTg3NjEsImp0aSI6IjZiMzJiY2UzLTYyYTUtNGZhNy05MjMyLTA1M2VkMGU0NGIyZCJ9.m4G3jgL3LOmI4ci45zND4OYAyrj9U0-YcWiSFfSdwNv4vx3AGH-SaklMVr_tFyjFPJPchmawjGIhIl1DdWrDZlPl5Uy-Ox7zdDVBxwewU_ek8XKpshvf7H5tdGI90n7fdDSjRn1G5Z6E-32fjtoP2_wvQCCUoo9QPtygRqJY882jxk3QyWzzX4V_pHRk6KW-G4mokch4B1YljKyv0l5TmGY5xOWa6N67AQAIL9i6EVsuIUdq2O9MR0rx_aOLf7Y4Pq31R3RylH7EBTn81kVVW5fSO8sK_5Hbbccs_IyfcQPnbWjDVyr94wVdTFUsapYXdVlsEOtHuXS2xcFUGYo4EA==",
+  urlObsMeteoFrance:"https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m",
+  urlHubeau:"https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr",
+  urlArchiveGG:"https://appli.antreizh.fr/data/maree-guily-glaz/",   // historique archivé (trous Hub'Eau comblés via Vigicrues)
+  refreshMinutes:10
+};
+function getText(url,opts){
+  const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(),20000); opts.signal=ctl.signal;
+  return fetch(url,opts).then(r=>{clearTimeout(tm);if(!r.ok)throw new Error("HTTP "+r.status);return r.text();});
+}
+const num=x=>{if(x==null)return null;x=String(x).trim().replace(",",".");if(x==="")return null;const n=+x;return isFinite(n)?n:null;};
+const premier=(p,noms)=>{for(const n of noms){const v=num(p[n]);if(v!=null)return v;}return null;};
+// Guily Glaz : 25 dernières heures (Hub'Eau), trous comblés avec l'historique archivé de l'appli
+function chargerMaree(){
+  const d0=new Date(Date.now()-25*H), url=CFG.urlHubeau+"?code_entite="+CFG.maregraphe+"&grandeur_hydro=H&date_debut_obs="+encodeURIComponent(d0.toISOString().slice(0,19)+"Z")+"&size=1000&sort=asc&fields=date_obs,resultat_obs&format=json";
+  const essai=()=>getText(url,{headers:{Accept:"application/json"}});
+  return essai().catch(essai).then(t=>(JSON.parse(t).data||[]).filter(r=>r.resultat_obs!=null&&r.date_obs).map(r=>({t:new Date(r.date_obs),h:r.resultat_obs/1000})))
+    .catch(()=>[]).then(hub=>{
+      const vus={}, mois={}; hub.forEach(p=>vus[+p.t]=1); [d0,new Date()].forEach(d=>mois[d.toISOString().slice(0,7)]=1);
+      return Promise.all(Object.keys(mois).map(m=>getText(CFG.urlArchiveGG+m+".csv?t="+Math.floor(Date.now()/6e5),{}).catch(()=>""))).then(textes=>{
+        textes.join("\n").split("\n").forEach(l=>{const c=l.split(";");if(c.length<2||c[1]===""||isNaN(+c[1])||!/^\d{4}-/.test(c[0]))return;
+          const t=new Date(c[0]);if(t>=d0&&!vus[+t]){vus[+t]=1;hub.push({t,h:+c[1]/1000});}});
+        return hub.sort((a,b)=>a.t-b.t);
+      });
+    });
+}
+// Vent : mesures toutes les 6 min regroupées par heure (mesures de ]H-1 ; H] : vent moyen, direction moyenne, rafale max)
+function chargerStation(st){
+  return getText(CFG.urlObsMeteoFrance+"?id_station="+st.id+"&format=csv",{headers:{apikey:CFG.cleApiMeteoFrance,accept:"*/*"}}).then(txt=>{
+    const lignes=txt.trim().split(/\r?\n/); if(lignes.length<2)throw new Error("vide");
+    const tete=lignes[0].split(";").map(s=>s.trim()), heures={};
+    lignes.slice(1).forEach(l=>{
+      const c=l.split(";"), p={}; tete.forEach((h,k)=>p[h]=c[k]);
+      const t=new Date(String(p.validity_time||p.reference_time||"").trim()), ff=num(p.ff), dd=num(p.dd), fx=premier(p,["raf10","fxi10","raf"]);
+      if(isNaN(t)||ff==null)return;
+      const k=Math.ceil(t.getTime()/H)*H, o=heures[k]||(heures[k]={n:0,ff:0,u:0,v:0,fx:0});
+      o.n++; o.ff+=ff; o.fx=Math.max(o.fx,fx!=null?fx:ff);
+      if(dd!=null&&ff>0){const r=dd*RAD;o.u+=ff*Math.sin(r);o.v+=ff*Math.cos(r);}
+    });
+    return Object.keys(heures).map(k=>{const o=heures[k], nd=o.ff/o.n*KT, dd=(Math.atan2(o.u,o.v)/RAD+360)%360;
+      return {t:new Date(+k),nd,dd:(o.u||o.v)?dd:null,raf:Math.max(o.fx*KT,nd)};}).sort((a,b)=>a.t-b.t);
+  });
+}
+function charger(){
+  Promise.all([chargerMaree().catch(()=>null)].concat(ST.map(s=>chargerStation(s).catch(()=>null)))).then(r=>{
+    if(r[0]&&r[0].length)ggAll=r[0];
+    ST.forEach((s,i)=>{if(r[i+1])s.all=r[i+1];});
+    const ecart=fin-sel;
+    fenetre();
+    sel=auPresent?fin:new Date(Math.max(+debut+5*60e3,fin-ecart));
+    curseur.value=Math.round((sel-debut)/(5*60e3));
+    if(!rafEau)dessiner();
+  });
+}
+charger();
+setInterval(charger,CFG.refreshMinutes*60000);
+})();
+</script>
+<script>
+  // Signale la hauteur du widget à la page qui l'affiche (site antreizh.fr ou appli), pour ajuster le cadre
+  (function () {
+    if (window.parent === window) return;
+    var last = 0;
+    function envoyer() {
+      var h = Math.ceil(document.body.getBoundingClientRect().height);
+      if (h && h !== last) { last = h; window.parent.postMessage({ hydraulneHauteur: h }, "*"); }
+    }
+    if (window.ResizeObserver) new ResizeObserver(envoyer).observe(document.body);
+    window.addEventListener("load", envoyer);
+    setTimeout(envoyer, 500); setTimeout(envoyer, 2000); setTimeout(envoyer, 5000);
+  })();
+</script>
+</body>
+</html>
