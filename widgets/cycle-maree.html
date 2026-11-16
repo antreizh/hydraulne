@@ -632,10 +632,10 @@
     }
 
     // tracé d'une série (interrompue en cas de trou de mesure)
-    function trace(serie, s, aire, trouMin) {
+    function trace(serie, s, aire, trouMin, trous) {
       var segs = [], cur = [];
       serie.forEach(function (p, i) {
-        if (i && p.t - serie[i - 1].t > trouMin * MIN) { segs.push(cur); cur = []; }
+        if (i && p.t - serie[i - 1].t > trouMin * MIN) { segs.push(cur); cur = []; if (trous) trous.push([serie[i - 1], p]); }
         cur.push(p);
       });
       segs.push(cur);
@@ -652,7 +652,23 @@
     }
     // ordre de superposition : théorique, puis la mesure de Guily Glaz au premier plan
     if (data.theo.length) trace(data.theo, SERIES.theo, false, 9999);
-    if (data.mes.length) trace(data.mes, SERIES.mes, true, CFG.trouMinutes);
+    var trous = [], lblTrous = [];
+    if (data.mes.length) trace(data.mes, SERIES.mes, true, CFG.trouMinutes, trous);
+    // coupures de transmission : pointillé gris entre les deux mesures encadrantes + mention « pas de mesure »
+    trous.forEach(function (tr) {
+      var a = tr[0], b = tr[1], xa = X(a.t), xb = X(b.t), xm = (xa + xb) / 2;
+      el("line", { x1: xa, y1: Y(a.v), x2: xb, y2: Y(b.v), stroke: "#8a99a6", "stroke-width": 1.4,
+        "stroke-dasharray": (1.5 * k) + " " + (3 * k), "stroke-linecap": "round" }, svg);
+      var anc = xm < x0 + 45 * k ? "start" : xm > x1 - 45 * k ? "end" : "middle";
+      var xt = anc === "start" ? Math.max(xa, x0 + 2 * k) : anc === "end" ? Math.min(xb, x1 - 2 * k) : xm;
+      var gT = el("g", {}, svg); lblTrous.push(gT);
+      var tt = el("text", { x: xt, y: y0 - fs * 1.45, "text-anchor": anc, "font-size": fs * 0.95 }, gT);
+      tt.style.fill = "#8a99a6"; tt.style.fontStyle = "italic"; tt.style.fontWeight = "400";
+      tt.textContent = "pas de mesure";
+      var t2 = el("text", { x: xt, y: y0 - fs * 0.45, "text-anchor": anc, "font-size": fs * 0.95 }, gT);
+      t2.style.fill = "#8a99a6"; t2.style.fontStyle = "italic"; t2.style.fontWeight = "400";
+      t2.textContent = hm(a.t) + " – " + hm(b.t);
+    });
 
     // repère « maintenant » : à droite, la courbe théorique est extrapolée
     var now = new Date(), xn = X(now), tn = null;
@@ -691,6 +707,7 @@
           lb.setAttribute("x", essais[i][0]); lb.setAttribute("y", essais[i][1]); lb.setAttribute("text-anchor", essais[i][2]);
           var bb = lb.getBBox();
           if (bb.y >= 0 && bb.y + bb.height <= y0 && bb.x >= 0 && bb.x + bb.width <= W && !chevauche(lb, tn) &&
+              !lblTrous.some(function (e) { return chevauche(lb, e); }) &&
               !etiquettes.some(function (e) { return chevauche(lb, e); })) break;
           if (i === essais.length - 1) { lb.setAttribute("x", essais[0][0]); lb.setAttribute("y", essais[0][1]); lb.setAttribute("text-anchor", essais[0][2]); }   // à défaut : position principale
         }
