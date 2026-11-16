@@ -802,6 +802,7 @@
     station: "J382183001",          // L'Aulne à Port-Launay – Guily Glaz [marégraphe]
     refreshMinutes: 5,              // le marégraphe de Guily Glaz mesure toutes les 5 minutes
     trouMinutes: 20,                // au-delà de cet écart entre deux mesures, la courbe est interrompue
+    urlArchive: "https://appli.antreizh.fr/data/maree-guily-glaz/",   // historique archivé (trous Hub'Eau comblés via Vigicrues)
     shomPort: "BREST"               // port de référence SHOM (coefficient et prédictions)
   };
   /* ============================================================== */
@@ -874,6 +875,27 @@
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
   }
 
+  /* Trous du flux Hub'Eau (coupures de transmission) : comblés avec l'historique archivé chaque jour,
+     qui reprend les mesures publiées par Vigicrues (même capteur). Aucune mesure Hub'Eau n'est remplacée. */
+  function combler(hub, debut, now) {
+    var vus = {}, mois = [], m = new Date(debut.getFullYear(), debut.getMonth(), 1);
+    hub.forEach(function (p) { vus[p.t.getTime()] = 1; });
+    for (; m <= now; m = new Date(m.getFullYear(), m.getMonth() + 1, 1))
+      mois.push(m.getFullYear() + "-" + ("0" + (m.getMonth() + 1)).slice(-2));
+    return Promise.all(mois.map(function (a) {
+      return fetch(CFG.urlArchive + a + ".csv", { cache: "no-cache" })
+        .then(function (r) { return r.ok ? r.text() : ""; }).catch(function () { return ""; });
+    })).then(function (textes) {
+      textes.join("\n").split("\n").forEach(function (l) {
+        var c = l.split(";");
+        if (c.length < 2 || c[1] === "" || isNaN(+c[1]) || !/^\d{4}-/.test(c[0])) return;
+        var t = new Date(c[0]);
+        if (t >= debut && !vus[t.getTime()]) { vus[t.getTime()] = 1; hub.push({ t: t, v: +c[1] / 1000 }); }
+      });
+      return hub;
+    });
+  }
+
   /* 1) Marégraphe de Guily Glaz (Hub'Eau) : 4 derniers jours, pour établir le profil réel de la marée */
   function load() {
     var now = new Date();
@@ -883,9 +905,12 @@
       "&grandeur_hydro=H&date_debut_obs=" + encodeURIComponent(debut.toISOString().slice(0, 19) + "Z") +
       "&size=5000&sort=asc&format=json")
       .then(function (j) {
-        ptsFit = (j.data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
-          .map(function (r) { return { t: new Date(r.date_obs), v: r.resultat_obs / 1000 }; })   // mm -> m
-          .sort(function (a, b) { return a.t - b.t; });
+        var hub = (j.data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
+          .map(function (r) { return { t: new Date(r.date_obs), v: r.resultat_obs / 1000 }; });  // mm -> m
+        return combler(hub, debut, now);
+      })
+      .then(function (serie) {
+        ptsFit = serie.sort(function (a, b) { return a.t - b.t; });
         pts = ptsFit.filter(function (p) { return p.t >= jour0; });
         msgVide = "En attente des premières mesures du jour…";
         ajuster(); draw(); summary(); table();
@@ -1451,15 +1476,15 @@
 
 <section class="appli-onglet" id="o-cadran" role="tabpanel" aria-labelledby="b-cadran" hidden>
 <!-- Cadran de marée : page widgets/cadran-maree.html (même widget que sur le site antreizh.fr) -->
-<iframe class="appli-meteo" src="widgets/cadran-maree.html?v=111" title="Cadran de marée et de vent à Guily Glaz" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/cadran-maree.html?v=112" title="Cadran de marée et de vent à Guily Glaz" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-histo" role="tabpanel" aria-labelledby="b-histo" hidden>
 <!-- Histo cadran : page widgets/histo-cadran.html (rejeu de l'historique, même widget que sur le site antreizh.fr) -->
-<iframe class="appli-meteo" src="widgets/histo-cadran.html?v=111" title="Histo cadran : rejeu des marées et vents à Guily Glaz" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/histo-cadran.html?v=112" title="Histo cadran : rejeu des marées et vents à Guily Glaz" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-vent" role="tabpanel" aria-labelledby="b-vent" hidden>
 <!-- page externe (site antreizh.fr) : hauteur fixée à l'écran, défilement dans le cadre ; ?v= augmenté avec la version pour que les téléphones rechargent la page -->
-<iframe class="appli-meteo appli-externe" src="https://www.antreizh.fr/widgets/vent/widget-vent.html?v=111" title="Vent et pression à Lanvéoc-Poulmic" loading="lazy"></iframe>
+<iframe class="appli-meteo appli-externe" src="https://www.antreizh.fr/widgets/vent/widget-vent.html?v=112" title="Vent et pression à Lanvéoc-Poulmic" loading="lazy"></iframe>
 </section>
 <section class="appli-onglet" id="o-hydro" role="tabpanel" aria-labelledby="b-hydro" hidden>
 <!-- ===== Widget Hydro (identique à widget-hydro.html) ===== -->
@@ -1996,32 +2021,32 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=111" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=112" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=111" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=112" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=111" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=112" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=111" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=111" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=112" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=112" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=111" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=111" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=112" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=112" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-spezet" role="tabpanel" aria-labelledby="b-spezet" hidden>
-<iframe class="appli-meteo" src="meteo-spezet-nappe-pluie.html?v=111" title="Pluviométrie et nappe à Spézet" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-spezet-nappe-pluie.html?v=112" title="Pluviométrie et nappe à Spézet" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-ss-sp" role="tabpanel" aria-labelledby="b-ss-sp" hidden>
-<iframe class="appli-meteo" src="meteo-nappes-ss-sp.html?v=111" title="Nappes de Saint-Ségal et de Spézet : écart à la moyenne" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappes-ss-sp.html?v=112" title="Nappes de Saint-Ségal et de Spézet : écart à la moyenne" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 <section class="appli-onglet" id="o-onde-maree" role="tabpanel" aria-labelledby="b-onde-maree" hidden>
 <!-- Onde marée : page widgets/onde-maree.html (carte animée de la marée dans l'Aulne maritime, de Landévennec à Guily Glaz) -->
-<iframe class="appli-meteo" src="widgets/onde-maree.html?v=111" title="Onde marée : carte animée de la marée dans l'Aulne maritime" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/onde-maree.html?v=112" title="Onde marée : carte animée de la marée dans l'Aulne maritime" loading="lazy" scrolling="no"></iframe>
 </section>
 </main>
 

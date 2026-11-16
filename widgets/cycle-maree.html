@@ -143,6 +143,7 @@
     station: "J382183001",          // L'Aulne à Port-Launay – Guily Glaz [marégraphe]
     refreshMinutes: 5,              // le marégraphe de Guily Glaz mesure toutes les 5 minutes
     trouMinutes: 20,                // au-delà de cet écart entre deux mesures, la courbe est interrompue
+    urlArchive: "https://appli.antreizh.fr/data/maree-guily-glaz/",   // historique archivé (trous Hub'Eau comblés via Vigicrues)
     shomPort: "BREST"               // port de référence SHOM (coefficient et prédictions)
   };
   /* ============================================================== */
@@ -215,6 +216,27 @@
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
   }
 
+  /* Trous du flux Hub'Eau (coupures de transmission) : comblés avec l'historique archivé chaque jour,
+     qui reprend les mesures publiées par Vigicrues (même capteur). Aucune mesure Hub'Eau n'est remplacée. */
+  function combler(hub, debut, now) {
+    var vus = {}, mois = [], m = new Date(debut.getFullYear(), debut.getMonth(), 1);
+    hub.forEach(function (p) { vus[p.t.getTime()] = 1; });
+    for (; m <= now; m = new Date(m.getFullYear(), m.getMonth() + 1, 1))
+      mois.push(m.getFullYear() + "-" + ("0" + (m.getMonth() + 1)).slice(-2));
+    return Promise.all(mois.map(function (a) {
+      return fetch(CFG.urlArchive + a + ".csv", { cache: "no-cache" })
+        .then(function (r) { return r.ok ? r.text() : ""; }).catch(function () { return ""; });
+    })).then(function (textes) {
+      textes.join("\n").split("\n").forEach(function (l) {
+        var c = l.split(";");
+        if (c.length < 2 || c[1] === "" || isNaN(+c[1]) || !/^\d{4}-/.test(c[0])) return;
+        var t = new Date(c[0]);
+        if (t >= debut && !vus[t.getTime()]) { vus[t.getTime()] = 1; hub.push({ t: t, v: +c[1] / 1000 }); }
+      });
+      return hub;
+    });
+  }
+
   /* 1) Marégraphe de Guily Glaz (Hub'Eau) : 4 derniers jours, pour établir le profil réel de la marée */
   function load() {
     var now = new Date();
@@ -224,9 +246,12 @@
       "&grandeur_hydro=H&date_debut_obs=" + encodeURIComponent(debut.toISOString().slice(0, 19) + "Z") +
       "&size=5000&sort=asc&format=json")
       .then(function (j) {
-        ptsFit = (j.data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
-          .map(function (r) { return { t: new Date(r.date_obs), v: r.resultat_obs / 1000 }; })   // mm -> m
-          .sort(function (a, b) { return a.t - b.t; });
+        var hub = (j.data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
+          .map(function (r) { return { t: new Date(r.date_obs), v: r.resultat_obs / 1000 }; });  // mm -> m
+        return combler(hub, debut, now);
+      })
+      .then(function (serie) {
+        ptsFit = serie.sort(function (a, b) { return a.t - b.t; });
         pts = ptsFit.filter(function (p) { return p.t >= jour0; });
         msgVide = "En attente des premières mesures du jour…";
         ajuster(); draw(); summary(); table();

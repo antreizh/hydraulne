@@ -122,6 +122,7 @@
     urlObsMeteoFrance: "https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m",
     urlHubeau: "https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr",
     urlCoefs: "https://appli.antreizh.fr/data/maree-brest/predictions-shom.csv",   // coefficients (archive SHOM de l'appli)
+    urlArchiveGG: "https://appli.antreizh.fr/data/maree-guily-glaz/",             // historique archivé (trous Hub'Eau comblés via Vigicrues)
     refreshMinutes: 10
   };
   /* ============================================================== */
@@ -183,9 +184,28 @@
               "&size=1000&sort=asc&fields=date_obs,resultat_obs&format=json";
     var essai = function () { return getText(url, { headers: { Accept: "application/json" } }); };
     return essai().catch(essai).then(function (t) {
-      return (JSON.parse(t).data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
-        .map(function (r) { return { t: new Date(r.date_obs), h: r.resultat_obs / 1000 }; })
-        .sort(function (a, b) { return a.t - b.t; });
+      var hub = (JSON.parse(t).data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
+        .map(function (r) { return { t: new Date(r.date_obs), h: r.resultat_obs / 1000 }; });
+      return combler(hub, new Date(debut));
+    }).then(function (s) { return s.sort(function (a, b) { return a.t - b.t; }); });
+  }
+
+  /* Trous du flux Hub'Eau (coupures de transmission) : comblés avec l'historique archivé de l'appli,
+     qui reprend les mesures publiées par Vigicrues (même capteur). Aucune mesure Hub'Eau n'est remplacée. */
+  function combler(hub, debut) {
+    var vus = {}, mois = {};
+    hub.forEach(function (p) { vus[p.t.getTime()] = 1; });
+    [debut, new Date()].forEach(function (d) { mois[d.toISOString().slice(0, 7)] = 1; });
+    return Promise.all(Object.keys(mois).map(function (m) {
+      return getText(CFG.urlArchiveGG + m + ".csv?t=" + Math.floor(Date.now() / 6e5), {}).catch(function () { return ""; });
+    })).then(function (textes) {
+      textes.join("\n").split("\n").forEach(function (l) {
+        var c = l.split(";");
+        if (c.length < 2 || c[1] === "" || isNaN(+c[1]) || !/^\d{4}-/.test(c[0])) return;
+        var t = new Date(c[0]);
+        if (t >= debut && !vus[t.getTime()]) { vus[t.getTime()] = 1; hub.push({ t: t, h: +c[1] / 1000 }); }
+      });
+      return hub;
     });
   }
 

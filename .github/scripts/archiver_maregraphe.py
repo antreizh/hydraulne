@@ -61,6 +61,7 @@ DEMI_CYCLE = dt.timedelta(hours=6, minutes=13)
 
 GG_STATION = "J382183001"                         # Aulne à Guily Glaz (Port-Launay), marégraphe
 GG_API = "https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr"
+GG_VIGICRUES = "https://www.vigicrues.gouv.fr/services/observations.json/index.php"   # secours : comble les trous Hub'Eau
 GG_RETOUR_MAX_JOURS = 35                          # Hub'Eau ne garde le temps réel qu'environ un mois
 REFMAR = "https://services.data.shom.fr/maregraphie/observation/json/3?sources=1&dtStart={a}&dtEnd={b}"
 IOC = "https://www.ioc-sealevelmonitoring.org/service.php?query=data&code=bres&timestart={a}&timestop={b}&format=json"
@@ -223,6 +224,19 @@ def guily_glaz(depuis):
         if len(data) < 10000 or not j.get("next"):
             return out
         page += 1
+
+
+def guily_glaz_vigicrues():
+    """Mesures de Guily Glaz publiées par Vigicrues (même capteur que Hub'Eau) → {date_utc: hauteur_mm}.
+    Vigicrues garde environ un mois : toutes les 5 min sur les 2-3 derniers jours, une valeur par heure avant.
+    Sert uniquement à combler les trous du flux Hub'Eau (coupures de transmission)."""
+    q = urllib.parse.urlencode({"CdStationHydro": GG_STATION, "GrdSerie": "H", "FormatDate": "iso"})
+    j = lire_url(f"{GG_VIGICRUES}?{q}")
+    out = {}
+    for r in ((j.get("Serie") or {}).get("ObssHydro") or []):
+        if r.get("DtObsHydro") and r.get("ResObsHydro") is not None:
+            out[cle(date(r["DtObsHydro"]))] = str(int(round(float(r["ResObsHydro"]) * 1000)))   # m → mm
+    return out
 
 
 # ---------------------------------------------------------------- Brest (SHOM REFMAR, secours IOC)
@@ -456,6 +470,17 @@ def main(base):
         for k, v in neuves.items():
             if archive.get(k, {}).get("hauteur_mm") != v:
                 archive.setdefault(k, {})["hauteur_mm"] = v; n += 1
+        if nom == "Guily Glaz":
+            # trous du flux Hub'Eau (coupure de transmission) : comblés avec Vigicrues, sans remplacer aucune mesure
+            try:
+                nv = 0
+                for k, v in guily_glaz_vigicrues().items():
+                    if date(k) >= DEBUT and not archive.get(k, {}).get("hauteur_mm"):
+                        archive.setdefault(k, {})["hauteur_mm"] = v; nv += 1
+                print(f"::notice::Guily Glaz : {nv} mesure(s) manquante(s) reprise(s) de Vigicrues")
+                n += nv
+            except Exception as e:
+                print(f"::warning::Vigicrues injoignable, trous de Guily Glaz non comblés ({e})")
         completer(archive, pm, meteo_l)
         mois = ecrire_mensuel(dossier, COLS_MAREE, archive)
         avec = lambda c: sum(1 for l in archive.values() if l.get(c))
