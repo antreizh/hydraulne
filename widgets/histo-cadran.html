@@ -303,8 +303,6 @@
     // cercle de référence 1015 hPa : au-dessus, la pression est haute (courbe vers l'extérieur), au-dessous elle est basse
     var rr = rp(P_REF);
     el("circle", { cx: 0, cy: 0, r: rr, fill: "none", stroke: coul.muted, "stroke-opacity": 0.55, "stroke-width": 0.8 });
-    var pr = xy(aLab + 0.9, rr);
-    el("text", { x: pr[0], y: pr[1] - 2, "text-anchor": "middle", "font-size": 8, fill: coul.muted }).textContent = P_REF;
     var segs = [], cur = [];
     P.forEach(function (p) { if (cur.length && p.t - cur[cur.length - 1].t > H) { segs.push(cur); cur = []; } cur.push(p); });
     segs.push(cur);
