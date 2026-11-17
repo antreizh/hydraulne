@@ -117,7 +117,7 @@
 #mhc-widget .mhc-hit:focus-visible{fill:var(--eau);fill-opacity:.08}
 #mhc-widget .mhc-soleil{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(8px*var(--k))}
 #mhc-widget .mhc-soleil:empty{display:none}
-#mhc-widget .mhc-pres{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(3px*var(--k))}
+#mhc-widget .mhc-pres{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(8px*var(--k))}
 #mhc-widget .mhc-pres:empty{display:none}
 #mhc-widget .mhc-pres span{white-space:nowrap}
 #mhc-widget .mhc-pres i{display:inline-block;width:calc(64px*var(--k));height:calc(8px*var(--k));border-radius:2px;vertical-align:middle;margin:0 calc(3px*var(--k));background:linear-gradient(90deg,rgba(21,101,168,.5),rgba(214,238,252,.5));border:1px solid var(--line)}
@@ -654,7 +654,7 @@
      (bibliothèque mp4-muxer, fichier lib/mp4-muxer.js, chargé seulement à la première vidéo).
      La durée de la vidéo suit la vitesse choisie : 3 jours à 2 h par seconde = 36 s de vidéo. */
   // dimensions multiples de 16 : certains lecteurs (Windows « Films et TV », Lecteur multimédia) refusent sinon le H.264
-  var VW = 1088, VH = 1488, FPS = 30;
+  var VW = 1088, VH = 1504, FPS = 30;
   // H.264 d'abord (lisible partout) ; VP9 en secours (MP4 lisible par Chrome, Firefox, VLC, mais pas toujours par les appareils Apple)
   var CODECS = [["avc1.640028", "avc"], ["avc1.4d0028", "avc"], ["avc1.42e028", "avc"], ["vp09.00.40.08", "vp9"], ["av01.0.08M.08", "av1"]];
   function chargerMuxer() {
@@ -692,8 +692,8 @@
     var x = 44; vents.forEach(function (v) { x += texteCanevas(c, v, x, 178, taille, ink, false) + ecart; });
     c.drawImage(img, (VW - 1000) / 2, 205, 1000, 1000);
     legendeCanevas(c, 1236, ink, muted);
-    texteCanevas(c, "Animation de l'historique · marégraphe Hub'Eau, vent Météo-France · antreizh.fr", VW / 2, 1444, 23, muted, false, "center");
-    texteCanevas(c, "Données et représentation indicatives non officielles", VW / 2, 1474, 21, muted, false, "center");
+    texteCanevas(c, "Animation de l'historique · marégraphe Hub'Eau, vent Météo-France · antreizh.fr", VW / 2, 1462, 23, muted, false, "center");
+    texteCanevas(c, "Données et représentation indicatives non officielles", VW / 2, 1492, 21, muted, false, "center");
   }
   // Légende « Vitesse du vent » sous le cadran : les 12 classes en 2 lignes de 6 (mêmes couleurs que le cadran)
   function legendeCanevas(c, y, ink, muted) {
@@ -703,7 +703,7 @@
     while (c.measureText(ts).width > VW - 88 && tl > 14) { tl--; c.font = "400 " + tl + "px " + getComputedStyle(root).fontFamily; }
     texteCanevas(c, ts, 44, y, tl, muted, false);
     // échelle de la pression (couleur et position sur le cercle)
-    y += 38;
+    y += 46;
     if ($("mhc-pres").textContent) {
     var em = $("mhc-pres").textContent.match(/(\d+)\s+(\d+) hPa/), t1 = "Pression à Lanvéoc en 24h : " + (em ? em[1] : ""), t2 = (em ? em[2] + " hPa" : "") + " · du centre vers le bord du cercle, pointillé à 1015 hPa", tp = tl;
     var largP = function () { c.font = "400 " + tp + "px " + getComputedStyle(root).fontFamily; return c.measureText(t1).width + c.measureText(t2).width + 140; };
@@ -713,7 +713,7 @@
     c.fillStyle = gr; c.fillRect(x, y - 15, 120, 14); c.strokeStyle = css("--line"); c.lineWidth = 1; c.strokeRect(x, y - 15, 120, 14);
     texteCanevas(c, t2, x + 130, y, tp, muted, false);
     }
-    y += 42;
+    y += 48;
     texteCanevas(c, "Vitesse du vent", 44, y, 26, ink, true);
     var col = (VW - 88) / 6;
     LEGENDE.forEach(function (l, i) {
