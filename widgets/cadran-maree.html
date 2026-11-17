@@ -29,13 +29,13 @@
   </div>
   <div class="mcd-lect" id="mcd-lect" aria-live="polite"></div>
   <svg id="mcd-svg" viewBox="-322 -312 634 624" role="img"
-       aria-label="Cadran de 24 heures : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, jour et nuit"></svg>
+       aria-label="Cadran de 24 heures : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, pression à Lanvéoc, jour et nuit"></svg>
   <div class="mcd-ext-t">Vitesse du vent</div>
   <div class="mcd-leg" id="mcd-leg"></div>
   <div class="mcd-ext-t">Rétrospective des marées</div>
   <div class="mcd-ext" id="mcd-ext"></div>
   <div class="mcd-foot">
-    <span class="mcd-src">Sources : <a href="https://www.hydro.eaufrance.fr/stationhydro/J382183001/fiche" target="_blank" rel="noopener" title="L'Aulne à Port-Launay – Guily Glaz [marégraphe] – HydroPortail">HydroPortail</a> · <a href="https://meteo.data.gouv.fr" target="_blank" rel="noopener" title="Vent : mesures des stations Météo-France (toutes les 6 minutes)">Météo-France</a></span>
+    <span class="mcd-src">Sources : <a href="https://www.hydro.eaufrance.fr/stationhydro/J382183001/fiche" target="_blank" rel="noopener" title="L'Aulne à Port-Launay – Guily Glaz [marégraphe] – HydroPortail">HydroPortail</a> · <a href="https://meteo.data.gouv.fr" target="_blank" rel="noopener" title="Vent et pression : mesures des stations Météo-France (toutes les 6 minutes)">Météo-France</a></span>
     <span class="mcd-copy">© <a href="https://www.antreizh.fr" target="_blank" rel="noopener" title="www.antreizh.fr">antreizh.fr</a></span>
     <span class="mcd-avert">Données et représentation indicatives non officielles</span>
   </div>
@@ -45,6 +45,7 @@
       <li><b>Centre</b> : hauteur, sens et coefficient de la marée à l'heure choisie (le moment présent par défaut). Le coefficient est celui de la pleine mer de Brest la plus proche (prédiction officielle du SHOM).</li>
       <li><b>1<sup>er</sup> cercle</b> : hauteur d'eau à Guily Glaz ; plus l'aire bleue s'éloigne du centre, plus l'eau est haute. Points : pleines (pleins) et basses mers (creux).</li>
       <li><b>Cercles suivants, par paires</b> : vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu. Pour chaque station, une barre par heure (vent moyen, rafale en trait), puis une flèche qui pointe vers où souffle le vent (nord en haut) ; un petit rond signale un vent calme.</li>
+      <li><b>Avant-dernier cercle</b> : pression au niveau de la mer à Lanvéoc (trait brun), mesurée toutes les 6 minutes ; plus le trait s'éloigne du centre, plus la pression est haute. L'échelle (en hPa) s'adapte aux 24 heures affichées. La ligne de lecture donne la pression et son évolution sur 3 heures.</li>
       <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre), selon le lever et le coucher réels du soleil à Saint-Ségal ; en petit, leur heure et la variation par rapport à la veille (mn / J-1).</li>
       <li>0 h en haut, sens des aiguilles d'une montre, heure de Paris ; le trait orange marque le moment présent ; les tracés pâlissent avec l'ancienneté. Touchez une heure pour lire ses valeurs.</li>
     </ul>
@@ -55,7 +56,7 @@
 /* Toutes les tailles de texte sont multipliées par --k, calculé selon la largeur allouée au widget */
 #mcd-widget{
   --ink:#0b3c5d; --muted:#5f7180; --line:#dde5eb; --grid:#e9eff3; --card:#fff;
-  --eau:#1f7bb6; --main:#c2410c; --nuit:#3d5566; --jour:#f3d27a;
+  --eau:#1f7bb6; --main:#c2410c; --nuit:#3d5566; --jour:#f3d27a; --pres:#8a5a2b;
   /* vitesse du vent, du calme à l'ouragan (> 80 nd) */
   --v1:#9fb7c6; --v2:#2a9d8f; --v3:#8cc152; --v4:#e9c23b; --v5:#e9a23b; --v6:#e76f51; --v7:#d62839; --v8:#b5179e;
   --v9:#7b2cbf; --v10:#5a189a; --v11:#3c096c; --v12:#10002b;
@@ -142,8 +143,9 @@
 
   /* ---------------- outils ---------------- */
   var KT = 1.94384, TZ = "Europe/Paris", H = 3600e3, JOUR = 24 * H;
-  var R0 = 44, R1 = 96;                                   // 1er cercle : hauteur d'eau
-  var RB = [104, 150, 196], RL = 23, RA = [137, 183, 229];// barres de force (de RB à RB+RL) puis flèches, par station
+  var R0 = 40, R1 = 90;                                   // 1er cercle : hauteur d'eau
+  var RB = [98, 138, 178], RL = 20, RA = [128, 168, 208]; // barres de force (de RB à RB+RL) puis flèches, par station
+  var RP0 = 220, RP1 = 237;                               // pression à Lanvéoc
   var RN0 = 241, RN1 = 246, RH = 260, RS = 304;                     // jour / nuit, heures
   var fmtH = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
   var fmtJ = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
@@ -222,6 +224,41 @@
       tx.setAttribute("transform", "rotate(" + deg.toFixed(1) + " " + pt[0] + " " + pt[1] + ")");
     });
   }
+  /* Cercle de la pression à Lanvéoc : courbe entre RP0 (plus bas) et RP1 (plus haut) de la fenêtre, échelle d'au moins
+     8 hPa arrondie à l'hPa ; interrompue s'il manque plus d'une heure de mesures. */
+  function echellePression(l) {
+    var v = l.map(function (p) { return p.p; }), lo = Math.floor(Math.min.apply(null, v)), hi = Math.ceil(Math.max.apply(null, v));
+    if (hi - lo < 8) { var m = (lo + hi) / 2; lo = Math.floor(m - 4); hi = lo + 8; }
+    return [lo, hi];
+  }
+  function dessinerPression(P, coul, aLab, ech) {
+    el("circle", { cx: 0, cy: 0, r: RP0, fill: "none", stroke: coul.muted, "stroke-opacity": 0.3 });
+    el("circle", { cx: 0, cy: 0, r: RP1, fill: "none", stroke: coul.muted, "stroke-opacity": 0.25, "stroke-dasharray": "1 3" });
+    var pl = xy(aLab + 0.05, (RP0 + RP1) / 2);
+    el("text", { x: pl[0], y: pl[1] + 3, "text-anchor": "middle", "font-size": 9.5, fill: coul.muted }).textContent = "Pression";
+    if (P.length < 2) return;
+    var e = ech || echellePression(P), rp = function (v) { return RP0 + Math.max(0, Math.min(1, (v - e[0]) / (e[1] - e[0]))) * (RP1 - RP0); };
+    var segs = [], cur = [];
+    P.forEach(function (p) { if (cur.length && p.t - cur[cur.length - 1].t > H) { segs.push(cur); cur = []; } cur.push(p); });
+    segs.push(cur);
+    segs.forEach(function (sg) {
+      if (sg.length < 2) return;
+      var pts = sg.map(function (p) { return xy(ang(p.t), rp(p.p)); }), a0 = ang(sg[0].t), a1 = ang(sg[sg.length - 1].t);
+      if (a1 < a0) a1 += 2 * Math.PI;
+      el("path", { d: "M" + xy(a0, RP0) + " L" + pts.join(" L") + " L" + xy(a1, RP0) + " A" + RP0 + "," + RP0 + " 0 " + (a1 - a0 > Math.PI ? 1 : 0) + " 0 " + xy(a0, RP0) + "Z",
+        fill: coul.pres, "fill-opacity": 0.14, stroke: "none" });
+      el("path", { d: "M" + pts.join(" L"), fill: "none", stroke: coul.pres, "stroke-width": 1.6, "stroke-linejoin": "round", "stroke-linecap": "round" });
+    });
+    var pe = xy(aLab + 0.62, RP1);
+    el("text", { x: pe[0], y: pe[1] - 2, "text-anchor": "middle", "font-size": 8.5, fill: coul.muted }).textContent = e[0] + "–" + e[1] + " hPa";
+  }
+  // pression à l'instant d et tendance sur 3 heures (hPa), pour la ligne de lecture
+  function lirePression(P, d) {
+    if (!P.length) return "";
+    var p = plusProche(P, d); if (Math.abs(p.t - d) > H) return "";
+    var q = plusProche(P, new Date(p.t - 3 * H)), tend = Math.abs(q.t - (p.t - 3 * H)) <= 20 * 60e3 ? p.p - q.p : null;
+    return "<span>Pression Lanvéoc <b>" + nf(p.p, 1) + " hPa</b>" + (tend == null ? "" : " · " + (tend > 0.05 ? "+" : tend < -0.05 ? "−" : "±") + nf(Math.abs(tend), 1) + " / 3 h") + "</span>";
+  }
   function secteur(a0, a1, r0, r1) {
     var g = a1 - a0 > Math.PI ? 1 : 0;
     return "M" + xy(a0, r0) + " L" + xy(a0, r1) + " A" + r1 + "," + r1 + " 0 " + g + " 1 " + xy(a1, r1) +
@@ -237,7 +274,7 @@
   function premier(p, noms) { for (var i = 0; i < noms.length; i++) { var n = num(p[noms[i]]); if (n != null) return n; } return null; }
 
   /* ---------------- données ---------------- */
-  var gg = [], vents = [[], [], []], maj = null, fin = null;
+  var gg = [], vents = [[], [], []], pression = [], maj = null, fin = null;
 
   // Guily Glaz : 25 dernières heures (Hub'Eau), hauteur en m à l'échelle de la station
   function chargerMaree() {
@@ -279,8 +316,11 @@
         var tete = lignes[0].split(";").map(function (s) { return s.trim(); });
         var obs = lignes.slice(1).map(function (l) {
           var c = l.split(";"), p = {}; tete.forEach(function (h, k) { p[h] = c[k]; });
-          return { t: new Date(String(p.validity_time || p.reference_time || "").trim()), ff: num(p.ff), dd: num(p.dd), fx: premier(p, ["raf10", "fxi10", "raf"]) };
-        }).filter(function (p) { return !isNaN(p.t) && p.ff != null; });
+          return { t: new Date(String(p.validity_time || p.reference_time || "").trim()), ff: num(p.ff), dd: num(p.dd), fx: premier(p, ["raf10", "fxi10", "raf"]), pm: num(p.pmer) };
+        }).filter(function (p) { return !isNaN(p.t); });
+        // pression au niveau de la mer (Pa -> hPa), mesures toutes les 6 minutes
+        var pres = obs.filter(function (p) { return p.pm != null; }).map(function (p) { return { t: p.t, p: p.pm / 100 }; }).sort(function (a, b) { return a.t - b.t; });
+        obs = obs.filter(function (p) { return p.ff != null; });
         var heures = {};
         obs.forEach(function (p) {
           var k = Math.ceil(p.t.getTime() / H) * H;          // mesures de ]H-1 ; H] → heure H
@@ -288,10 +328,12 @@
           o.n++; o.ff += p.ff; o.fx = Math.max(o.fx, p.fx != null ? p.fx : p.ff);
           if (p.dd != null && p.ff > 0) { var r = p.dd * Math.PI / 180; o.u += p.ff * Math.sin(r); o.v += p.ff * Math.cos(r); }
         });
-        return Object.keys(heures).map(function (k) {
+        var res = Object.keys(heures).map(function (k) {
           var o = heures[k], nd = o.ff / o.n * KT, dd = (Math.atan2(o.u, o.v) * 180 / Math.PI + 360) % 360;
           return { t: new Date(+k), nd: nd, dd: (o.u || o.v) ? dd : null, raf: Math.max(o.fx * KT, nd) };
         }).sort(function (a, b) { return a.t - b.t; });
+        res.pres = pres;
+        return res;
       });
   }
 
@@ -313,6 +355,7 @@
     Promise.all(p.map(function (x, i) { return i ? x : x.catch(function () { return null; }); })).then(function (r) {
       if (r[0] && r[0].length) gg = r[0];
       for (var i = 0; i < 3; i++) if (r[i + 1]) vents[i] = r[i + 1];
+      if (r[2] && r[2].pres && r[2].pres.length) pression = r[2].pres;   // Lanvéoc
       maj = new Date();
       dessiner();
     });
@@ -413,6 +456,9 @@
     var pm = xy(aLab + 0.34, RB[2] + RL);
     el("text", assign({ x: pm[0], y: pm[1] - 2, "text-anchor": "middle", "font-size": 8.5, fill: muted }, halo)).textContent = vMax + " nd";
 
+    // avant-dernier cercle : pression au niveau de la mer à Lanvéoc (mesures toutes les 6 minutes)
+    dessinerPression(pression.filter(function (p) { return p.t > debut && p.t <= hFin; }), { muted: muted, pres: css("--pres") }, aLab);
+
     // aiguille « maintenant »
     var n0 = xy(an, R0), n1 = xy(an, RN1);
     el("line", { x1: n0[0], y1: n0[1], x2: n1[0], y2: n1[1], stroke: main, "stroke-width": 1.6, "stroke-dasharray": "4 3" });
@@ -437,7 +483,7 @@
         var v = plusProche(l, d);
         if (Math.abs(v.t - d) > 1.5 * H) return "<span>" + st.nom + " : —</span>";
         return "<span>" + st.nom + " <b>" + (v.nd < 0.5 || v.dd == null ? "calme" : card(v.dd) + " " + Math.round(v.nd) + " nd") + "</b> · raf. " + Math.round(v.raf) + "</span>";
-      }).join("");
+      }).join("") + lirePression(pression, d);
     }
     lire(fin, true);
     for (k = 0; k < 24; k++) (function (d) {

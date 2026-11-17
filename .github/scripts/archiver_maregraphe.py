@@ -75,11 +75,11 @@ COLS_MAREE = ["date_utc", "hauteur_mm", "coef", "vent_ms", "vent_dir", "pression
 COLS_METEO = ["date_utc", "vent_ms", "vent_dir", "rafale_ms", "pression_hpa"]
 # vent des trois stations du widget « Cadran de marée », pour le widget « Histo cadran » (rejeu)
 VENT_RADE = (("segal", "29263002"), ("lanveoc", "29120001"), ("mathieu", "29190001"))
-COLS_VENT_RADE = ["date_utc"] + [f"{n}_{c}" for n, _ in VENT_RADE for c in ("ms", "dir", "raf")]
+COLS_VENT_RADE = ["date_utc"] + [f"{n}_{c}" for n, _ in VENT_RADE for c in ("ms", "dir", "raf")] + ["lanveoc_pmer"]   # pression au niveau de la mer à Lanvéoc (hPa)
 # mesures toutes les 6 minutes de ces trois stations : exactement la source du widget « Cadran de marée »
 # (API Météo-France « Paquet Observations » v2, infrahoraire-6m ; elle rend environ les 5 derniers jours)
 API_6MIN = "https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m?id_station={}&format=csv"
-COLS_VENT_6MIN = ["date_utc"] + [f"{n}_{c}" for n, _ in VENT_RADE for c in ("ff", "dd", "raf")]
+COLS_VENT_6MIN = ["date_utc"] + [f"{n}_{c}" for n, _ in VENT_RADE for c in ("ff", "dd", "raf")] + ["lanveoc_pmer"]
 COLS_PRED = ["date_utc", "type", "hauteur_m", "coef"]
 COLS_EXT = ["date_utc_prevue", "type", "hauteur_prevue_m", "coef", "date_utc_mesuree", "hauteur_mesuree_m",
             "surcote_m", "vent_ms", "vent_dir", "pression_hpa", "gg_date_utc", "gg_hauteur_mm"]
@@ -292,6 +292,8 @@ def meteo_mf(depuis):
         for nom, num in VENT_RADE:
             if poste == num:
                 rade.setdefault(k, {}).update({f"{nom}_ms": l[ix["FF"]].strip(), f"{nom}_dir": l[ix["DD"]].strip(), f"{nom}_raf": l[ix["FXI"]].strip()})
+                if nom == "lanveoc":
+                    rade[k]["lanveoc_pmer"] = l[ix["PMER"]].strip()          # pression au niveau de la mer (hPa)
     vent = [k for k, v in out.items() if v.get("vent_ms")]
     print(f"Météo-France {url.rsplit('/', 1)[1]} : {len(vent)} heures de vent à la pointe Saint-Mathieu "
           f"(dernière {max(vent) if vent else '—'}), {sum(1 for v in out.values() if v.get('pression_hpa'))} de pression à Brest-Guipavas, "
@@ -322,6 +324,8 @@ def vent_6min(cle):
             for l in lignes[1:]:
                 c = dict(zip(tete, l.split(";")))
                 k, ff = c.get("validity_time", "").strip(), c.get("ff", "").strip()
+                if k and nom == "lanveoc" and c.get("pmer", "").strip():   # pression au niveau de la mer, en Pa -> hPa
+                    out.setdefault(k, {})["lanveoc_pmer"] = f"{float(c['pmer']) / 100:.1f}"
                 if not k or ff == "":
                     continue
                 raf = c.get("raf10", "").strip() or c.get("fxi10", "").strip()
@@ -340,10 +344,14 @@ def horaire_depuis_6min(v6):
     retenue dès qu'elle a une mesure (une station peut n'en transmettre qu'une ou deux dans l'heure) ; l'heure en cours,
     encore incomplète, est recalculée au passage suivant."""
     import math
-    acc = {}
+    acc, pres = {}, {}
     for k, v in v6.items():
         t = date(k)
         h = t.replace(minute=0, second=0, microsecond=0) + (dt.timedelta(hours=1) if (t.minute or t.second) else dt.timedelta(0))
+        try:                                                     # pression de Lanvéoc : moyenne des mesures de l'heure
+            p = pres.setdefault(cle(h), [0.0, 0]); p[0] += float(v.get("lanveoc_pmer", "")); p[1] += 1
+        except ValueError:
+            pass
         for nom, _ in VENT_RADE:
             try:
                 ff = float(v.get(f"{nom}_ff", ""))
@@ -368,6 +376,9 @@ def horaire_depuis_6min(v6):
         moy = a["ff"] / a["n"]
         dd = (math.degrees(math.atan2(a["u"], a["v"])) + 360) % 360 if (a["u"] or a["v"]) else 0
         out.setdefault(k, {}).update({f"{nom}_ms": f"{moy:.1f}", f"{nom}_dir": f"{dd:.0f}", f"{nom}_raf": f"{max(a['fx'], moy):.1f}"})
+    for k, (s, n) in pres.items():
+        if n:
+            out.setdefault(k, {})["lanveoc_pmer"] = f"{s / n:.1f}"
     return out
 
 
@@ -434,6 +445,8 @@ def main(base):
     meteo, rade = charger_mensuel(d_mt), charger_mensuel(d_vr)
     try:
         depuis = min(depuis_archive(meteo, maintenant), depuis_archive(rade, maintenant)) - dt.timedelta(days=2)
+        if not any(v.get("lanveoc_pmer") for v in rade.values()):   # pression de Lanvéoc ajoutée le 17/11/2026 : reprise depuis le début
+            depuis = DEBUT
         neuves, neuves_rade = meteo_mf(max(depuis, DEBUT - dt.timedelta(days=1)))
         for k, v in neuves.items():
             meteo.setdefault(k, {}).update({c: x for c, x in v.items() if x})
