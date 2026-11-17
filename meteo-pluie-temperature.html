@@ -198,35 +198,107 @@ function addDays(s, n) {
   return d.toISOString().slice(0, 10);
 }
 
-async function fetchLatest() {
+// ---- Relevés récents de la station, lus en arrière-plan ----
+// Lecture en flux du fichier départemental : seules les lignes de la station sont gardées, et la lecture
+// s'arrête une fois son bloc passé. Le résultat est partagé entre les pages de l'appli (localStorage,
+// 30 min) : quand plusieurs widgets s'ouvrent ensemble, le fichier n'est téléchargé qu'une fois.
+const MF_CACHE = 'hydraulne-mf-' + STATION, MF_LOCK = MF_CACHE + '-encours', MF_ECHEC = MF_CACHE + '-echec', MF_TTL = 30 * 60e3;
+const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* stockage indisponible */ } };
+const lsDel = k => { try { localStorage.removeItem(k); } catch (e) { /* idem */ } };
+const pause = ms => new Promise(r => setTimeout(r, ms));
+
+async function downloadStation() {
   const r = await fetch(MF_URL);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const lines = (await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).text()).split('\n');
-  const head = lines[0].split(';').map(s => s.trim());
-  const iD = head.indexOf('AAAAMMJJ'), iR = head.indexOf('RR'), iT = head.indexOf('TNTXM');
-  const out = [];
-  for (const l of lines) {
-    if (!l.startsWith(STATION + ';')) continue;
-    const c = l.split(';'), d = c[iD];
-    out.push([`${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`, c[iR], c[iT]]);
+  const reader = r.body.pipeThrough(new DecompressionStream('gzip')).pipeThrough(new TextDecoderStream()).getReader();
+  const pref = STATION + ';', rows = [];
+  let head = null, iD, iR, iT, rest = '', apres = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    const lines = (rest + (done ? '\n' : value)).split('\n');
+    rest = lines.pop();
+    for (const l of lines) {
+      if (!head) {
+        head = l.split(';').map(s => s.trim());
+        iD = head.indexOf('AAAAMMJJ'); iR = head.indexOf('RR'); iT = head.indexOf('TNTXM');
+        if (iD < 0) throw new Error('format inattendu');
+        continue;
+      }
+      if (l.startsWith(pref)) {
+        const c = l.split(';'), d = c[iD];
+        rows.push([`${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`, (c[iR] ?? '').trim(), (c[iT] ?? '').trim()]);
+        apres = 0;
+      } else if (rows.length && ++apres > 3000) {   // bloc de la station passé : inutile de lire la suite
+        reader.cancel().catch(() => {});
+        return rows;
+      }
+    }
+    if (done) return rows;
   }
-  return out;
 }
 
-async function load() {
+// [[date, RR, TNTXM], …] pour la station (chaînes vides si non renseigné)
+async function fetchLatest() {
+  const frais = c => c && Array.isArray(c.rows) && Date.now() - c.at < MF_TTL;
+  const echec = () => Date.now() - (lsGet(MF_ECHEC) || 0) < 60e3;   // échec récent d'une autre page : inutile de réessayer
+  let c = lsGet(MF_CACHE);
+  if (frais(c)) return c.rows;
+  if (echec()) throw new Error('fichier indisponible');
+  await pause(Math.random() * 200);              // départage les cadres qui s'ouvrent au même instant
+  c = lsGet(MF_CACHE);
+  if (frais(c)) return c.rows;
+  const lock = lsGet(MF_LOCK);
+  if (lock && Date.now() - lock < 30e3) {        // une autre page télécharge déjà le fichier : on attend son résultat
+    for (let i = 0; i < 100; i++) {
+      await pause(300);
+      c = lsGet(MF_CACHE);
+      if (frais(c)) return c.rows;
+      if (echec()) throw new Error('fichier indisponible');
+      if (!lsGet(MF_LOCK)) break;
+    }
+  }
+  lsSet(MF_LOCK, Date.now());
+  try {
+    const rows = await downloadStation();
+    lsSet(MF_CACHE, { at: Date.now(), rows });
+    lsDel(MF_ECHEC);
+    return rows;
+  } catch (e) {
+    lsSet(MF_ECHEC, Date.now());
+    throw e;
+  } finally { lsDel(MF_LOCK); }
+}
+
+// Veille (date locale) : dernier jour dont le relevé peut être publié
+function hier() {
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const lastKey = (...maps) => maps.flatMap(m => [...m.keys()]).sort().at(-1);
+// Fusionne les relevés récents dans une série ; renvoie true si quelque chose a changé
+function merge(series, rows, col) {
+  let changed = false;
+  for (const row of rows) {
+    const v = row[col];
+    if (v === '' || v == null || series.get(row[0]) === +v) continue;
+    series.set(row[0], +v); changed = true;
+  }
+  return changed;
+}
+const MSG = {
+  aJour:   last => `Relevés à jour : dernier relevé publié le ${fmtYear.format(toDate(last))}.`,
+  attente: last => `Relevés enregistrés jusqu'au ${fmtYear.format(toDate(last))} ; recherche de relevés plus récents…`,
+  live:    last => `Fichier Météo-France consulté ; dernier relevé publié : ${fmtYear.format(toDate(last))}.`,
+  horsLigne: last => `Fichier en ligne indisponible : affichage des relevés enregistrés jusqu'au ${fmtYear.format(toDate(last))}.`,
+};
+const setSrc = t => { document.getElementById('src').textContent = t; };
+
+function snapData() {
   const rain = new Map(), temp = new Map();
   SNAP_RR.split(',').forEach((v, i) => { if (v !== '') rain.set(addDays(SNAP_START, i), +v); });
   SNAP_TT.split(',').forEach((v, i) => { if (v !== '') temp.set(addDays(SNAP_START, i), +v); });
-  let live = false;
-  try {
-    for (const [d, r, t] of await fetchLatest()) {
-      if (r !== '' && r != null) rain.set(d, +r);
-      if (t !== '' && t != null) temp.set(d, +t);
-    }
-    live = true;
-  } catch (e) { /* on garde l'instantané */ }
-  const last = [...rain.keys(), ...temp.keys()].sort().at(-1);
-  return { rain, temp, last, live };
+  return { rain, temp, last: lastKey(rain, temp) };
 }
 
 // Cumul de pluie (dixièmes entiers) et moyenne de température (jours renseignés) sur [a, b]
@@ -373,23 +445,30 @@ function miniTemp(weeks, id, lP, lN) {
   document.getElementById('lg-' + id).innerHTML = `<span><i style="background:${tColor(14)};opacity:${PREV_OP};border-radius:50%"></i>${lP}</span><span><i style="background:${tColor(14)};border-radius:50%"></i>${lN}</span><span>couleur = température</span>`;
 }
 
-load().then(data => {
-  render(data);
-  // Redessine les graphiques quand la place attribuée au widget change (fenêtre, colonne du site, iframe)
-  let lastW = 0, raf = 0;
-  new ResizeObserver(entries => {
-    const w = Math.round(entries[0].contentRect.width);
-    if (w === lastW) return; lastW = w;
-    cancelAnimationFrame(raf); raf = requestAnimationFrame(() => render(data));
-  }).observe(document.querySelector('main.pm'));
-  document.getElementById('src').textContent = data.live
-    ? `Fichier Météo-France lu à l'ouverture ; dernier relevé publié : ${fmtYear.format(toDate(data.last))}.`
-    : `Fichier en ligne indisponible : affichage des relevés enregistrés jusqu'au ${fmtYear.format(toDate(data.last))}.`;
-}).catch(e => {
-  document.getElementById('table').innerHTML = `<p class="status err">Impossible de récupérer les relevés (${e.message}). Rechargez la page.</p>`;
-});
+// Affichage immédiat avec les relevés intégrés (tenus à jour plusieurs fois par jour), puis complément
+// en arrière-plan seulement s'il manque des jours récents.
+let data = snapData();
+render(data);
+// Redessine les graphiques quand la place attribuée au widget change (fenêtre, colonne du site, iframe)
+let lastW = 0, raf = 0;
+new ResizeObserver(entries => {
+  const w = Math.round(entries[0].contentRect.width);
+  if (w === lastW) return; lastW = w;
+  cancelAnimationFrame(raf); raf = requestAnimationFrame(() => render(data));
+}).observe(document.querySelector('main.pm'));
+(async () => {
+  if (data.last >= hier()) { setSrc(MSG.aJour(data.last)); return; }
+  setSrc(MSG.attente(data.last));
+  try {
+    const rows = await fetchLatest();
+    const a = merge(data.rain, rows, 1), b = merge(data.temp, rows, 2);
+    if (a || b) { data = { ...data, last: lastKey(data.rain, data.temp) }; render(data); }
+    setSrc(MSG.live(data.last));
+  } catch (e) {
+    setSrc(MSG.horsLigne(data.last));
+  }
+})();
 </script>
-
 
 <!-- ===== Intégration dans l'application HYDRAULNE ===== -->
 <style>
