@@ -51,7 +51,7 @@
   </div>
   <div class="mhc-quand" id="mhc-quand" aria-live="off"></div>
   <div class="mhc-lect" id="mhc-lect"></div>
-  <svg id="mhc-svg" viewBox="-276 -276 552 552" role="img"
+  <svg id="mhc-svg" viewBox="-296 -296 592 592" role="img"
        aria-label="Cadran de 24 heures rejoué : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, jour et nuit"></svg>
   <div class="mhc-ext-t">Vitesse du vent</div>
   <div class="mhc-leg" id="mhc-leg"></div>
@@ -70,7 +70,7 @@
       <li><b>Centre</b> : hauteur, sens et coefficient de la marée à l'instant rejoué (coefficient archivé avec chaque mesure ; il n'existe qu'à partir du 5 novembre 2026, le SHOM ne publiant pas ses prédictions passées).</li>
       <li><b>1<sup>er</sup> cercle</b> : hauteur d'eau à Guily Glaz sur les 24 heures qui précèdent l'instant rejoué ; plus l'aire bleue s'éloigne du centre, plus l'eau est haute. Points : pleines (pleins) et basses mers (creux).</li>
       <li><b>Cercles suivants, par paires</b> : vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu. Pour chaque station, une barre par heure (vent moyen, rafale en trait), puis une flèche qui pointe vers où souffle le vent (nord en haut) ; un petit rond signale un vent calme.</li>
-      <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre).</li>
+      <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre), selon le lever et le coucher réels du soleil à Saint-Ségal ; en petit, leur heure et la variation par rapport à la veille (mn / J-1).</li>
       <li>0 h en haut, sens des aiguilles d'une montre, heure de Paris ; le trait orange marque l'instant rejoué ; les tracés pâlissent avec l'ancienneté.</li>
     </ul>
   </details>
@@ -190,7 +190,7 @@
   var KT = 1.94384, TZ = "Europe/Paris", H = 3600e3, JOUR = 24 * H;
   var R0 = 44, R1 = 96;
   var RB = [104, 150, 196], RL = 23, RA = [137, 183, 229];
-  var RN0 = 241, RN1 = 246, RH = 260;
+  var RN0 = 241, RN1 = 246, RH = 260, RS = 285;
   var fmtH = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
   var fmtJ = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
   var fmtJA = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", year: "numeric" });
@@ -209,6 +209,65 @@
   function classe(nd) { for (var i = 0; i < SEUILS.length; i++) if (nd < SEUILS[i]) return i + 1; return nd <= 80 ? 11 : 12; }
   var LEGENDE = [["< 5 nd", 1], ["5–9", 2], ["10–15", 3], ["16–21", 4], ["22–27", 5], ["28–33", 6], ["34–40", 7], ["41–50", 8], ["51–60", 9], ["61–70", 10], ["71–80", 11], ["> 80 nd", 12]];
   var COUL = ["", "--v1", "--v2", "--v3", "--v4", "--v5", "--v6", "--v7", "--v8", "--v9", "--v10", "--v11", "--v12"];
+  /* Lever et coucher du soleil à Saint-Ségal, calculés dans le navigateur pour chaque jour (heure de Paris) :
+     algorithme de la NOAA (équation du temps, déclinaison), soleil à 0,833° sous l'horizon comme les éphémérides ;
+     écart de l'ordre de 30 secondes avec les éphémérides publiées. */
+  var SOLEIL = { lat: 48.2236, lon: -4.0694 };
+  var fmtYMD = new Intl.DateTimeFormat("fr-CA", { timeZone: TZ }), soleilCache = {};
+  function soleilJour(ymd) {                              // "AAAA-MM-JJ" -> { lever: Date, coucher: Date }
+    if (soleilCache[ymd]) return soleilCache[ymd];
+    var R = Math.PI / 180, p = ymd.split("-"), t0 = Date.UTC(+p[0], +p[1] - 1, +p[2]);
+    function instant(signe) {                             // -1 : lever, +1 : coucher (2 passes pour la précision)
+      var t = t0 + 12 * H;
+      for (var it = 0; it < 2; it++) {
+        var T = (t / 864e5 + 2440587.5 - 2451545) / 36525;
+        var L0 = (280.46646 + T * (36000.76983 + T * 0.0003032)) % 360, M = 357.52911 + T * (35999.05029 - 0.0001537 * T);
+        var ex = 0.016708634 - T * (0.000042037 + 0.0000001267 * T);
+        var C = Math.sin(M * R) * (1.914602 - T * (0.004817 + 0.000014 * T)) + Math.sin(2 * M * R) * (0.019993 - 0.000101 * T) + Math.sin(3 * M * R) * 0.000289;
+        var om = 125.04 - 1934.136 * T, lam = L0 + C - 0.00569 - 0.00478 * Math.sin(om * R);
+        var eps = 23 + (26 + (21.448 - T * (46.815 + T * (0.00059 - T * 0.001813))) / 60) / 60 + 0.00256 * Math.cos(om * R);
+        var dec = Math.asin(Math.sin(eps * R) * Math.sin(lam * R)), y = Math.pow(Math.tan(eps * R / 2), 2);
+        var eqt = 4 / R * (y * Math.sin(2 * L0 * R) - 2 * ex * Math.sin(M * R) + 4 * ex * y * Math.sin(M * R) * Math.cos(2 * L0 * R)
+          - 0.5 * y * y * Math.sin(4 * L0 * R) - 1.25 * ex * ex * Math.sin(2 * M * R));
+        var ha = Math.acos(Math.cos(90.833 * R) / (Math.cos(SOLEIL.lat * R) * Math.cos(dec)) - Math.tan(SOLEIL.lat * R) * Math.tan(dec)) / R;
+        t = t0 + (720 - 4 * SOLEIL.lon - eqt + signe * 4 * ha) * 60e3;
+      }
+      return new Date(t);
+    }
+    return (soleilCache[ymd] = { lever: instant(-1), coucher: instant(1) });
+  }
+  function veille(ymd) { var p = ymd.split("-"); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] - 1, 12)).toISOString().slice(0, 10); }
+  function minuitLoc(ymd) { var g = Date.parse(ymd + "T00:00:00Z"); return g - minLoc(new Date(g)) * 60e3; }
+  // Dernier cercle : jour (jaune) et nuit (sombre) d'après le lever et le coucher réels du soleil sur la fenêtre de 24 h,
+  // avec, en petit à chaque limite, l'heure de lever / coucher et sa variation par rapport à la veille.
+  function anneauSoleil(t0, t1, coul) {
+    var bornes = [t0, t1], evts = [], jours = {};
+    for (var x = t0 - JOUR; x <= t1 + JOUR; x += H) jours[fmtYMD.format(new Date(x))] = 1;
+    Object.keys(jours).forEach(function (j) {
+      var s = soleilJour(j), m = minuitLoc(j);
+      if (m > t0 && m < t1) bornes.push(m);
+      [["lever", s.lever], ["coucher", s.coucher]].forEach(function (c) {
+        if (+c[1] > t0 && +c[1] < t1) { bornes.push(+c[1]); evts.push({ type: c[0], t: c[1], j: j }); }
+      });
+    });
+    bornes.sort(function (a, b) { return a - b; });
+    for (var i = 0; i < bornes.length - 1; i++) {
+      var a = bornes[i], b = bornes[i + 1]; if (b - a < 1000) continue;
+      var mil = new Date((a + b) / 2), s = soleilJour(fmtYMD.format(mil)), jour = mil >= s.lever && mil < s.coucher;
+      var a0 = ang(new Date(a)), a1 = ang(new Date(b)); if (a1 <= a0) a1 += 2 * Math.PI;
+      el("path", { d: secteur(a0, a1, RN0, RN1), fill: jour ? coul.jour : coul.nuit });
+    }
+    evts.forEach(function (ev) {
+      var hier = soleilJour(veille(ev.j))[ev.type], dm = minLoc(ev.t) - minLoc(hier);
+      if (dm > 30) dm -= 60; else if (dm < -30) dm += 60;          // changement d'heure : variation du soleil, pas de l'horloge
+      var a = ang(ev.t), p0 = xy(a, RN0 - 3), p1 = xy(a, RN1 + 4), pt = xy(a, RS), deg = a * 180 / Math.PI;
+      el("line", { x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], stroke: coul.ink, "stroke-width": 1.2 });
+      if (deg > 90 && deg < 270) deg += 180;                         // texte toujours lisible (jamais à l'envers)
+      el("text", { x: pt[0], y: pt[1], transform: "rotate(" + deg.toFixed(1) + " " + pt[0] + " " + pt[1] + ")", "text-anchor": "middle",
+        "dominant-baseline": "central", "font-size": 12, fill: coul.muted }).textContent =
+        ev.type + " " + fmtH.format(ev.t) + " · " + (dm > 0 ? "+" : dm < 0 ? "−" : "±") + Math.abs(dm) + " mn / J-1";
+    });
+  }
   function secteur(a0, a1, r0, r1) {
     var g = a1 - a0 > Math.PI ? 1 : 0;
     return "M" + xy(a0, r0) + " L" + xy(a0, r1) + " A" + r1 + "," + r1 + " 0 " + g + " 1 " + xy(a1, r1) +
@@ -358,7 +417,8 @@
     var an = ang(fin), aLab = an + 0.12, k, i;
     function age(t) { return Math.max(0, Math.min(1, (fin - t) / JOUR)); }
 
-    for (k = 0; k < 24; k++) el("path", { d: secteur(k / 24 * 2 * Math.PI, (k + 1) / 24 * 2 * Math.PI, RN0, RN1), fill: (k >= 18 || k < 8) ? css("--nuit") : css("--jour") });
+    // jour / nuit : lever et coucher réels du soleil à Saint-Ségal, pour les dates rejouées
+    anneauSoleil(debut, hFin, { jour: css("--jour"), nuit: css("--nuit"), ink: ink, muted: muted });
     for (k = 0; k < 24; k += 3) { var ph = xy(k / 24 * 2 * Math.PI, RH); el("text", { x: ph[0], y: ph[1] + 5, "text-anchor": "middle", "font-size": 15, fill: ink, "font-weight": k % 6 === 0 ? 700 : 400 }).textContent = k + " h"; }
 
     var hMin = hMinP, hMax = hMaxP;
