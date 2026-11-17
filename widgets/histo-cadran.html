@@ -199,8 +199,8 @@
   var KT = 1.94384, TZ = "Europe/Paris", H = 3600e3, JOUR = 24 * H;
   var R0 = 40, R1 = 90;
   var RB = [98, 138, 178], RL = 20, RA = [128, 168, 208];   // barres de force puis flèches, par station
-  var RP0 = 218, RP1 = 238;                                // pression à Lanvéoc
-  var RN0 = 241, RN1 = 246, RH = 260, RS = 304;
+  var RP0 = 218, RP1 = 235;                                // pression à Lanvéoc
+  var RN0 = 243, RN1 = 248, RH = 260, RS = 304;
   var fmtH = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
   var fmtJ = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
   var fmtJA = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", year: "numeric" });
@@ -509,7 +509,7 @@
       var jk = tk == null ? "" : fmtYMD.format(new Date(tk)) === jJ ? "J" : fmtYMD.format(new Date(tk)) === jJ1 ? "J-1" : "";
       var cote = k === 6 ? 1 : k === 18 ? -1 : 0, bx, by;
       if (cote) { bx = cote * (RN1 + 9); by = 0; }
-      else { var pb = xy(k / 24 * 2 * Math.PI, k % 6 === 0 ? 266 : 274); bx = pb[0]; by = pb[1]; }
+      else { var pb = xy(k / 24 * 2 * Math.PI, k % 6 === 0 ? 268 : 276); bx = pb[0]; by = pb[1]; }
       var anc = cote > 0 ? "start" : cote < 0 ? "end" : "middle";
       el("text", { x: bx, y: by + 1, "text-anchor": anc, "font-size": 15, fill: ink, "font-weight": k % 6 === 0 ? 700 : 400 }).textContent = k + " h";
       if (jk) el("text", { x: bx, y: by + 13, "text-anchor": anc, "font-size": 10.5, fill: muted }).textContent = jk;
