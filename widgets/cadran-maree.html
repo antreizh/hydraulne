@@ -28,7 +28,7 @@
     <div class="mcd-maj" id="mcd-maj">Chargement des mesures…</div>
   </div>
   <div class="mcd-lect" id="mcd-lect" aria-live="polite"></div>
-  <svg id="mcd-svg" viewBox="-308 -296 604 592" role="img"
+  <svg id="mcd-svg" viewBox="-322 -312 634 624" role="img"
        aria-label="Cadran de 24 heures : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, jour et nuit"></svg>
   <div class="mcd-ext-t">Vitesse du vent</div>
   <div class="mcd-leg" id="mcd-leg"></div>
@@ -144,7 +144,7 @@
   var KT = 1.94384, TZ = "Europe/Paris", H = 3600e3, JOUR = 24 * H;
   var R0 = 44, R1 = 96;                                   // 1er cercle : hauteur d'eau
   var RB = [104, 150, 196], RL = 23, RA = [137, 183, 229];// barres de force (de RB à RB+RL) puis flèches, par station
-  var RN0 = 241, RN1 = 246, RH = 260, RS = 285;                     // jour / nuit, heures
+  var RN0 = 241, RN1 = 246, RH = 260, RS = 304;                     // jour / nuit, heures
   var fmtH = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
   var fmtJ = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
   var fmtP = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -215,10 +215,8 @@
       el("line", { x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], stroke: coul.ink, "stroke-width": 1.2 });
       var tx = el("text", { "text-anchor": "middle", "dominant-baseline": "central", "font-size": 12, fill: coul.muted });
       tx.textContent = ev.type + " " + fmtH.format(ev.t) + " · " + (dm > 0 ? "+" : dm < 0 ? "−" : "±") + Math.abs(dm) + " mn / J-1";
-      // texte centré sur la limite, sauf s'il passerait sur « 6 h » ou « 18 h » : il est alors placé juste à côté
-      var demi = (tx.getComputedTextLength ? tx.getComputedTextLength() : 170) / 2 / RS + 0.05, c = a;
-      [Math.PI / 2, 3 * Math.PI / 2].forEach(function (s) { if (Math.abs(c - s) < demi) c = c < s ? s - demi : s + demi; });
-      pt = xy(c, RS); deg = c * 180 / Math.PI;
+      // texte centré sur la limite, au-delà des heures (aucun chevauchement)
+      pt = xy(a, RS); deg = a * 180 / Math.PI;
       if (deg > 90 && deg < 270) deg += 180;                         // texte toujours lisible (jamais à l'envers)
       tx.setAttribute("x", pt[0]); tx.setAttribute("y", pt[1]);
       tx.setAttribute("transform", "rotate(" + deg.toFixed(1) + " " + pt[0] + " " + pt[1] + ")");
@@ -350,10 +348,19 @@
 
     // jour / nuit : lever et coucher réels du soleil à Saint-Ségal
     anneauSoleil(+debut, hFin, { jour: css("--jour"), nuit: css("--nuit"), ink: ink, muted: muted });
-    // heures ; « 6 h » et « 18 h » posées à côté du cercle, avec le même écart que « 0 h » et « 12 h » au-dessus et au-dessous
+    // heures, avec J (jour de l'instant affiché) ou J-1 (veille) dessous ; « 6 h » et « 18 h » posées à côté du cercle.
+    // Chaque heure du cadran correspond à un seul instant de la fenêtre [début ; fin[ de 24 h.
+    var jJ = fmtYMD.format(fin), jJ1 = veille(jJ);
     for (k = 0; k < 24; k += 3) {
-      var ph = xy(k / 24 * 2 * Math.PI, RH), cote = k === 6 ? 1 : k === 18 ? -1 : 0;
-      el("text", { x: cote ? cote * (RN1 + 9) : ph[0], y: ph[1] + 5, "text-anchor": cote > 0 ? "start" : cote < 0 ? "end" : "middle", "font-size": 15, fill: ink, "font-weight": k % 6 === 0 ? 700 : 400 }).textContent = k + " h";
+      var tk = null;
+      for (var x = +debut; x < hFin; x += H) if (minLoc(new Date(x)) === k * 60) { tk = x; break; }
+      var jk = tk == null ? "" : fmtYMD.format(new Date(tk)) === jJ ? "J" : fmtYMD.format(new Date(tk)) === jJ1 ? "J-1" : "";
+      var cote = k === 6 ? 1 : k === 18 ? -1 : 0, bx, by;
+      if (cote) { bx = cote * (RN1 + 9); by = 0; }
+      else { var pb = xy(k / 24 * 2 * Math.PI, k % 6 === 0 ? 266 : 274); bx = pb[0]; by = pb[1]; }
+      var anc = cote > 0 ? "start" : cote < 0 ? "end" : "middle";
+      el("text", { x: bx, y: by + 1, "text-anchor": anc, "font-size": 15, fill: ink, "font-weight": k % 6 === 0 ? 700 : 400 }).textContent = k + " h";
+      if (jk) el("text", { x: bx, y: by + 13, "text-anchor": anc, "font-size": 10.5, fill: muted }).textContent = jk;
     }
 
     // 1er cercle : hauteur d'eau
