@@ -25,8 +25,8 @@
      ===================================================================== -->
 <div id="mhc-widget">
   <div class="mhc-head">
-    <div class="mhc-t">Rose des marées et vents réels <span>· <b class="mhc-lieu">Guily Glaz</b></span></div>
-    <div class="mhc-per">Rejeu de l'historique</div>
+    <div class="mhc-t">Rose des marées de <b class="mhc-lieu">Guily Glaz</b> et vents réels</div>
+    <div class="mhc-per">Animation de l'historique</div>
     <div class="mhc-maj" id="mhc-maj">Chargement de l'historique…</div>
   </div>
   <div class="mhc-cmd">
@@ -518,8 +518,12 @@
   function composer(c, img) {
     var ink = css("--ink"), muted = css("--muted"), eau = css("--eau"), main = css("--main");
     c.fillStyle = "#ffffff"; c.fillRect(0, 0, VW, VH);
-    var w = texteCanevas(c, "Rose des marées et vents réels · ", 44, 70, 40, ink, true);
-    texteCanevas(c, "Guily Glaz", 44 + w, 70, 40, eau, true);
+    // titre « Rose des marées de Guily Glaz et vents réels » (Guily Glaz en bleu), police réduite si besoin
+    var tt = 40; c.font = "700 " + tt + "px " + getComputedStyle(root).fontFamily;
+    while (c.measureText("Rose des marées de Guily Glaz et vents réels").width > VW - 88 && tt > 28) { tt--; c.font = "700 " + tt + "px " + getComputedStyle(root).fontFamily; }
+    var w = texteCanevas(c, "Rose des marées de ", 44, 70, tt, ink, true);
+    w += texteCanevas(c, "Guily Glaz", 44 + w, 70, tt, eau, true);
+    texteCanevas(c, " et vents réels", 44 + w, 70, tt, ink, true);
     texteCanevas(c, $("mhc-quand").textContent, 44, 128, 36, main, true);
     var vents = Array.prototype.map.call($("mhc-lect").querySelectorAll("span"), function (s) { return s.textContent; });
     // les trois vents sur une ligne, police réduite si besoin pour tenir dans la largeur
@@ -529,7 +533,7 @@
     var x = 44; vents.forEach(function (v) { x += texteCanevas(c, v, x, 178, taille, ink, false) + ecart; });
     c.drawImage(img, (VW - 1000) / 2, 205, 1000, 1000);
     legendeCanevas(c, 1232, ink, muted);
-    texteCanevas(c, "Rejeu de l'historique · marégraphe Hub'Eau, vent Météo-France · antreizh.fr", VW / 2, 1362, 23, muted, false, "center");
+    texteCanevas(c, "Animation de l'historique · marégraphe Hub'Eau, vent Météo-France · antreizh.fr", VW / 2, 1362, 23, muted, false, "center");
     texteCanevas(c, "Données et représentation indicatives non officielles", VW / 2, 1393, 21, muted, false, "center");
   }
   // Légende « Vitesse du vent » sous le cadran : les 12 classes en 2 lignes de 6 (mêmes couleurs que le cadran)
