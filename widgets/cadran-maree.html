@@ -28,7 +28,7 @@
     <div class="mcd-maj" id="mcd-maj">Chargement des mesures…</div>
   </div>
   <div class="mcd-lect" id="mcd-lect" aria-live="polite"></div>
-  <svg id="mcd-svg" viewBox="-306 -298 598 596" role="img"
+  <svg id="mcd-svg" viewBox="-295 -287 580 575" role="img"
        aria-label="Cadran de 24 heures : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, pression à Lanvéoc, jour et nuit"></svg>
   <div class="mcd-soleil" id="mcd-soleil"></div>
   <div class="mcd-pres" id="mcd-pres"></div>
@@ -85,7 +85,7 @@
 #mcd-widget .mcd-lect{display:flex;flex-wrap:wrap;gap:calc(1px*var(--k)) calc(9px*var(--k));margin-top:calc(7px*var(--k));border-top:1px solid var(--line);padding-top:calc(6px*var(--k));
   font-size:calc(var(--fl,10.5px)*var(--k));line-height:1.35;color:var(--muted);font-variant-numeric:tabular-nums;min-height:calc(17px*var(--k))}
 #mcd-widget .mcd-lect b{color:var(--ink)}
-#mcd-widget svg{display:block;width:100%;height:auto;margin-top:calc(4px*var(--k));touch-action:manipulation}
+#mcd-widget svg{display:block;width:calc(100% + 20px*var(--k));margin-left:calc(-10px*var(--k));margin-right:calc(-10px*var(--k));height:auto;margin-top:calc(4px*var(--k));touch-action:manipulation}
 #mcd-widget svg text{font-family:inherit;font-variant-numeric:tabular-nums}
 #mcd-widget .mcd-hit{fill:transparent;cursor:pointer}
 #mcd-widget .mcd-hit:focus{outline:none}
