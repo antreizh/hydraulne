@@ -28,7 +28,7 @@
     <div class="mcd-maj" id="mcd-maj">Chargement des mesures…</div>
   </div>
   <div class="mcd-lect" id="mcd-lect" aria-live="polite"></div>
-  <svg id="mcd-svg" viewBox="-296 -296 592 592" role="img"
+  <svg id="mcd-svg" viewBox="-308 -296 604 592" role="img"
        aria-label="Cadran de 24 heures : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, jour et nuit"></svg>
   <div class="mcd-ext-t">Vitesse du vent</div>
   <div class="mcd-leg" id="mcd-leg"></div>
@@ -213,10 +213,15 @@
       if (dm > 30) dm -= 60; else if (dm < -30) dm += 60;          // changement d'heure : variation du soleil, pas de l'horloge
       var a = ang(ev.t), p0 = xy(a, RN0 - 3), p1 = xy(a, RN1 + 4), pt = xy(a, RS), deg = a * 180 / Math.PI;
       el("line", { x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], stroke: coul.ink, "stroke-width": 1.2 });
+      var tx = el("text", { "text-anchor": "middle", "dominant-baseline": "central", "font-size": 12, fill: coul.muted });
+      tx.textContent = ev.type + " " + fmtH.format(ev.t) + " · " + (dm > 0 ? "+" : dm < 0 ? "−" : "±") + Math.abs(dm) + " mn / J-1";
+      // texte centré sur la limite, sauf s'il passerait sur « 6 h » ou « 18 h » : il est alors placé juste à côté
+      var demi = (tx.getComputedTextLength ? tx.getComputedTextLength() : 170) / 2 / RS + 0.05, c = a;
+      [Math.PI / 2, 3 * Math.PI / 2].forEach(function (s) { if (Math.abs(c - s) < demi) c = c < s ? s - demi : s + demi; });
+      pt = xy(c, RS); deg = c * 180 / Math.PI;
       if (deg > 90 && deg < 270) deg += 180;                         // texte toujours lisible (jamais à l'envers)
-      el("text", { x: pt[0], y: pt[1], transform: "rotate(" + deg.toFixed(1) + " " + pt[0] + " " + pt[1] + ")", "text-anchor": "middle",
-        "dominant-baseline": "central", "font-size": 12, fill: coul.muted }).textContent =
-        ev.type + " " + fmtH.format(ev.t) + " · " + (dm > 0 ? "+" : dm < 0 ? "−" : "±") + Math.abs(dm) + " mn / J-1";
+      tx.setAttribute("x", pt[0]); tx.setAttribute("y", pt[1]);
+      tx.setAttribute("transform", "rotate(" + deg.toFixed(1) + " " + pt[0] + " " + pt[1] + ")");
     });
   }
   function secteur(a0, a1, r0, r1) {
@@ -345,7 +350,11 @@
 
     // jour / nuit : lever et coucher réels du soleil à Saint-Ségal
     anneauSoleil(+debut, hFin, { jour: css("--jour"), nuit: css("--nuit"), ink: ink, muted: muted });
-    for (k = 0; k < 24; k += 3) { var ph = xy(k / 24 * 2 * Math.PI, RH); el("text", { x: ph[0], y: ph[1] + 5, "text-anchor": "middle", "font-size": 15, fill: ink, "font-weight": k % 6 === 0 ? 700 : 400 }).textContent = k + " h"; }
+    // heures ; « 6 h » et « 18 h » posées à côté du cercle, avec le même écart que « 0 h » et « 12 h » au-dessus et au-dessous
+    for (k = 0; k < 24; k += 3) {
+      var ph = xy(k / 24 * 2 * Math.PI, RH), cote = k === 6 ? 1 : k === 18 ? -1 : 0;
+      el("text", { x: cote ? cote * (RN1 + 9) : ph[0], y: ph[1] + 5, "text-anchor": cote > 0 ? "start" : cote < 0 ? "end" : "middle", "font-size": 15, fill: ink, "font-weight": k % 6 === 0 ? 700 : 400 }).textContent = k + " h";
+    }
 
     // 1er cercle : hauteur d'eau
     var hMin = -1.5, hMax = 3.5;
