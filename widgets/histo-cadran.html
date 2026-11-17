@@ -207,6 +207,7 @@
   function card(dd) { return CARD[Math.round(dd / 22.5) % 16]; }
   var SEUILS = [5, 10, 16, 22, 28, 34, 41, 51, 61, 71];
   function classe(nd) { for (var i = 0; i < SEUILS.length; i++) if (nd < SEUILS[i]) return i + 1; return nd <= 80 ? 11 : 12; }
+  var LEGENDE = [["< 5 nd", 1], ["5–9", 2], ["10–15", 3], ["16–21", 4], ["22–27", 5], ["28–33", 6], ["34–40", 7], ["41–50", 8], ["51–60", 9], ["61–70", 10], ["71–80", 11], ["> 80 nd", 12]];
   var COUL = ["", "--v1", "--v2", "--v3", "--v4", "--v5", "--v6", "--v7", "--v8", "--v9", "--v10", "--v11", "--v12"];
   function secteur(a0, a1, r0, r1) {
     var g = a1 - a0 > Math.PI ? 1 : 0;
@@ -494,7 +495,7 @@
      (bibliothèque mp4-muxer, fichier lib/mp4-muxer.js, chargé seulement à la première vidéo).
      La durée de la vidéo suit la vitesse choisie : 3 jours à 2 h par seconde = 36 s de vidéo. */
   // dimensions multiples de 16 : certains lecteurs (Windows « Films et TV », Lecteur multimédia) refusent sinon le H.264
-  var VW = 1088, VH = 1312, FPS = 30;
+  var VW = 1088, VH = 1408, FPS = 30;
   // H.264 d'abord (lisible partout) ; VP9 en secours (MP4 lisible par Chrome, Firefox, VLC, mais pas toujours par les appareils Apple)
   var CODECS = [["avc1.640028", "avc"], ["avc1.4d0028", "avc"], ["avc1.42e028", "avc"], ["vp09.00.40.08", "vp9"], ["av01.0.08M.08", "av1"]];
   function chargerMuxer() {
@@ -527,8 +528,20 @@
     while (larg() > VW - 88 && taille > 16) taille--;
     var x = 44; vents.forEach(function (v) { x += texteCanevas(c, v, x, 178, taille, ink, false) + ecart; });
     c.drawImage(img, (VW - 1000) / 2, 205, 1000, 1000);
-    texteCanevas(c, "Rejeu de l'historique · marégraphe Hub'Eau, vent Météo-France · antreizh.fr", VW / 2, 1264, 23, muted, false, "center");
-    texteCanevas(c, "Données et représentation indicatives non officielles", VW / 2, 1295, 21, muted, false, "center");
+    legendeCanevas(c, 1232, ink, muted);
+    texteCanevas(c, "Rejeu de l'historique · marégraphe Hub'Eau, vent Météo-France · antreizh.fr", VW / 2, 1362, 23, muted, false, "center");
+    texteCanevas(c, "Données et représentation indicatives non officielles", VW / 2, 1393, 21, muted, false, "center");
+  }
+  // Légende « Vitesse du vent » sous le cadran : les 12 classes en 2 lignes de 6 (mêmes couleurs que le cadran)
+  function legendeCanevas(c, y, ink, muted) {
+    texteCanevas(c, "Vitesse du vent", 44, y, 26, ink, true);
+    var col = (VW - 88) / 6;
+    LEGENDE.forEach(function (l, i) {
+      var x = 44 + (i % 6) * col, yy = y + 38 + Math.floor(i / 6) * 38;
+      c.fillStyle = css(COUL[l[1]]);
+      c.beginPath(); if (c.roundRect) c.roundRect(x, yy - 14, 34, 9, 3); else c.rect(x, yy - 14, 34, 9); c.fill();
+      texteCanevas(c, l[0], x + 44, yy - 2, 22, muted, false);
+    });
   }
   // Une image de la vidéo : instant n° i redessiné puis recopié sur le canevas
   function imageNo(c, i, pasT) { t = Math.min(T1, T0 + i * pasT); afficher(); return imageSvg().then(function (img) { composer(c, img); }); }
@@ -716,7 +729,7 @@
 
 
   var lg = $("mhc-leg");
-  [["< 5 nd", 1], ["5–9", 2], ["10–15", 3], ["16–21", 4], ["22–27", 5], ["28–33", 6], ["34–40", 7], ["41–50", 8], ["51–60", 9], ["61–70", 10], ["71–80", 11], ["> 80 nd", 12]].forEach(function (c) {
+  LEGENDE.forEach(function (c) {
     var s = document.createElement("span"); s.innerHTML = '<i style="background:var(' + COUL[c[1]] + ')"></i>' + c[0]; lg.appendChild(s);
   });
 
