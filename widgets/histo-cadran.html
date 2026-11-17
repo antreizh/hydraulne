@@ -107,8 +107,8 @@
 #mhc-widget .mhc-lieu{color:var(--eau);font-weight:700;font-size:calc(17px*var(--k))}   /* Guily Glaz en bleu, même taille que le titre */
 #mhc-widget .mhc-maj{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(2px*var(--k))}
 #mhc-widget .mhc-per{font-size:calc(13.5px*var(--k));font-weight:600;color:var(--ink);margin-top:calc(2px*var(--k))}
-#mhc-widget .mhc-lect{display:flex;flex-wrap:wrap;gap:calc(2px*var(--k)) calc(12px*var(--k));margin-top:calc(7px*var(--k));border-top:1px solid var(--line);padding-top:calc(6px*var(--k));
-  font-size:calc(12px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums;min-height:calc(17px*var(--k))}
+#mhc-widget .mhc-lect{display:flex;flex-wrap:wrap;gap:calc(1px*var(--k)) calc(9px*var(--k));margin-top:calc(7px*var(--k));border-top:1px solid var(--line);padding-top:calc(6px*var(--k));
+  font-size:calc(var(--fl,10.5px)*var(--k));line-height:1.35;color:var(--muted);font-variant-numeric:tabular-nums;min-height:calc(17px*var(--k))}
 #mhc-widget .mhc-lect b{color:var(--ink)}
 #mhc-widget svg{display:block;width:100%;height:auto;margin-top:calc(4px*var(--k));touch-action:manipulation}
 #mhc-widget svg text{font-family:inherit;font-variant-numeric:tabular-nums}
@@ -500,6 +500,17 @@
   }
   var hMinP = -1, hMaxP = 3.5, vMaxP = 10, pEchP = null;    // échelles fixées pour toute la période (le cadran ne « respire » pas pendant le rejeu)
 
+  // Ligne « À cet instant … » : en petit, et réduite encore si besoin pour tenir sur 2 lignes au plus
+  var flMem = 10.5;
+  function ajusterLecture() {
+    var l = $("mhc-lect"), fl = flMem;
+    var tient = function () { var h = parseFloat(getComputedStyle(l).lineHeight) || 16; return l.scrollHeight - parseFloat(getComputedStyle(l).paddingTop) <= 2 * h + 3; };
+    l.style.setProperty("--fl", fl + "px");
+    if (!l.offsetWidth) return;
+    while (fl < 10.5 && tient()) { fl += 0.5; l.style.setProperty("--fl", fl + "px"); }   // reprend de la place si la ligne raccourcit
+    while (!tient() && fl > 8) { fl -= 0.5; l.style.setProperty("--fl", fl + "px"); }
+    flMem = fl;
+  }
   function dessiner(fin) {
     svg.textContent = "";
     var hFin = Math.ceil(fin / H) * H, debut = hFin - JOUR;
@@ -598,6 +609,7 @@
       if (!v || Math.abs(v.t - fin) > 1.5 * H) return "<span>" + st.nom + " : —</span>";
       return "<span>" + st.nom + " <b>" + (v.nd < 0.5 || v.dd == null ? "calme" : card(v.dd) + " " + Math.round(v.nd) + " nd") + "</b> · raf. " + Math.round(v.raf) + "</span>";
     }).join("") + lirePression(tranche(pression, new Date(+fin - 5 * H), fin), fin);
+    ajusterLecture();
 
     var ex = $("mhc-ext"); ex.innerHTML = "";
     ext.slice(-4).forEach(function (e) {
