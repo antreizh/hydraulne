@@ -336,7 +336,9 @@ def vent_6min(cle):
 
 def horaire_depuis_6min(v6):
     """Regroupe les mesures 6 min par heure comme le Cadran de marée : mesures de ]H-1 ; H] → heure H,
-    vent moyen, direction moyenne vectorielle, rafale maximale (au moins la moyenne). Au moins 3 mesures par heure."""
+    vent moyen, direction moyenne vectorielle, rafale maximale (au moins la moyenne). Comme le Cadran, une heure est
+    retenue dès qu'elle a une mesure (une station peut n'en transmettre qu'une ou deux dans l'heure) ; l'heure en cours,
+    encore incomplète, est recalculée au passage suivant."""
     import math
     acc = {}
     for k, v in v6.items():
@@ -361,7 +363,7 @@ def horaire_depuis_6min(v6):
                 pass
     out = {}
     for (k, nom), a in acc.items():
-        if a["n"] < 3:
+        if a["n"] < 1:
             continue
         moy = a["ff"] / a["n"]
         dd = (math.degrees(math.atan2(a["u"], a["v"])) + 360) % 360 if (a["u"] or a["v"]) else 0
