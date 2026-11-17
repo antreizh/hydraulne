@@ -72,7 +72,7 @@
       <li><b>Centre</b> : hauteur, sens et coefficient de la marée à l'instant rejoué (coefficient archivé avec chaque mesure ; il n'existe qu'à partir du 5 novembre 2026, le SHOM ne publiant pas ses prédictions passées).</li>
       <li><b>1<sup>er</sup> cercle</b> : hauteur d'eau à Guily Glaz sur les 24 heures qui précèdent l'instant rejoué ; plus l'aire bleue s'éloigne du centre, plus l'eau est haute. Points : pleines (pleins) et basses mers (creux).</li>
       <li><b>Cercles suivants, par paires</b> : vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu. Pour chaque station, une barre par heure (vent moyen, rafale en trait), puis une flèche qui pointe vers où souffle le vent (nord en haut) ; un petit rond signale un vent calme.</li>
-      <li><b>Avant-dernier cercle</b> : pression au niveau de la mer à Lanvéoc, en bleu ciel dégradé semi-transparent, du plus foncé (valeur la plus basse de l'échelle) au plus clair (la plus haute) ; la courbe évolue autour du cercle en pointillé de 1015 hPa : vers l'extérieur au-dessus (haute pression), vers le centre au-dessous (basse pression). L'échelle du cercle et celle des couleurs sont indiquées sous le cadran ; celle du cercle est fixée pour toute la période choisie. La ligne de lecture donne la pression et son évolution sur 3 heures (archivée depuis le 29 septembre 2026, moyenne par heure).</li>
+      <li><b>Avant-dernier cercle</b> : pression au niveau de la mer à Lanvéoc, en couleurs semi-transparentes : sous 1015 hPa en bleu, très clair près de 1015 et de plus en plus foncé quand la pression baisse ; au-dessus de 1015 hPa en jaune orangé, de plus en plus orange et soutenu quand elle monte ; la courbe évolue autour du cercle en pointillé de 1015 hPa : vers l'extérieur au-dessus (haute pression), vers le centre au-dessous (basse pression). L'échelle du cercle et celle des couleurs sont indiquées sous le cadran ; celle du cercle est fixée pour toute la période choisie. La ligne de lecture donne la pression et son évolution sur 3 heures (archivée depuis le 29 septembre 2026, moyenne par heure).</li>
       <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre), selon le lever et le coucher réels du soleil à Saint-Ségal (petit trait à chaque limite) ; leurs heures et leur variation par rapport à la veille (mn / J-1) sont indiquées sous le cadran.</li>
       <li>0 h en haut, sens des aiguilles d'une montre, heure de Paris ; le trait orange marque l'instant rejoué ; les tracés pâlissent avec l'ancienneté.</li>
     </ul>
@@ -120,7 +120,7 @@
 #mhc-widget .mhc-pres{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(8px*var(--k))}
 #mhc-widget .mhc-pres:empty{display:none}
 #mhc-widget .mhc-pres span{white-space:nowrap}
-#mhc-widget .mhc-pres i{display:inline-block;width:calc(64px*var(--k));height:calc(8px*var(--k));border-radius:2px;vertical-align:middle;margin:0 calc(3px*var(--k));background:linear-gradient(90deg,rgba(21,101,168,.5),rgba(214,238,252,.5));border:1px solid var(--line)}
+#mhc-widget .mhc-pres i{display:inline-block;width:calc(64px*var(--k));height:calc(8px*var(--k));border-radius:2px;vertical-align:middle;margin:0 calc(3px*var(--k));border:1px solid var(--line)}
 #mhc-widget .mhc-ext-t{font-size:calc(12.5px*var(--k));font-weight:700;color:var(--ink);margin-top:calc(10px*var(--k))}
 #mhc-widget .mhc-ext{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(6px*var(--k));margin-top:calc(4px*var(--k))}
 #mhc-widget .mhc-ext div{border-top:2px solid var(--line);padding-top:calc(3px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
@@ -288,12 +288,23 @@
     if (hi - lo < 8) { var m = (lo + hi) / 2; lo = Math.floor(m - 4); hi = lo + 8; }
     return [lo, hi];
   }
-  // couleur de la pression, en valeur relative : bleu ciel foncé au bas de l'échelle affichée → très clair en haut
-  // (l'échelle contient toujours 1015 hPa) ; fonce = 1 pour le trait de la courbe (même bleu, plus soutenu)
-  function couleurPression(p, e, fonce) {
-    var f = Math.max(0, Math.min(1, (p - e[0]) / (e[1] - e[0]))), A = [21, 101, 168], B = [214, 238, 252];
-    if (fonce) f = Math.max(0, f - 0.45);
-    return "rgb(" + A.map(function (a, i) { return Math.round(a + (B[i] - a) * f); }).join(",") + ")";
+  // Couleur de la pression autour de 1015 hPa, en valeur relative à l'échelle affichée :
+  //  - sous 1015 : bleu, très clair et très transparent près de 1015 → bleu foncé (encore transparent) au bas de l'échelle ;
+  //  - au-dessus : jaune orangé près de 1015 → orange de moins en moins transparent en haut de l'échelle.
+  // Renvoie { c: couleur, a: opacité } ; trait = true pour la courbe (même teinte, plus soutenue et plus opaque).
+  var PRES_BAS = [[214, 238, 252, 0.18], [21, 101, 168, 0.55]], PRES_HAUT = [[250, 214, 90, 0.3], [228, 110, 20, 0.85]];
+  function couleurPression(p, e, trait) {
+    var bas = p < P_REF, g = bas ? PRES_BAS : PRES_HAUT;
+    var f = bas ? (P_REF - p) / Math.max(1, P_REF - e[0]) : (p - P_REF) / Math.max(1, e[1] - P_REF);
+    f = Math.max(0, Math.min(1, f));
+    if (trait) f = Math.min(1, 0.35 + f * 0.65);
+    var c = [0, 1, 2].map(function (i) { return Math.round(g[0][i] + (g[1][i] - g[0][i]) * f); });
+    return { c: "rgb(" + c.join(",") + ")", a: trait ? 0.9 : +(g[0][3] + (g[1][3] - g[0][3]) * f).toFixed(2) };
+  }
+  // dégradé de la légende (CSS ou canevas) : bas de l'échelle → 1015 → haut de l'échelle
+  function arretsPression(e) {
+    var pos = (P_REF - e[0]) / (e[1] - e[0]), r = function (p) { var k = couleurPression(p, e); return k.c.replace("rgb(", "rgba(").replace(")", "," + k.a + ")"); };
+    return [[0, r(e[0])], [pos, r(P_REF - 0.01)], [pos, r(P_REF)], [1, r(e[1])]];
   }
   function dessinerPression(P, coul, aLab, ech) {
     el("circle", { cx: 0, cy: 0, r: RP0, fill: "none", stroke: coul.muted, "stroke-opacity": 0.3 });
@@ -307,7 +318,7 @@
     var segs = [], cur = [];
     P.forEach(function (p) { if (cur.length && p.t - cur[cur.length - 1].t > H) { segs.push(cur); cur = []; } cur.push(p); });
     segs.push(cur);
-    // dégradé de bleu ciel, semi-transparent : foncé au bas de l'échelle affichée, clair en haut
+    // bleu sous 1015 hPa, jaune orangé au-dessus (voir couleurPression)
     segs.forEach(function (sg) {
       for (var i = 0; i < sg.length - 1; i++) {
         var p = sg[i], q = sg[i + 1], a = ang(p.t), b = ang(q.t); if (b < a) b += 2 * Math.PI;
@@ -317,8 +328,8 @@
           var f0 = k / n, f1 = (k + 1) / n, a0 = a + (b - a) * f0, a1 = a + (b - a) * f1;
           var v0 = p.p + (q.p - p.p) * f0, v1 = p.p + (q.p - p.p) * f1, m = (v0 + v1) / 2, pp = xy(a0, rp(v0)), pq = xy(a1, rp(v1));
           el("path", { d: "M" + xy(a0, rr) + " L" + pp + " L" + pq + " L" + xy(a1, rr) + " A" + rr + "," + rr + " 0 0 0 " + xy(a0, rr) + "Z",
-            fill: couleurPression(m, e), "fill-opacity": 0.5, stroke: "none" });
-          el("line", { x1: pp[0], y1: pp[1], x2: pq[0], y2: pq[1], stroke: couleurPression(m, e, 1), "stroke-opacity": 0.85, "stroke-width": 1.4, "stroke-linecap": "round" });
+            fill: couleurPression(m, e).c, "fill-opacity": couleurPression(m, e).a, stroke: "none" });
+          el("line", { x1: pp[0], y1: pp[1], x2: pq[0], y2: pq[1], stroke: couleurPression(m, e, 1).c, "stroke-opacity": 0.9, "stroke-width": 1.4, "stroke-linecap": "round" });
         }
       }
     });
@@ -329,7 +340,8 @@
   // Ligne sous le cadran : échelle de la pression (couleur et position), du bas (centre, foncé) au haut (bord, clair)
   function lignePression(e) {
     if (!e) return "";
-    return "Pression à Lanvéoc en 24h : <span>" + e[0] + " <i></i> " + e[1] + " hPa</span> · <span>du centre vers le bord du cercle,</span> <span>pointillé à " + P_REF + " hPa</span>";
+    var grad = "linear-gradient(90deg," + arretsPression(e).map(function (s) { return s[1] + " " + (s[0] * 100).toFixed(1) + "%"; }).join(",") + ")";
+    return "Pression à Lanvéoc en 24h : <span>" + e[0] + ' <i style="background:' + grad + '"></i> ' + e[1] + " hPa</span> · <span>du centre vers le bord du cercle,</span> <span>pointillé à " + P_REF + " hPa</span>";
   }
   // pression à l'instant d et tendance sur 3 heures (hPa), pour la ligne de lecture
   function lirePression(P, d) {
@@ -709,7 +721,7 @@
     var largP = function () { c.font = "400 " + tp + "px " + getComputedStyle(root).fontFamily; return c.measureText(t1).width + c.measureText(t2).width + 140; };
     while (largP() > VW - 88 && tp > 13) tp--;
     var x = 44 + texteCanevas(c, t1, 44, y, tp, muted, false) + 10;
-    var gr = c.createLinearGradient(x, 0, x + 120, 0); gr.addColorStop(0, "rgba(21,101,168,.5)"); gr.addColorStop(1, "rgba(214,238,252,.5)");
+    var gr = c.createLinearGradient(x, 0, x + 120, 0); if (em) arretsPression([+em[1], +em[2]]).forEach(function (s) { gr.addColorStop(s[0], s[1]); });
     c.fillStyle = gr; c.fillRect(x, y - 15, 120, 14); c.strokeStyle = css("--line"); c.lineWidth = 1; c.strokeRect(x, y - 15, 120, 14);
     texteCanevas(c, t2, x + 130, y, tp, muted, false);
     }
