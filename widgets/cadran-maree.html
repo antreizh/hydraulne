@@ -45,7 +45,7 @@
       <li><b>Centre</b> : hauteur, sens et coefficient de la marée à l'heure choisie (le moment présent par défaut). Le coefficient est celui de la pleine mer de Brest la plus proche (prédiction officielle du SHOM).</li>
       <li><b>1<sup>er</sup> cercle</b> : hauteur d'eau à Guily Glaz ; plus l'aire bleue s'éloigne du centre, plus l'eau est haute. Points : pleines (pleins) et basses mers (creux).</li>
       <li><b>Cercles suivants, par paires</b> : vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu. Pour chaque station, une barre par heure (vent moyen, rafale en trait), puis une flèche qui pointe vers où souffle le vent (nord en haut) ; un petit rond signale un vent calme.</li>
-      <li><b>Avant-dernier cercle</b> : pression au niveau de la mer à Lanvéoc (trait brun), mesurée toutes les 6 minutes ; plus le trait s'éloigne du centre, plus la pression est haute. L'échelle (en hPa) s'adapte aux 24 heures affichées. La ligne de lecture donne la pression et son évolution sur 3 heures.</li>
+      <li><b>Avant-dernier cercle</b> : pression au niveau de la mer à Lanvéoc, mesurée toutes les 6 minutes, en bleu ciel dégradé : foncé vers 980 hPa (dépression), de plus en plus clair vers 1015 hPa (anticyclone) ; la courbe s'éloigne du centre quand la pression monte. L'échelle (en hPa) s'adapte aux 24 heures affichées. La ligne de lecture donne la pression et son évolution sur 3 heures.</li>
       <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre), selon le lever et le coucher réels du soleil à Saint-Ségal ; en petit, leur heure et la variation par rapport à la veille (mn / J-1).</li>
       <li>0 h en haut, sens des aiguilles d'une montre, heure de Paris ; le trait orange marque le moment présent ; les tracés pâlissent avec l'ancienneté. Touchez une heure pour lire ses valeurs.</li>
     </ul>
@@ -231,6 +231,12 @@
     if (hi - lo < 8) { var m = (lo + hi) / 2; lo = Math.floor(m - 4); hi = lo + 8; }
     return [lo, hi];
   }
+  // couleur de la pression : bleu ciel foncé à 980 hPa → bleu ciel très clair à 1015 hPa (bornée au-delà) ;
+  // fonce > 0 assombrit la teinte (trait de la courbe)
+  function couleurPression(p, fonce) {
+    var f = Math.max(0, Math.min(1, (p - 980) / 35)), A = [21, 101, 168], B = [214, 238, 252];
+    return "rgb(" + A.map(function (a, i) { return Math.round((a + (B[i] - a) * f) * (1 - (fonce || 0))); }).join(",") + ")";
+  }
   function dessinerPression(P, coul, aLab, ech) {
     el("circle", { cx: 0, cy: 0, r: RP0, fill: "none", stroke: coul.muted, "stroke-opacity": 0.3 });
     el("circle", { cx: 0, cy: 0, r: RP1, fill: "none", stroke: coul.muted, "stroke-opacity": 0.25, "stroke-dasharray": "1 3" });
@@ -241,13 +247,15 @@
     var segs = [], cur = [];
     P.forEach(function (p) { if (cur.length && p.t - cur[cur.length - 1].t > H) { segs.push(cur); cur = []; } cur.push(p); });
     segs.push(cur);
+    // dégradé de bleu ciel : foncé vers 980 hPa (dépression), clair vers 1015 hPa et au-delà (anticyclone)
     segs.forEach(function (sg) {
-      if (sg.length < 2) return;
-      var pts = sg.map(function (p) { return xy(ang(p.t), rp(p.p)); }), a0 = ang(sg[0].t), a1 = ang(sg[sg.length - 1].t);
-      if (a1 < a0) a1 += 2 * Math.PI;
-      el("path", { d: "M" + xy(a0, RP0) + " L" + pts.join(" L") + " L" + xy(a1, RP0) + " A" + RP0 + "," + RP0 + " 0 " + (a1 - a0 > Math.PI ? 1 : 0) + " 0 " + xy(a0, RP0) + "Z",
-        fill: coul.pres, "fill-opacity": 0.14, stroke: "none" });
-      el("path", { d: "M" + pts.join(" L"), fill: "none", stroke: coul.pres, "stroke-width": 1.6, "stroke-linejoin": "round", "stroke-linecap": "round" });
+      for (var i = 0; i < sg.length - 1; i++) {
+        var p = sg[i], q = sg[i + 1], a = ang(p.t), b = ang(q.t); if (b < a) b += 2 * Math.PI;
+        var pp = xy(a, rp(p.p)), pq = xy(b, rp(q.p)), m = (p.p + q.p) / 2;
+        el("path", { d: "M" + xy(a, RP0) + " L" + pp + " L" + pq + " L" + xy(b, RP0) + " A" + RP0 + "," + RP0 + " 0 0 0 " + xy(a, RP0) + "Z",
+          fill: couleurPression(m, 0), stroke: couleurPression(m, 0), "stroke-width": 0.4 });
+        el("line", { x1: pp[0], y1: pp[1], x2: pq[0], y2: pq[1], stroke: couleurPression(m, 0.35), "stroke-width": 1.6, "stroke-linecap": "round" });
+      }
     });
     var pe = xy(aLab + 0.62, RP1);
     el("text", { x: pe[0], y: pe[1] - 2, "text-anchor": "middle", "font-size": 8.5, fill: coul.muted }).textContent = e[0] + "–" + e[1] + " hPa";
