@@ -28,8 +28,9 @@
     <div class="mcd-maj" id="mcd-maj">Chargement des mesures…</div>
   </div>
   <div class="mcd-lect" id="mcd-lect" aria-live="polite"></div>
-  <svg id="mcd-svg" viewBox="-322 -312 634 624" role="img"
+  <svg id="mcd-svg" viewBox="-306 -298 598 596" role="img"
        aria-label="Cadran de 24 heures : hauteur d'eau à Guily Glaz au centre, vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu en couronnes, pression à Lanvéoc, jour et nuit"></svg>
+  <div class="mcd-soleil" id="mcd-soleil"></div>
   <div class="mcd-ext-t">Vitesse du vent</div>
   <div class="mcd-leg" id="mcd-leg"></div>
   <div class="mcd-ext-t">Rétrospective des marées</div>
@@ -46,7 +47,7 @@
       <li><b>1<sup>er</sup> cercle</b> : hauteur d'eau à Guily Glaz ; plus l'aire bleue s'éloigne du centre, plus l'eau est haute. Points : pleines (pleins) et basses mers (creux).</li>
       <li><b>Cercles suivants, par paires</b> : vent de Saint-Ségal, de Lanvéoc puis de la pointe Saint-Mathieu. Pour chaque station, une barre par heure (vent moyen, rafale en trait), puis une flèche qui pointe vers où souffle le vent (nord en haut) ; un petit rond signale un vent calme.</li>
       <li><b>Avant-dernier cercle</b> : pression au niveau de la mer à Lanvéoc, mesurée toutes les 6 minutes, en bleu ciel dégradé : foncé vers 980 hPa (dépression), de plus en plus clair vers 1015 hPa (anticyclone) ; la courbe évolue autour du cercle fin de 1015 hPa : vers l'extérieur au-dessus (haute pression), vers le centre au-dessous (basse pression). L'échelle (en hPa) s'adapte aux 24 heures affichées. La ligne de lecture donne la pression et son évolution sur 3 heures.</li>
-      <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre), selon le lever et le coucher réels du soleil à Saint-Ségal ; en petit, leur heure et la variation par rapport à la veille (mn / J-1).</li>
+      <li><b>Dernier cercle</b> : jour (jaune) et nuit (sombre), selon le lever et le coucher réels du soleil à Saint-Ségal (petit trait à chaque limite) ; leurs heures et leur variation par rapport à la veille (mn / J-1) sont indiquées sous le cadran.</li>
       <li>0 h en haut, sens des aiguilles d'une montre, heure de Paris ; le trait orange marque le moment présent ; les tracés pâlissent avec l'ancienneté. Touchez une heure pour lire ses valeurs.</li>
     </ul>
   </details>
@@ -88,6 +89,8 @@
 #mcd-widget .mcd-hit{fill:transparent;cursor:pointer}
 #mcd-widget .mcd-hit:focus{outline:none}
 #mcd-widget .mcd-hit:focus-visible{fill:var(--eau);fill-opacity:.08}
+#mcd-widget .mcd-soleil{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(8px*var(--k))}
+#mcd-widget .mcd-soleil:empty{display:none}
 #mcd-widget .mcd-ext-t{font-size:calc(12.5px*var(--k));font-weight:700;color:var(--ink);margin-top:calc(10px*var(--k))}
 #mcd-widget .mcd-ext{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(6px*var(--k));margin-top:calc(4px*var(--k))}
 #mcd-widget .mcd-ext div{border-top:2px solid var(--line);padding-top:calc(3px*var(--k));font-size:calc(11.5px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
@@ -190,6 +193,13 @@
     return (soleilCache[ymd] = { lever: instant(-1), coucher: instant(1) });
   }
   function veille(ymd) { var p = ymd.split("-"); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] - 1, 12)).toISOString().slice(0, 10); }
+  // Ligne « Soleil à Saint-Ségal » sous le cadran : lever et coucher du jour de l'instant affiché, avec leur variation / veille
+  function ligneSoleil(d) {
+    var j = fmtYMD.format(d), s = soleilJour(j), h = soleilJour(veille(j));
+    function v(a, b) { var dm = minLoc(a) - minLoc(b); if (dm > 30) dm -= 60; else if (dm < -30) dm += 60;   // changement d'heure : variation du soleil
+      return (dm > 0 ? "+" : dm < 0 ? "−" : "±") + Math.abs(dm) + " mn / J-1"; }
+    return "Soleil à Saint-Ségal : lever " + fmtH.format(s.lever) + " (" + v(s.lever, h.lever) + ") · coucher " + fmtH.format(s.coucher) + " (" + v(s.coucher, h.coucher) + ")";
+  }
   function minuitLoc(ymd) { var g = Date.parse(ymd + "T00:00:00Z"); return g - minLoc(new Date(g)) * 60e3; }
   // Dernier cercle : jour (jaune) et nuit (sombre) d'après le lever et le coucher réels du soleil sur la fenêtre de 24 h,
   // avec, en petit à chaque limite, l'heure de lever / coucher et sa variation par rapport à la veille.
@@ -210,18 +220,9 @@
       var a0 = ang(new Date(a)), a1 = ang(new Date(b)); if (a1 <= a0) a1 += 2 * Math.PI;
       el("path", { d: secteur(a0, a1, RN0, RN1), fill: jour ? coul.jour : coul.nuit });
     }
-    evts.forEach(function (ev) {
-      var hier = soleilJour(veille(ev.j))[ev.type], dm = minLoc(ev.t) - minLoc(hier);
-      if (dm > 30) dm -= 60; else if (dm < -30) dm += 60;          // changement d'heure : variation du soleil, pas de l'horloge
-      var a = ang(ev.t), p0 = xy(a, RN0 - 3), p1 = xy(a, RN1 + 4), pt = xy(a, RS), deg = a * 180 / Math.PI;
+    evts.forEach(function (ev) {                                   // petit trait à chaque lever / coucher
+      var a = ang(ev.t), p0 = xy(a, RN0 - 3), p1 = xy(a, RN1 + 4);
       el("line", { x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], stroke: coul.ink, "stroke-width": 1.2 });
-      var tx = el("text", { "text-anchor": "middle", "dominant-baseline": "central", "font-size": 12, fill: coul.muted });
-      tx.textContent = ev.type + " " + fmtH.format(ev.t) + " · " + (dm > 0 ? "+" : dm < 0 ? "−" : "±") + Math.abs(dm) + " mn / J-1";
-      // texte centré sur la limite, au-delà des heures (aucun chevauchement)
-      pt = xy(a, RS); deg = a * 180 / Math.PI;
-      if (deg > 90 && deg < 270) deg += 180;                         // texte toujours lisible (jamais à l'envers)
-      tx.setAttribute("x", pt[0]); tx.setAttribute("y", pt[1]);
-      tx.setAttribute("transform", "rotate(" + deg.toFixed(1) + " " + pt[0] + " " + pt[1] + ")");
     });
   }
   /* Cercle de la pression à Lanvéoc : courbe entre RP0 (plus bas) et RP1 (plus haut), autour du cercle de référence
@@ -234,7 +235,7 @@
     return [lo, hi];
   }
   // couleur de la pression : bleu ciel foncé à 980 hPa → bleu ciel très clair à 1015 hPa (bornée au-delà) ;
-  // fonce > 0 assombrit la teinte (trait de la courbe)
+  // le trait de la courbe prend la teinte de 15 hPa plus bas (même bleu, plus soutenu)
   function couleurPression(p, fonce) {
     var f = Math.max(0, Math.min(1, (p - 980) / 35)), A = [21, 101, 168], B = [214, 238, 252];
     return "rgb(" + A.map(function (a, i) { return Math.round((a + (B[i] - a) * f) * (1 - (fonce || 0))); }).join(",") + ")";
@@ -256,10 +257,15 @@
     segs.forEach(function (sg) {
       for (var i = 0; i < sg.length - 1; i++) {
         var p = sg[i], q = sg[i + 1], a = ang(p.t), b = ang(q.t); if (b < a) b += 2 * Math.PI;
-        var pp = xy(a, rp(p.p)), pq = xy(b, rp(q.p)), m = (p.p + q.p) / 2;
-        el("path", { d: "M" + xy(a, rr) + " L" + pp + " L" + pq + " L" + xy(b, rr) + " A" + rr + "," + rr + " 0 0 0 " + xy(a, rr) + "Z",
-          fill: couleurPression(m, 0), stroke: couleurPression(m, 0), "stroke-width": 0.4 });
-        el("line", { x1: pp[0], y1: pp[1], x2: pq[0], y2: pq[1], stroke: couleurPression(m, 0.35), "stroke-width": 1.6, "stroke-linecap": "round" });
+        // pas découpé en petits arcs (valeurs horaires de l'Histo cadran : courbe arrondie, pas de polygone)
+        var n = Math.max(1, Math.ceil((b - a) / 0.02));
+        for (var k = 0; k < n; k++) {
+          var f0 = k / n, f1 = (k + 1) / n, a0 = a + (b - a) * f0, a1 = a + (b - a) * f1;
+          var v0 = p.p + (q.p - p.p) * f0, v1 = p.p + (q.p - p.p) * f1, m = (v0 + v1) / 2, pp = xy(a0, rp(v0)), pq = xy(a1, rp(v1));
+          el("path", { d: "M" + xy(a0, rr) + " L" + pp + " L" + pq + " L" + xy(a1, rr) + " A" + rr + "," + rr + " 0 0 0 " + xy(a0, rr) + "Z",
+            fill: couleurPression(m), stroke: couleurPression(m), "stroke-width": 0.4 });
+          el("line", { x1: pp[0], y1: pp[1], x2: pq[0], y2: pq[1], stroke: couleurPression(m - 15), "stroke-width": 1.6, "stroke-linecap": "round" });
+        }
       }
     });
     var pe = xy(aLab + 0.62, RP1);
@@ -406,6 +412,7 @@
 
     // jour / nuit : lever et coucher réels du soleil à Saint-Ségal
     anneauSoleil(+debut, hFin, { jour: css("--jour"), nuit: css("--nuit"), ink: ink, muted: muted });
+    document.getElementById("mcd-soleil").textContent = ligneSoleil(fin);
     // heures, avec J (jour de l'instant affiché) ou J-1 (veille) dessous ; « 6 h » et « 18 h » posées à côté du cercle.
     // Chaque heure du cadran correspond à un seul instant de la fenêtre [début ; fin[ de 24 h.
     var jJ = fmtYMD.format(fin), jJ1 = veille(jJ);
