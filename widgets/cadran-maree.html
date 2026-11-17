@@ -280,7 +280,7 @@
   // Ligne sous le cadran : échelle de la pression (couleur et position), du bas (centre, foncé) au haut (bord, clair)
   function lignePression(e) {
     if (!e) return "";
-    return "Pression à Lanvéoc : <span>" + e[0] + " <i></i> " + e[1] + " hPa</span> · <span>du centre vers le bord du cercle,</span> <span>pointillé à " + P_REF + " hPa</span>";
+    return "Pression à Lanvéoc en 24h : <span>" + e[0] + " <i></i> " + e[1] + " hPa</span> · <span>du centre vers le bord du cercle,</span> <span>pointillé à " + P_REF + " hPa</span>";
   }
   // pression à l'instant d et tendance sur 3 heures (hPa), pour la ligne de lecture
   function lirePression(P, d) {

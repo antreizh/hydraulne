@@ -329,7 +329,7 @@
   // Ligne sous le cadran : échelle de la pression (couleur et position), du bas (centre, foncé) au haut (bord, clair)
   function lignePression(e) {
     if (!e) return "";
-    return "Pression à Lanvéoc : <span>" + e[0] + " <i></i> " + e[1] + " hPa</span> · <span>du centre vers le bord du cercle,</span> <span>pointillé à " + P_REF + " hPa</span>";
+    return "Pression à Lanvéoc en 24h : <span>" + e[0] + " <i></i> " + e[1] + " hPa</span> · <span>du centre vers le bord du cercle,</span> <span>pointillé à " + P_REF + " hPa</span>";
   }
   // pression à l'instant d et tendance sur 3 heures (hPa), pour la ligne de lecture
   function lirePression(P, d) {
@@ -705,7 +705,7 @@
     // échelle de la pression (couleur et position sur le cercle)
     y += 38;
     if ($("mhc-pres").textContent) {
-    var em = $("mhc-pres").textContent.match(/(\d+)\s+(\d+) hPa/), t1 = "Pression à Lanvéoc : " + (em ? em[1] : ""), t2 = (em ? em[2] + " hPa" : "") + " · du centre vers le bord du cercle, pointillé à 1015 hPa", tp = tl;
+    var em = $("mhc-pres").textContent.match(/(\d+)\s+(\d+) hPa/), t1 = "Pression à Lanvéoc en 24h : " + (em ? em[1] : ""), t2 = (em ? em[2] + " hPa" : "") + " · du centre vers le bord du cercle, pointillé à 1015 hPa", tp = tl;
     var largP = function () { c.font = "400 " + tp + "px " + getComputedStyle(root).fontFamily; return c.measureText(t1).width + c.measureText(t2).width + 140; };
     while (largP() > VW - 88 && tp > 13) tp--;
     var x = 44 + texteCanevas(c, t1, 44, y, tp, muted, false) + 10;
