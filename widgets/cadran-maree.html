@@ -82,8 +82,8 @@
 #mcd-widget .mcd-lieu{color:var(--eau);font-weight:700;font-size:calc(17px*var(--k))}   /* Guily Glaz en bleu, même taille que le titre */
 #mcd-widget .mcd-maj{font-size:calc(11.5px*var(--k));color:var(--muted);margin-top:calc(2px*var(--k))}
 #mcd-widget .mcd-per{font-size:calc(13.5px*var(--k));font-weight:600;color:var(--ink);margin-top:calc(2px*var(--k))}
-#mcd-widget .mcd-lect{display:flex;flex-wrap:wrap;gap:calc(2px*var(--k)) calc(12px*var(--k));margin-top:calc(7px*var(--k));border-top:1px solid var(--line);padding-top:calc(6px*var(--k));
-  font-size:calc(12px*var(--k));color:var(--muted);font-variant-numeric:tabular-nums;min-height:calc(17px*var(--k))}
+#mcd-widget .mcd-lect{display:flex;flex-wrap:wrap;gap:calc(1px*var(--k)) calc(9px*var(--k));margin-top:calc(7px*var(--k));border-top:1px solid var(--line);padding-top:calc(6px*var(--k));
+  font-size:calc(var(--fl,10.5px)*var(--k));line-height:1.35;color:var(--muted);font-variant-numeric:tabular-nums;min-height:calc(17px*var(--k))}
 #mcd-widget .mcd-lect b{color:var(--ink)}
 #mcd-widget svg{display:block;width:100%;height:auto;margin-top:calc(4px*var(--k));touch-action:manipulation}
 #mcd-widget svg text{font-family:inherit;font-variant-numeric:tabular-nums}
@@ -419,6 +419,17 @@
     return out.sort(function (a, b) { return a.t - b.t; });
   }
 
+  // Ligne « Maintenant … » : en petit, et réduite encore si besoin pour tenir sur 2 lignes au plus
+  var flMem = 10.5;
+  function ajusterLecture() {
+    var l = document.getElementById("mcd-lect"), fl = flMem;
+    var tient = function () { var h = parseFloat(getComputedStyle(l).lineHeight) || 16; return l.scrollHeight - parseFloat(getComputedStyle(l).paddingTop) <= 2 * h + 3; };
+    l.style.setProperty("--fl", fl + "px");
+    if (!l.offsetWidth) return;
+    while (fl < 10.5 && tient()) { fl += 0.5; l.style.setProperty("--fl", fl + "px"); }   // reprend de la place si la ligne raccourcit
+    while (!tient() && fl > 8) { fl -= 0.5; l.style.setProperty("--fl", fl + "px"); }
+    flMem = fl;
+  }
   function dessiner() {
     svg.textContent = "";
     // Fenêtre de 24 h calée sur les heures pleines : de (heure en cours + 1) − 24 h à maintenant.
@@ -530,6 +541,7 @@
         if (Math.abs(v.t - d) > 1.5 * H) return "<span>" + st.nom + " : —</span>";
         return "<span>" + st.nom + " <b>" + (v.nd < 0.5 || v.dd == null ? "calme" : card(v.dd) + " " + Math.round(v.nd) + " nd") + "</b> · raf. " + Math.round(v.raf) + "</span>";
       }).join("") + lirePression(pression, d);
+      ajusterLecture();
     }
     lire(fin, true);
     for (k = 0; k < 24; k++) (function (d) {
