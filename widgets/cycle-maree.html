@@ -100,6 +100,7 @@
   border-radius:calc(8px*var(--k));padding:calc(4px*var(--k)) calc(8px*var(--k));font-size:calc(12px*var(--k));white-space:nowrap;
   box-shadow:0 2px 8px rgba(11,60,93,.12);color:#1d2b36}
 #mwc-widget .mwc-tip b{font-variant-numeric:tabular-nums}
+#mwc-widget .mwc-tip-cf{color:var(--mwc-navy);font-weight:600}
 #mwc-widget .mwc-tip-l{display:flex;align-items:center;gap:calc(5px*var(--k));margin-top:calc(2px*var(--k))}
 #mwc-widget .mwc-tip-l i{width:calc(8px*var(--k));height:calc(8px*var(--k));border-radius:50%;flex:0 0 auto}
 #mwc-widget .mwc-tip-l b{margin-left:auto;padding-left:calc(8px*var(--k))}
@@ -349,6 +350,14 @@
   }
   function estDemain(d, now) {
     return d.toDateString() === new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
+  }
+  // Coefficient à un instant donné (étiquette du survol) : celui de la pleine mer de Brest la plus proche,
+  // à 6 h 13 près (demi-cycle), comme le Cadran et l'historique ; sinon la pleine mer la plus proche dans les 12 h
+  function coefA(t) {
+    if (!tides) return null;
+    var best = null;
+    tides.forEach(function (e) { if (e.type === "PM" && e.coef != null && (!best || Math.abs(e.date - t) < Math.abs(best.date - t))) best = e; });
+    return best && Math.abs(best.date - t) <= 12 * HEURE ? best.coef : null;
   }
   /* ================== COURBE THÉORIQUE (profil réel de Guily Glaz) ==================
      À Guily Glaz, la marée n'a pas la forme sinusoïdale de Brest : la mer monte très vite (≈ 3 h 30 à 5 h),
@@ -779,7 +788,8 @@
       if (!lignes.length) { hide(); return; }
       var px = X(tRef);
       hair.setAttribute("x1", px); hair.setAttribute("x2", px); hair.setAttribute("opacity", 0.35);
-      tip.innerHTML = "<b>" + hm(tRef) + "</b>" + lignes.join("");
+      var cf = coefA(tRef);
+      tip.innerHTML = "<b>" + hm(tRef) + "</b>" + (cf ? ' <span class="mwc-tip-cf">· coef. ' + cf + "</span>" : "") + lignes.join("");
       tip.hidden = false;
       var left = px * r.width / W, half = tip.offsetWidth / 2, top = topY * r.height / H - tip.offsetHeight - 10 * k;
       tip.style.left = Math.max(half, Math.min(r.width - half, left)) + "px";
