@@ -309,6 +309,22 @@ window.dash = (() => {
 })();
 </script>
 <script>
+// Moyenne journalière (heure de Paris) des mesures horaires Hub'Eau « temps réel », pour les jours complets
+// après `apres` et avant aujourd'hui (au moins 12 mesures) : comble le retard de la série journalière.
+async function moyennesTR(bss, apres) {
+  const r = await fetch('https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques_tr?code_bss=' + encodeURIComponent(bss) + '&date_debut_mesure=' + apres + '&fields=date_mesure,niveau_eau_ngf&size=20000&sort=asc');
+  if (!r.ok) return [];
+  const j = await r.json(), jours = new Map();
+  const auj = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+  (j.data || []).forEach((d) => {
+    if (d.niveau_eau_ngf == null || !d.date_mesure) return;
+    const k = new Date(d.date_mesure).toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+    if (k > apres && k < auj) { if (!jours.has(k)) jours.set(k, []); jours.get(k).push(+d.niveau_eau_ngf); }
+  });
+  return [...jours].filter(([, l]) => l.length >= 12).map(([k, l]) => [k, Math.round(l.reduce((a, b) => a + b, 0) / l.length * 100) / 100]).sort();
+}
+</script>
+<script>
 (async () => {
   const note = document.getElementById('maj');
   const today = new Date().toISOString().slice(0, 10), year = today.slice(0, 4);
@@ -319,6 +335,11 @@ window.dash = (() => {
     if (!r.ok) throw new Error(r.status);
     const j = await r.json();
     const rows = (j.data || []).filter((d) => d.niveau_nappe_eau != null && d.date_mesure.startsWith(year)).map((d) => ({ date: d.date_mesure.slice(0, 10), niveau_m: +d.niveau_nappe_eau }));
+    // Série journalière publiée avec retard : jours manquants complétés par la moyenne des mesures horaires
+    try {
+      const der = [...dash.data('piezo').data.map((x) => x.date), ...rows.map((x) => x.date)].sort().at(-1);
+      rows.push(...(await moyennesTR('03113X0031/F', der)).map(([date, v]) => ({ date, niveau_m: v })));
+    } catch (e) {}
     if (rows.length) { dash._set('piezo', merge(dash.data('piezo').data, rows, 'date')); msgs.push('niveau Hub\u2019Eau à jour'); }
   } catch (e) { msgs.push('niveau : données enregistrées (Hub\u2019Eau injoignable)'); }
   try {

@@ -7,7 +7,8 @@ servent à l'affichage immédiat et de secours si une source ne répond pas.
 
 Sources (sans clé) :
   - Météo-France, fichier quotidien du Finistère (station 29263002 ST-SEGAL S A) : pluie RR, température TNTXM ;
-  - Hub'Eau, piézomètre de Kergadalen 03103X0047/PZ : niveau de la nappe (m NGF).
+  - Hub'Eau, piézomètre de Kergadalen 03103X0047/PZ : niveau de la nappe (m NGF), série journalière
+    complétée, en cas de retard de publication, par la moyenne journalière des mesures horaires.
 
 Seules les constantes de données sont réécrites (SNAP, SNAP_RR, SNAP_TT et, si Météo-France
 renomme son fichier en début d'année, MF_URL). Une série n'est jamais raccourcie : en cas de
@@ -24,6 +25,7 @@ S3 = "https://meteofrance.s3.sbg.io.cloud.ovh.net"
 PREFIXE = "data/synchro_ftp/BASE/QUOT/Q_29_latest"
 FICHIER_MF = re.compile(r"data/synchro_ftp/BASE/QUOT/Q_29_latest-(\d{4})-(\d{4})_RR-T-Vent\.csv\.gz")
 HUBEAU = "https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques"
+HUBEAU_TR = "https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques_tr"
 UA = {"User-Agent": "antreizh-hydraulne/1.0 (+https://appli.antreizh.fr)"}
 
 journal = []
@@ -78,6 +80,21 @@ def meteo_france():
 
 
 # ---------------------------------------------------------------- Hub'Eau
+def moyennes_tr(mesures, apres, aujourd_hui, minimum=12):
+    """Mesures horaires [(horodatage ISO UTC, niveau)] → moyenne par jour (heure de Paris),
+    pour les jours complets après `apres` et avant `aujourd_hui` (au moins `minimum` mesures)."""
+    jours = {}
+    for h, v in mesures:
+        try:
+            t = dt.datetime.fromisoformat(h.replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Paris"))
+        except ValueError:
+            continue
+        j = t.date().isoformat()
+        if apres < j < aujourd_hui:
+            jours.setdefault(j, []).append(float(v))
+    return {j: round(sum(l) / len(l), 2) for j, l in jours.items() if len(l) >= minimum}
+
+
 def hubeau(depuis):
     url = f"{HUBEAU}?code_bss={BSS}&date_debut_mesure={depuis}&fields=date_mesure,niveau_nappe_eau&size=20000"
     data = json.loads(lire_url(url)).get("data") or []
@@ -86,6 +103,21 @@ def hubeau(depuis):
     if not vals:
         raise RuntimeError("aucune mesure Hub'Eau")
     log(f"Hub'Eau depuis {depuis} : {len(vals)} jours, dernier {max(vals)}")
+    # La série journalière (reprise d'ADES) est parfois publiée avec plusieurs jours de retard.
+    # Les jours manquants sont complétés par la moyenne des mesures horaires (« temps réel ») ;
+    # la valeur journalière les remplace dès qu'elle est publiée.
+    try:
+        dernier = max(vals)
+        aujourd_hui = dt.datetime.now(ZoneInfo("Europe/Paris")).date().isoformat()
+        url = f"{HUBEAU_TR}?code_bss={BSS}&date_debut_mesure={dernier}&fields=date_mesure,niveau_eau_ngf&size=20000&sort=asc"
+        tr = json.loads(lire_url(url)).get("data") or []
+        complement = moyennes_tr([(d["date_mesure"], d["niveau_eau_ngf"]) for d in tr
+                                  if d.get("date_mesure") and d.get("niveau_eau_ngf") is not None], dernier, aujourd_hui)
+        if complement:
+            vals.update(complement)
+            log(f"  complété par les mesures horaires : {len(complement)} jours, jusqu'au {max(complement)}")
+    except Exception as e:
+        log(f"  mesures horaires Hub'Eau indisponibles ({e})")
     return vals
 
 
