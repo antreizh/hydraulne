@@ -210,6 +210,7 @@
   var tides = null;               // pleines et basses mers SHOM (Brest)
   var theo = null;                // ajustement { a, b, tau } de la courbe théorique de Guily Glaz
   var msgVide = "En attente des premières mesures du jour…";
+  var hubKO = false;              // Hub'Eau ne répond pas : mesures reprises de l'historique archivé (en différé)
 
   function getJSON(url) {
     return fetch(url, { headers: { Accept: "application/json" } })
@@ -246,11 +247,13 @@
       "&grandeur_hydro=H&date_debut_obs=" + encodeURIComponent(debut.toISOString().slice(0, 19) + "Z") +
       "&size=5000&sort=asc&format=json")
       .then(function (j) {
-        var hub = (j.data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
+        hubKO = false;
+        return (j.data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
           .map(function (r) { return { t: new Date(r.date_obs), v: r.resultat_obs / 1000 }; });  // mm -> m
-        return combler(hub, debut, now);
-      })
+      }, function () { hubKO = true; return []; })   // Hub'Eau en panne : on affiche l'historique (mesures Vigicrues)
+      .then(function (hub) { return combler(hub, debut, now); })
       .then(function (serie) {
+        if (!serie.length) throw new Error("aucune mesure");
         ptsFit = serie.sort(function (a, b) { return a.t - b.t; });
         pts = ptsFit.filter(function (p) { return p.t >= jour0; });
         msgVide = "En attente des premières mesures du jour…";
@@ -533,7 +536,7 @@
     }
     // hauteur arrondie au décimètre, suivie de l'heure de la mesure
     hauteurHTML = '<span class="mwc-h">' + m1(last.v) + ' m <small class="mwc-hh">à ' + hm(last.t) + "</small></span>";
-    sousTitre("");
+    sousTitre(hubKO ? "relevés en différé (Hub'Eau indisponible)" : "");
     renderState();
   }
 

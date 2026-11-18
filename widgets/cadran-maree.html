@@ -338,10 +338,11 @@
               "&size=1000&sort=asc&fields=date_obs,resultat_obs&format=json";
     var essai = function () { return getText(url, { headers: { Accept: "application/json" } }); };
     return essai().catch(essai).then(function (t) {
-      var hub = (JSON.parse(t).data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
+      return (JSON.parse(t).data || []).filter(function (r) { return r.resultat_obs != null && r.date_obs; })
         .map(function (r) { return { t: new Date(r.date_obs), h: r.resultat_obs / 1000 }; });
-      return combler(hub, new Date(debut));
-    }).then(function (s) { return s.sort(function (a, b) { return a.t - b.t; }); });
+    }).catch(function () { return []; })        // Hub'Eau en panne : l'historique archivé (mesures Vigicrues) prend le relais
+      .then(function (hub) { return combler(hub, new Date(debut)); })
+      .then(function (s) { if (!s.length) throw new Error("aucune mesure"); return s.sort(function (a, b) { return a.t - b.t; }); });
   }
 
   /* Trous du flux Hub'Eau (coupures de transmission) : comblés avec l'historique archivé de l'appli,
