@@ -87,6 +87,7 @@
 /* « Marée : Guily Glaz · Port-Launay » : même taille, police et couleur que « Marée » */
 #mwc-widget .mwc-sub1{display:inline;margin:0;font-size:1em;font-weight:700;color:inherit}
 #mwc-widget .mwc-sub1 span{white-space:normal}
+#mwc-widget .mwc-sub1 .mwc-note{font-size:.72em;font-weight:400;color:var(--mwc-muted)}
 #mwc-widget #mwc-proch:empty{display:none}
 #mwc-widget .mwc-coef{font-weight:700;font-size:1em;color:var(--mwc-navy)!important}   /* même taille et graisse que « montante » */
 #mwc-widget .mwc-shom-host iframe{position:absolute;left:-10000px;top:0;width:420px;height:700px;border:0;visibility:hidden}
@@ -528,7 +529,7 @@
       proch = '<span class="mwc-proch" title="Heure estimée à Guily Glaz (courbe théorique)">Prochaine ' +
         (pr.type === "PM" ? "pleine mer " : "basse mer ") + (demain ? "demain " : "") + "à " + hm(d) + "</span>";
     }
-    $("mwc-sub").innerHTML = "<span>Guily Glaz · Port-Launay" + (txt ? "," : "") + "</span>" + (txt ? " <span>" + txt + "</span>" : "");
+    $("mwc-sub").innerHTML = "<span>Guily Glaz · Port-Launay" + (txt ? "," : "") + "</span>" + (txt ? ' <span class="mwc-note">' + txt + "</span>" : "");
     $("mwc-proch").innerHTML = proch;                                  // sous le coefficient
   }
 
