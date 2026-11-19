@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Propagation crue · Aulne → Châteaulin</title>
+<style>html,body{margin:0;background:transparent}body{padding:1px}</style>
+</head>
+<body>
+<!-- =====================================================================
+     Widget « Propagation crue » — prévision de la hauteur de l'Aulne à Châteaulin (16 h)
+     Modèle « aulne_prevision v2 » (calé sur l'historique horaire 2010-2019, validé 2019-2025) :
+       débit aval(t+h) = débit aval(t) + r · [débit amont(t+h-L) - débit amont(t-L)], en cascade
+       Poullaouen → Kergloff → Châteauneuf-du-Faou → Gouézec → Châteaulin ;
+       hauteur prévue = dernière hauteur mesurée + variation de hauteur déduite du débit prévu.
+     Mesures en direct : Hub'Eau (HydroPortail temps réel). Préfixe mpc-.
+     ===================================================================== -->
+<div id="mpc-widget">
+  <div class="mpc-head">
+    <div class="mpc-title">Propagation crue</div>
+    <div class="mpc-sub">Aulne · de l'amont du bassin jusqu'à Châteaulin</div>
+    <div class="mpc-updated" id="mpc-updated">Chargement des mesures…</div>
+  </div>
+
+  <div class="mpc-hero" id="mpc-hero">
+    <div class="mpc-tile"><div class="mpc-k">Maintenant</div><div class="mpc-v" id="mpc-now">–</div><div class="mpc-s" id="mpc-now-s">&nbsp;</div></div>
+    <div class="mpc-tile"><div class="mpc-k" id="mpc-pic-k">Dans les 16 h</div><div class="mpc-v" id="mpc-pic">–</div><div class="mpc-s" id="mpc-pic-s">&nbsp;</div></div>
+    <div class="mpc-tile mpc-tile-impact" id="mpc-imp-tile"><div class="mpc-k">Impact attendu</div><div class="mpc-v mpc-v-txt" id="mpc-imp">–</div><div class="mpc-s" id="mpc-imp-s">&nbsp;</div></div>
+  </div>
+  <div class="mpc-alerte" id="mpc-alerte" hidden></div>
+
+  <section class="mpc-card">
+    <h3 class="mpc-h3">L'onde de crue descend la rivière</h3>
+    <p class="mpc-note">De haut en bas, de l'amont vers Châteaulin : chaque station est placée selon le temps que met l'eau à arriver à Châteaulin. Largeur de la rivière = débit ; couleur = débit comparé aux crues habituelles de la station.</p>
+    <svg id="mpc-profil" viewBox="0 0 360 430" role="img" aria-label="Schéma de la propagation de la crue le long de l'Aulne"></svg>
+    <div class="mpc-legende" id="mpc-leg-profil"></div>
+  </section>
+
+  <section class="mpc-card">
+    <h3 class="mpc-h3">Hauteur à Châteaulin (pont routier)</h3>
+    <p class="mpc-note">Trait plein : mesure des 36 dernières heures. Pointillé : prévision, avec sa fourchette. Bandes de couleur : ce qui se passe en ville à ces hauteurs.</p>
+    <div class="mpc-graph-wrap">
+      <svg id="mpc-graph" viewBox="0 0 640 300" role="img" aria-label="Hauteur mesurée et prévue à Châteaulin"></svg>
+      <div class="mpc-tip" id="mpc-tip" hidden></div>
+    </div>
+  </section>
+
+  <section class="mpc-card">
+    <h3 class="mpc-h3">Ce que signifie la hauteur à Châteaulin</h3>
+    <div class="mpc-echelle">
+      <svg id="mpc-jauge" viewBox="0 0 150 360" role="img" aria-label="Échelle des hauteurs et de leurs conséquences"></svg>
+      <ol class="mpc-impacts" id="mpc-impacts"></ol>
+    </div>
+  </section>
+
+  <section class="mpc-card">
+    <h3 class="mpc-h3">Stations de mesure</h3>
+    <div class="mpc-table-wrap"><table class="mpc-table" id="mpc-table"></table></div>
+  </section>
+
+  <details class="mpc-card mpc-details">
+    <summary>Méthode, précision et limites</summary>
+    <p>Le débit mesuré en amont est propagé de station en station : la variation observée à une station arrive à la suivante après un délai (2 à 7 h selon le tronçon, plus long en forte crue), puis la hauteur à Châteaulin est déduite du débit prévu, en partant de la dernière hauteur mesurée.</p>
+    <p>Calage sur les mesures horaires 2010-2019, vérification sur les 12 crues de 2019 à 2025 : écart moyen sur la hauteur du pic de 1 cm à 4 h, 2 cm à 8 h, 4 cm à 12 h, 6 cm à 16 h. Pour les plus fortes crues (pics de 1,9 à 2,4 m), le pic est sous-estimé de 10 à 20 cm à 16 h : la fourchette est élargie vers le haut dans ce cas.</p>
+    <p>Limites : au-delà de 16 h il faudrait la pluie prévue ; l'Hyères (entre Kergloff et Châteauneuf) n'a pas de station temps réel dans la chaîne ; en basses eaux les hauteurs dépendent surtout des manœuvres de barrages. La marée n'a pas d'effet mesurable sur la hauteur à Châteaulin en crue.</p>
+    <p><b>Prévision indicative : seule la vigilance officielle <a href="https://www.vigicrues.gouv.fr/" target="_blank" rel="noopener">Vigicrues</a> fait foi.</b></p>
+    <p class="mpc-src">Mesures : Hub'Eau / HydroPortail (temps réel). Crues de référence : règlement Vigicrues (SPC Vilaine – Côtiers bretons). Repères : plateforme nationale des repères de crues (zéro de l'échelle de Châteaulin à 4,74 m NGF), presse locale (31/12/2022, 01/01/2023, 03/01/2024).</p>
+  </details>
+</div>
+
+<style>
+#mpc-widget{--navy:#0b3c5d;--blue:#1f7bb6;--sky:#e8f4fb;--ink:#1d2b36;--muted:#5f7180;--rule:#dde6ec;
+  font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);
+  background:#f4f7f8;border-radius:18px;padding:14px;box-sizing:border-box;max-width:760px;margin:0 auto}
+#mpc-widget *{box-sizing:border-box}
+#mpc-widget .mpc-head{margin:0 2px 10px}
+#mpc-widget .mpc-title{font:700 20px/1.2 system-ui,sans-serif;color:var(--navy)}
+#mpc-widget .mpc-sub{color:var(--muted);font-size:13px}
+#mpc-widget .mpc-updated{color:var(--muted);font-size:12px;margin-top:2px}
+#mpc-widget .mpc-hero{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+#mpc-widget .mpc-tile{background:#fff;border:1px solid var(--rule);border-radius:14px;padding:9px 10px;min-width:0}
+#mpc-widget .mpc-k{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+#mpc-widget .mpc-v{font:700 22px/1.2 system-ui,sans-serif;color:var(--navy);font-variant-numeric:tabular-nums;white-space:nowrap}
+#mpc-widget .mpc-v-txt{font-size:15px;line-height:1.25;white-space:normal}
+#mpc-widget .mpc-s{font-size:12px;color:var(--muted)}
+#mpc-widget .mpc-tile-impact{border-left:6px solid #2e9e6a}
+#mpc-widget .mpc-alerte{background:#fff7e0;color:#7a5a00;border-radius:12px;padding:8px 12px;font-size:13px;margin-bottom:10px}
+#mpc-widget .mpc-card{background:#fff;border:1px solid var(--rule);border-radius:16px;padding:12px 12px 10px;margin-bottom:10px}
+#mpc-widget .mpc-h3{margin:0 0 2px;font:700 15px/1.3 system-ui,sans-serif;color:var(--navy)}
+#mpc-widget .mpc-note{margin:0 0 6px;color:var(--muted);font-size:12px}
+#mpc-widget svg{display:block;width:100%;height:auto;overflow:visible}
+#mpc-widget svg text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#mpc-widget .mpc-legende{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--muted);margin-top:4px}
+#mpc-widget .mpc-legende i{display:inline-block;width:18px;height:8px;border-radius:4px;margin-right:4px;vertical-align:middle}
+#mpc-widget .mpc-graph-wrap{position:relative}
+#mpc-widget .mpc-tip{position:absolute;pointer-events:none;background:rgba(11,60,93,.95);color:#fff;border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.35;white-space:nowrap;z-index:2}
+#mpc-widget .mpc-echelle{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;align-items:start}
+#mpc-widget .mpc-impacts{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+#mpc-widget .mpc-impacts li{border-left:5px solid #ccc;padding:3px 0 3px 8px;font-size:12.5px}
+#mpc-widget .mpc-impacts li b{color:var(--navy)}
+#mpc-widget .mpc-impacts li.mpc-ici{background:var(--sky);border-radius:0 8px 8px 0}
+#mpc-widget .mpc-impacts li small{display:block;color:var(--muted);font-size:11.5px}
+#mpc-widget .mpc-table-wrap{overflow-x:auto}
+#mpc-widget .mpc-table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+#mpc-widget .mpc-table th{text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--rule)}
+#mpc-widget .mpc-table td{padding:5px 6px;border-bottom:1px solid #eef2f5;white-space:nowrap}
+#mpc-widget .mpc-table td:first-child{white-space:normal}
+#mpc-widget .mpc-table small{color:var(--muted)}
+#mpc-widget .mpc-details summary{cursor:pointer;font-weight:700;color:var(--navy)}
+#mpc-widget .mpc-details p{font-size:12.5px;margin:8px 0 0;color:var(--ink)}
+#mpc-widget .mpc-details a{color:var(--blue)}
+#mpc-widget .mpc-src{color:var(--muted)!important;font-size:11.5px!important}
+#mpc-widget .mpc-flux{animation:mpc-flux 2.4s linear infinite}
+@keyframes mpc-flux{to{stroke-dashoffset:-28}}
+@media (prefers-reduced-motion:reduce){#mpc-widget .mpc-flux{animation:none}}
+@media (max-width:460px){
+  #mpc-widget{padding:10px}
+  #mpc-widget .mpc-v{font-size:18px}
+  #mpc-widget .mpc-v-txt{font-size:13px}
+  #mpc-widget .mpc-echelle{grid-template-columns:118px minmax(0,1fr);gap:8px}
+}
+</style>
+
+<script>
+(function () {
+  "use strict";
+  var API = "https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr";
+  var HORIZON = 16, PASSE = 36;
+
+  /* ---------- réseau et paramètres calés (aulne_prevision v2) ---------- */
+  var ST = [
+    { k: "poullaouen",  code: "J360181001", nom: "Poullaouen",          det: "Aulne amont · 118 km²",  qref: 13.9 },
+    { k: "kergloff",    code: "J363181003", nom: "Kergloff",            det: "Pont Triffen · 518 km²", qref: 56.3 },
+    { k: "chateauneuf", code: "J381181001", nom: "Châteauneuf-du-Faou", det: "Pont Pol · 1 225 km²",   qref: 120 },
+    { k: "gouezec",     code: "J382181001", nom: "Gouézec",             det: "Pont-Coblant · 1 391 km²", qref: 141 },
+    { k: "chateaulin",  code: "J382182001", nom: "Châteaulin",          det: "Pont routier · 1 483 km²", qref: 152 }
+  ];
+  // L : délai (h) ; Lh : délai en forte crue (débit amont > s, m³/s) ; r : transfert des variations
+  var TR = [
+    { aval: "kergloff",    amont: "poullaouen",  L: 5, Lh: 6, s: 13.9,  r: 1.80 },
+    { aval: "chateauneuf", amont: "kergloff",    L: 5, Lh: 7, s: 56.3,  r: 1.12 },
+    { aval: "gouezec",     amont: "chateauneuf", L: 2, Lh: 3, s: 120,   r: 1.02 },
+    { aval: "chateaulin",  amont: "gouezec",     L: 4, Lh: 4, s: 141,   r: 0.88 }
+  ];
+  // courbes débit (m³/s) -> hauteur (m), médianes horaires 2018-2025
+  var COURBES = {
+    kergloff:    [[1.7,4,7.8,12.4,17.4,24.2,34.2,44.2,54.2,68.5,86.6,109,136.5],
+                  [.84,.9,.96,1.02,1.07,1.14,1.22,1.29,1.36,1.44,1.54,1.65,1.83]],
+    chateauneuf: [[2.2,4.1,7.7,12.5,17,24.8,34.8,44.7,54.9,69,88.6,110.5,137.9,160.5,186,219,280.5],
+                  [.37,.42,.5,.58,.65,.76,.87,.98,1.08,1.21,1.41,1.59,1.83,2.04,2.22,2.43,2.76]],
+    gouezec:     [[2.3,4,7.8,12.3,17.4,24.7,35,44.9,54.7,69.7,89.6,110,137,162,188,217.4,269.2,327.9],
+                  [1.39,1.43,1.51,1.58,1.64,1.72,1.82,1.92,2,2.1,2.22,2.31,2.4,2.61,2.81,3.03,3.4,3.74]],
+    chateaulin:  [[2.4,4,7.7,12.3,17.4,24.3,34.9,44.9,54.5,69.9,89,110.5,135,161.2,189,214.4,275.5,322.5,367],
+                  [.03,.07,.14,.21,.27,.34,.44,.51,.58,.65,.76,.81,.92,1.07,1.2,1.33,1.57,1.76,1.96]]
+  };
+  // conséquences à Châteaulin (hauteur à l'échelle du pont routier, m)
+  var IMPACTS = [
+    { h: 0,    col: "#2e9e6a", lbl: "Dans son lit", txt: "Pas de conséquence en ville." },
+    { h: 1.30, col: "#c9a400", lbl: "Chemin de halage fermé", txt: "1,33 m le 31/12/2022 : accès au halage interdit, pas encore de débordement." },
+    { h: 1.50, col: "#e67e22", lbl: "Seuil d'alerte communal", txt: "1,50 m : l'Aulne peut sortir de son lit par endroits." },
+    { h: 1.90, col: "#d64545", lbl: "Quais submergés", txt: "1,97 m le 01/01/2023 ; 2,00 m le 03/01/2024 : quais envahis, bateau poussé sur le quai (D770 vers Port-Launay). Rue Neuve vers 1,94 m." },
+    { h: 2.40, col: "#a3195b", lbl: "Centre-ville touché", txt: "2,39 m le 24/12/2013 (plus haut depuis 2010) ; place de la Résistance vers 2,42 m." },
+    { h: 2.90, col: "#5b2a86", lbl: "Crue majeure", txt: "2,91 m en janvier 1995 ; 3,17 m le 13/12/2000 : environ 400 habitations et des équipements publics touchés en 2000-2001." }
+  ];
+  var HISTO = [{ h: 3.17, d: "déc. 2000" }, { h: 2.91, d: "janv. 1995" }, { h: 2.39, d: "déc. 2013" }, { h: 2.11, d: "févr. 2014" }, { h: 1.97, d: "janv. 2023" }];
+
+  /* ---------- outils ---------- */
+  function $(id) { return document.getElementById(id); }
+  function num(x, d) { return x == null || isNaN(x) ? "–" : x.toFixed(d).replace(".", ","); }
+  function signe(x, d) { return (x > 0 ? "+" : x < 0 ? "−" : "±") + num(Math.abs(x), d); }
+  function hm(t) { return new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }); }
+  function jourHeure(t) {
+    var d = new Date(t), auj = new Date(Date.now()), dem = new Date(Date.now() + 864e5);
+    var f = function (x) { return x.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }); };
+    var j = f(d) === f(auj) ? "aujourd'hui" : f(d) === f(dem) ? "demain" : d.toLocaleDateString("fr-FR", { weekday: "long", timeZone: "Europe/Paris" });
+    return j + " à " + hm(t).replace(":", " h ");
+  }
+  function interp(x, xp, fp) {
+    var n = xp.length;
+    if (x <= xp[0]) return fp[0] + (fp[1] - fp[0]) / (xp[1] - xp[0]) * (x - xp[0]);
+    if (x >= xp[n - 1]) return fp[n - 1] + (fp[n - 1] - fp[n - 2]) / (xp[n - 1] - xp[n - 2]) * (x - xp[n - 1]);
+    for (var i = 1; i < n; i++) if (x <= xp[i]) return fp[i - 1] + (fp[i] - fp[i - 1]) * (x - xp[i - 1]) / (xp[i] - xp[i - 1]);
+  }
+  function hDeQ(k, q) { return interp(q, COURBES[k][0], COURBES[k][1]); }
+  function impactDe(h) { var r = IMPACTS[0]; IMPACTS.forEach(function (c) { if (h >= c.h) r = c; }); return r; }
+  function couleurQ(rap) { // débit / débit de crue habituel
+    if (rap == null) return "#b9c4cc";
+    if (rap < 0.35) return "#7fb8e0"; if (rap < 0.7) return "#2f80c9"; if (rap < 1) return "#e0b100";
+    if (rap < 1.6) return "#e67e22"; return "#d64545";
+  }
+  function el(tag, at, txt) {
+    var e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (var a in at) e.setAttribute(a, at[a]);
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+  function vider(s) { while (s.firstChild) s.removeChild(s.firstChild); }
+
+  function charger(code, g) {
+    var depuis = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 19) + "Z";
+    var url = API + "?code_entite=" + code + "&grandeur_hydro=" + g + "&date_debut_obs=" + depuis +
+              "&size=5000&sort=asc&fields=date_obs,resultat_obs&format=json";
+    return fetch(url).then(function (r) { if (!r.ok && r.status !== 206) throw new Error(r.status); return r.json(); })
+      .then(function (js) {
+        return (js.data || []).map(function (d) { return { t: Date.parse(d.date_obs), v: d.resultat_obs / 1000 }; })
+          .filter(function (p) { return isFinite(p.t) && isFinite(p.v); }).sort(function (a, b) { return a.t - b.t; });
+      }).catch(function () { return []; });
+  }
+  // valeur interpolée à l'instant t (null si trou de plus de 6 h ou hors période)
+  function aT(pts, t) {
+    if (!pts.length || t < pts[0].t || t > pts[pts.length - 1].t) return null;
+    var lo = 0, hi = pts.length - 1;
+    while (hi - lo > 1) { var m = (lo + hi) >> 1; if (pts[m].t <= t) lo = m; else hi = m; }
+    var a = pts[lo], b = pts[hi];
+    if (b.t === a.t) return a.v;
+    if (b.t - a.t > 6 * 36e5) return null;
+    return a.v + (b.v - a.v) * (t - a.t) / (b.t - a.t);
+  }
+
+  /* ---------- modèle ---------- */
+  function prevoir(D) {
+    var H1 = 36e5, dernier = {};
+    ST.forEach(function (s) { var q = D[s.k].Q; dernier[s.k] = q.length ? q[q.length - 1].t : null; });
+    if (!dernier.chateaulin || !D.chateaulin.H.length) return null;
+    // stations en retard de plus de 3 h sur Châteaulin : considérées indisponibles
+    var dispo = {};
+    ST.forEach(function (s) { dispo[s.k] = dernier[s.k] && dernier[s.k] >= dernier.chateaulin - 3 * H1; });
+    var t0 = Infinity;
+    ST.forEach(function (s) { if (dispo[s.k]) t0 = Math.min(t0, dernier[s.k]); });
+    t0 = Math.floor(t0 / H1) * H1;
+    var prev = {}, lag = {};
+    function valeur(k, t) {
+      if (t <= t0) return aT(D[k].Q, t);
+      if (prev[k]) return prev[k][Math.round((t - t0) / H1) - 1];
+      return aT(D[k].Q, t0); // amont extrême : dernière valeur
+    }
+    var fiable = 0, chaineOk = true;
+    TR.forEach(function (tr) {
+      var q0 = aT(D[tr.aval].Q, t0);
+      var amontOk = dispo[tr.amont] && aT(D[tr.amont].Q, t0) != null;
+      var L = amontOk && aT(D[tr.amont].Q, t0) > tr.s ? tr.Lh : tr.L;
+      lag[tr.aval] = L;
+      var ref = amontOk ? aT(D[tr.amont].Q, t0 - L * H1) : null;
+      var arr = [];
+      for (var h = 1; h <= HORIZON; h++) {
+        var v = q0;
+        if (amontOk && ref != null) { var vf = valeur(tr.amont, t0 + (h - L) * H1); if (vf != null) v = q0 + tr.r * (vf - ref); }
+        arr.push(Math.max(v, 0));
+      }
+      prev[tr.aval] = arr;
+      // horizon fiable : somme des délais depuis la station disponible la plus en amont
+      if (amontOk && chaineOk) fiable += L; else { chaineOk = amontOk; fiable = amontOk ? L : 0; }
+    });
+    var h0 = aT(D.chateaulin.H, t0), q0c = aT(D.chateaulin.Q, t0);
+    var hp = prev.chateaulin.map(function (q, i) {
+      var p = h0 + hDeQ("chateaulin", q) - hDeQ("chateaulin", q0c);
+      var hh = i + 1, e = 0.008 + 0.0035 * hh;              // écart typique (validation 2019-2025)
+      var haut = p + e + (p > 1.8 ? 0.15 * hh / HORIZON : 0); // sous-estimation des fortes crues
+      return { t: t0 + hh * H1, h: p, bas: p - e, haut: haut, q: q };
+    });
+    return { t0: t0, h0: h0, q0: q0c, prev: prev, hp: hp, lag: lag, dispo: dispo, fiable: Math.min(fiable, HORIZON) };
+  }
+
+  /* ---------- rendu : tuiles ---------- */
+  function tuiles(D, M) {
+    var Hc = D.chateaulin.H, last = Hc[Hc.length - 1];
+    var il3 = aT(Hc, last.t - 3 * 36e5);
+    $("mpc-now").textContent = num(last.v, 2) + " m";
+    $("mpc-now-s").textContent = (il3 != null ? signe(Math.round((last.v - il3) * 100), 0) + " cm en 3 h · " : "") + "mesure de " + hm(last.t);
+    var max = M.hp.reduce(function (a, b) { return b.h > a.h ? b : a; }, M.hp[0]);
+    var monte = max.h > M.h0 + 0.03;
+    $("mpc-pic-k").textContent = monte ? "Pic prévu" : "Dans les 16 h";
+    if (monte) {
+      $("mpc-pic").textContent = num(max.h, 2) + " m";
+      $("mpc-pic-s").textContent = jourHeure(max.t) + " · " + num(max.bas, 2) + " à " + num(max.haut, 2) + " m";
+    } else {
+      var fin = M.hp[M.hp.length - 1];
+      $("mpc-pic").textContent = fin.h < M.h0 - 0.03 ? "En baisse" : "Stable";
+      $("mpc-pic-s").textContent = num(fin.h, 2) + " m prévu " + jourHeure(fin.t);
+    }
+    var hMax = Math.max(last.v, max.h), imp = impactDe(hMax), suiv = IMPACTS[IMPACTS.indexOf(imp) + 1];
+    $("mpc-imp").textContent = imp.lbl;
+    $("mpc-imp-tile").style.borderLeftColor = imp.col;
+    $("mpc-imp-s").textContent = suiv ? "prochain seuil : " + num(suiv.h, 2) + " m (" + signe(Math.round((suiv.h - hMax) * 100), 0) + " cm)" : "au-delà des crues récentes";
+    $("mpc-updated").textContent = "Prévision calculée à partir des mesures de " + hm(M.t0) + " · actualisation toutes les 10 min";
+    var manque = ST.filter(function (s) { return !M.dispo[s.k]; }).map(function (s) { return s.nom; });
+    var al = $("mpc-alerte");
+    if (manque.length) { al.hidden = false; al.textContent = "Mesures indisponibles ou en retard : " + manque.join(", ") + ". Prévision fiable sur " + M.fiable + " h seulement."; }
+    else al.hidden = true;
+  }
+
+  /* ---------- rendu : profil de propagation (vertical : amont en haut, Châteaulin en bas) ---------- */
+  function cumul(M) {
+    var cum = { chateaulin: 0 }, acc = 0;
+    for (var i = TR.length - 1; i >= 0; i--) { acc += M.lag[TR[i].aval]; cum[TR[i].amont] = acc; }
+    return cum;
+  }
+  function profil(D, M) {
+    var s = $("mpc-profil"); vider(s);
+    var W = Math.max(300, s.parentNode.clientWidth - 24), HT = 430;
+    s.setAttribute("viewBox", "0 0 " + W + " " + HT);
+    var cum = cumul(M), tmax = cum.poullaouen, top = 30, bot = HT - 40, xr = 78, xl = xr + 34;
+    function Y(k) { return bot - (bot - top) * cum[k] / tmax; }
+    var infos = ST.map(function (st) {
+      var q = D[st.k].Q, last = q.length ? q[q.length - 1] : null;
+      var ok = M.dispo[st.k] && last, q3 = ok ? aT(q, last.t - 3 * 36e5) : null;
+      return { st: st, q: ok ? last.v : null, d3: ok && q3 != null ? last.v - q3 : null, y: Y(st.k) };
+    });
+    var defs = el("defs", {}); s.appendChild(defs);
+    var grad = el("linearGradient", { id: "mpc-grad", x1: "0", x2: "0", y1: "0", y2: "1", gradientUnits: "userSpaceOnUse" });
+    grad.setAttribute("y1", top); grad.setAttribute("y2", bot); defs.appendChild(grad);
+    infos.forEach(function (o) {
+      grad.appendChild(el("stop", { offset: ((o.y - top) / (bot - top) * 100).toFixed(1) + "%", "stop-color": couleurQ(o.q == null ? null : o.q / o.st.qref) }));
+    });
+    // axe des temps (à gauche)
+    s.appendChild(el("text", { x: 2, y: 14, "font-size": 11.5, fill: "#5f7180" }, "Arrivée à Châteaulin"));
+    for (var h = 0; h <= tmax; h += 2) {
+      var yy = bot - (bot - top) * h / tmax;
+      s.appendChild(el("line", { x1: 38, x2: 44, y1: yy, y2: yy, stroke: "#9fb0bc" }));
+      s.appendChild(el("text", { x: 34, y: yy + 4, "text-anchor": "end", "font-size": 11, fill: "#5f7180" }, h === 0 ? "0 h" : "−" + h + " h"));
+    }
+    s.appendChild(el("line", { x1: 41, x2: 41, y1: top, y2: bot, stroke: "#9fb0bc" }));
+    // affluent Hyères, entre Kergloff et Châteauneuf
+    var yh = (Y("kergloff") + 28 + Y("chateauneuf") - 22) / 2;
+    s.appendChild(el("path", { d: "M" + (xr + 50) + " " + (yh - 6) + " Q " + (xr + 22) + " " + (yh - 4) + " " + (xr + 6) + " " + (yh + 10), fill: "none", stroke: "#b9c4cc", "stroke-width": 6, "stroke-linecap": "round" }));
+    s.appendChild(el("text", { x: xr + 56, y: yh - 2, "font-size": 11.5, "font-style": "italic", fill: "#5f7180" }, "+ Hyères (sans mesure en direct)"));
+    // rivière : épaisseur selon le débit
+    var w = infos.map(function (o) { return o.q == null ? 7 : Math.max(6, Math.min(44, 3.4 * Math.sqrt(o.q))); });
+    var g1 = "", g2 = "";
+    infos.forEach(function (o, i) { g1 += (i ? " L" : "M") + (xr - w[i] / 2).toFixed(1) + " " + o.y.toFixed(1); });
+    for (var j = infos.length - 1; j >= 0; j--) g2 += " L" + (xr + w[j] / 2).toFixed(1) + " " + infos[j].y.toFixed(1);
+    s.appendChild(el("path", { d: g1 + g2 + " Z", fill: "url(#mpc-grad)", stroke: "#fff", "stroke-width": 1, "stroke-linejoin": "round" }));
+    s.appendChild(el("line", { x1: xr, x2: xr, y1: top, y2: bot, stroke: "rgba(255,255,255,.8)", "stroke-width": 2, "stroke-dasharray": "6 22", class: "mpc-flux" }));
+    // étiquettes : décalées vers le bas si deux stations sont trop proches
+    var yl = [], gap = 50;
+    infos.forEach(function (o, i) { yl[i] = Math.max(o.y - 8, i ? yl[i - 1] + gap : -1e9); });
+    var deb = yl[infos.length - 1] + 44 - (HT - 2);
+    if (deb > 0) for (var k = infos.length - 1; k >= 0; k--) { yl[k] -= deb; if (k && yl[k] - yl[k - 1] >= gap) break; }
+    infos.forEach(function (o, i) {
+      var g = el("g", {}); s.appendChild(g);
+      g.appendChild(el("circle", { cx: xr, cy: o.y, r: 7, fill: "#fff", stroke: "#0b3c5d", "stroke-width": 2.5 }));
+      if (Math.abs(yl[i] + 8 - o.y) > 3) g.appendChild(el("path", { d: "M" + (xr + 9) + " " + o.y + " L" + (xl - 4) + " " + (yl[i] - 4), stroke: "#9fb0bc", fill: "none" }));
+      var mont = o.d3 != null && Math.abs(o.d3) > 0.05 * Math.max(o.q, 1);
+      g.appendChild(el("text", { x: xl, y: yl[i], "font-size": 13.5, "font-weight": 700, fill: "#0b3c5d" }, o.st.nom));
+      var t2 = el("text", { x: xl, y: yl[i] + 16, "font-size": 12.5, fill: "#1d2b36" });
+      t2.appendChild(el("tspan", {}, o.q == null ? "pas de mesure" : num(o.q, o.q < 10 ? 1 : 0) + " m³/s"));
+      if (mont) t2.appendChild(el("tspan", { fill: o.d3 > 0 ? "#c0392b" : "#2f80c9", "font-weight": 600 },
+        "  " + (o.d3 > 0 ? "↗ +" : "↘ −") + num(Math.abs(o.d3), Math.abs(o.d3) < 10 ? 1 : 0) + " en 3 h"));
+      else if (o.q != null) t2.appendChild(el("tspan", { fill: "#5f7180" }, "  → stable"));
+      g.appendChild(t2);
+      var t3 = st3(o, cum);
+      g.appendChild(el("text", { x: xl, y: yl[i] + 31, "font-size": 11.5, fill: "#5f7180" }, t3));
+    });
+    function st3(o, cum) {
+      if (o.st.k === "chateaulin") return "hauteur " + num(M.h0, 2) + " m";
+      return "arrive à Châteaulin dans ~" + cum[o.st.k] + " h";
+    }
+    $("mpc-leg-profil").innerHTML = [["#7fb8e0", "bas"], ["#2f80c9", "moyen"], ["#e0b100", "haut"], ["#e67e22", "crue"], ["#d64545", "forte crue"]]
+      .map(function (c) { return '<span><i style="background:' + c[0] + '"></i>' + c[1] + "</span>"; }).join("");
+  }
+
+  /* ---------- rendu : graphique de hauteur ---------- */
+  function graphique(D, M) {
+    var s = $("mpc-graph"); vider(s);
+    var W = Math.max(300, s.parentNode.clientWidth), Hh = W < 500 ? 280 : 320, ml = 38, mr = 10, mt = 12, mb = 30;
+    s.setAttribute("viewBox", "0 0 " + W + " " + Hh);
+    var obs = D.chateaulin.H.filter(function (p) { return p.t >= M.t0 - PASSE * 36e5; });
+    var ta = M.t0 - PASSE * 36e5, tb = M.t0 + HORIZON * 36e5;
+    var vals = obs.map(function (p) { return p.v; }).concat(M.hp.map(function (p) { return p.haut; }), M.hp.map(function (p) { return p.bas; }));
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var prochain = IMPACTS.filter(function (c) { return c.h > hi; })[0];
+    var ymin = Math.floor((lo - 0.1) * 10) / 10, ymax = Math.max(hi + 0.15, ymin + 0.6);
+    if (prochain && prochain.h - hi < 0.6) ymax = Math.max(ymax, prochain.h + 0.1); // montrer le prochain seuil s'il est proche
+    ymax = Math.ceil(ymax * 10) / 10;
+    function X(t) { return ml + (W - ml - mr) * (t - ta) / (tb - ta); }
+    function Y(v) { return mt + (Hh - mt - mb) * (1 - (v - ymin) / (ymax - ymin)); }
+    var clip = el("clipPath", { id: "mpc-clip" }); clip.appendChild(el("rect", { x: ml, y: mt, width: W - ml - mr, height: Hh - mt - mb }));
+    var defs = el("defs", {}); defs.appendChild(clip); s.appendChild(defs);
+    var zones = el("g", { "clip-path": "url(#mpc-clip)" }); s.appendChild(zones);
+    IMPACTS.forEach(function (c, i) {
+      var h2 = i + 1 < IMPACTS.length ? IMPACTS[i + 1].h : 9;
+      if (h2 < ymin || c.h > ymax) return;
+      zones.appendChild(el("rect", { x: ml, width: W - ml - mr, y: Y(Math.min(h2, ymax)), height: Math.max(0, Y(Math.max(c.h, ymin)) - Y(Math.min(h2, ymax))), fill: c.col, opacity: i === 0 ? 0.06 : 0.13 }));
+      if (c.h > ymin && c.h < ymax) {
+        zones.appendChild(el("line", { x1: ml, x2: W - mr, y1: Y(c.h), y2: Y(c.h), stroke: c.col, "stroke-width": 1.2, "stroke-dasharray": "4 3" }));
+        zones.appendChild(el("text", { x: ml + 6, y: Y(c.h) - 4 < mt + 12 ? Y(c.h) + 14 : Y(c.h) - 4, "font-size": 12, "font-weight": 600, fill: c.col }, num(c.h, 2) + " m · " + c.lbl));
+      }
+    });
+    // axes
+    var pas = ymax - ymin > 2 ? 0.5 : ymax - ymin > 0.8 ? 0.2 : 0.1;
+    for (var v = Math.ceil(ymin / pas) * pas; v <= ymax + 1e-9; v += pas) {
+      s.appendChild(el("line", { x1: ml, x2: W - mr, y1: Y(v), y2: Y(v), stroke: "#e3eaef" }));
+      s.appendChild(el("text", { x: ml - 5, y: Y(v) + 4, "text-anchor": "end", "font-size": 11.5, fill: "#5f7180" }, num(v, 1)));
+    }
+    s.appendChild(el("text", { x: 4, y: mt + 4, "font-size": 10.5, fill: "#5f7180" }, "m"));
+    var pasT = (W < 500 ? 12 : 6) * 36e5;
+    for (var t = Math.ceil(ta / pasT) * pasT; t <= tb; t += pasT) {
+      s.appendChild(el("line", { x1: X(t), x2: X(t), y1: Hh - mb, y2: Hh - mb + 4, stroke: "#9fb0bc" }));
+      var lab = new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", timeZone: "Europe/Paris" }).replace(/\s/g, "");
+      s.appendChild(el("text", { x: X(t), y: Hh - mb + 16, "text-anchor": "middle", "font-size": 11.5, fill: "#5f7180" }, lab));
+    }
+    s.appendChild(el("line", { x1: ml, x2: W - mr, y1: Hh - mb, y2: Hh - mb, stroke: "#9fb0bc" }));
+    // maintenant
+    s.appendChild(el("line", { x1: X(M.t0), x2: X(M.t0), y1: mt, y2: Hh - mb, stroke: "#0b3c5d", "stroke-width": 1, "stroke-dasharray": "2 3" }));
+    s.appendChild(el("text", { x: X(M.t0) + 4, y: Hh - mb - 6, "font-size": 11.5, fill: "#0b3c5d" }, "prévision →"));
+    // fourchette
+    var bande = "M" + X(M.t0) + " " + Y(M.h0);
+    M.hp.forEach(function (p) { bande += " L" + X(p.t).toFixed(1) + " " + Y(p.haut).toFixed(1); });
+    for (var i = M.hp.length - 1; i >= 0; i--) bande += " L" + X(M.hp[i].t).toFixed(1) + " " + Y(M.hp[i].bas).toFixed(1);
+    s.appendChild(el("path", { d: bande + " Z", fill: "#1f7bb6", opacity: 0.18 }));
+    // mesure
+    if (obs.length) {
+      var d = obs.map(function (p, k) { return (k ? "L" : "M") + X(p.t).toFixed(1) + " " + Y(p.v).toFixed(1); }).join(" ");
+      s.appendChild(el("path", { d: d, fill: "none", stroke: "#0b3c5d", "stroke-width": 2.4, "stroke-linejoin": "round" }));
+    }
+    // prévision
+    var dp = "M" + X(M.t0) + " " + Y(M.h0) + M.hp.map(function (p) { return " L" + X(p.t).toFixed(1) + " " + Y(p.h).toFixed(1); }).join("");
+    s.appendChild(el("path", { d: dp, fill: "none", stroke: "#1f7bb6", "stroke-width": 2.4, "stroke-dasharray": "6 4" }));
+    if (M.fiable < HORIZON) {
+      s.appendChild(el("rect", { x: X(M.t0 + M.fiable * 36e5), y: mt, width: X(tb) - X(M.t0 + M.fiable * 36e5), height: Hh - mt - mb, fill: "#fff", opacity: 0.55 }));
+    }
+    var max = M.hp.reduce(function (a, b) { return b.h > a.h ? b : a; }, M.hp[0]);
+    if (max.h > M.h0 + 0.03) {
+      s.appendChild(el("circle", { cx: X(max.t), cy: Y(max.h), r: 4.5, fill: "#1f7bb6", stroke: "#fff", "stroke-width": 1.5 }));
+      s.appendChild(el("text", { x: Math.min(X(max.t), W - mr - 2), y: Y(max.h) - 9, "text-anchor": X(max.t) > W - 80 ? "end" : "middle", "font-size": 13, "font-weight": 700, fill: "#1f7bb6" }, num(max.h, 2) + " m"));
+    }
+    // info-bulle
+    var curseur = el("line", { y1: mt, y2: Hh - mb, stroke: "#0b3c5d", "stroke-width": 1, opacity: 0 }); s.appendChild(curseur);
+    var tip = $("mpc-tip");
+    function bouger(ev) {
+      var r = s.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+      if (px < ml || px > W - mr) { cacher(); return; }
+      var t = ta + (px - ml) / (W - ml - mr) * (tb - ta), txt;
+      if (t <= M.t0) { var v = aT(obs, t); if (v == null) { cacher(); return; } txt = "<b>" + num(v, 2) + " m</b> mesuré<br>" + jourHeure(t); }
+      else {
+        var k = Math.min(M.hp.length - 1, Math.max(0, Math.round((t - M.t0) / 36e5) - 1)), p = M.hp[k]; t = p.t;
+        txt = "<b>" + num(p.h, 2) + " m</b> prévu (" + num(p.bas, 2) + " à " + num(p.haut, 2) + ")<br>" + jourHeure(t) + " · " + Math.round(p.q) + " m³/s<br>" + impactDe(p.h).lbl;
+      }
+      curseur.setAttribute("x1", X(t)); curseur.setAttribute("x2", X(t)); curseur.setAttribute("opacity", 0.5);
+      tip.innerHTML = txt; tip.hidden = false;
+      var left = X(t) / W * r.width, wTip = tip.offsetWidth;
+      tip.style.left = Math.max(0, Math.min(r.width - wTip, left - wTip / 2)) + "px";
+      tip.style.top = "4px";
+    }
+    function cacher() { tip.hidden = true; curseur.setAttribute("opacity", 0); }
+    s.onpointermove = bouger; s.onpointerdown = bouger; s.onpointerleave = cacher;
+  }
+
+  /* ---------- rendu : échelle des impacts ---------- */
+  function jauge(D, M) {
+    var s = $("mpc-jauge"); vider(s);
+    var hmin = -0.2, hmax = 3.4, top = 10, bot = 350, xL = 40, wB = 28;
+    function Y(v) { return bot - (bot - top) * (v - hmin) / (hmax - hmin); }
+    IMPACTS.forEach(function (c, i) {
+      var h1 = i ? c.h : hmin, h2 = i + 1 < IMPACTS.length ? IMPACTS[i + 1].h : hmax;
+      s.appendChild(el("rect", { x: xL, y: Y(h2), width: wB, height: Y(h1) - Y(h2), fill: c.col, opacity: 0.85 }));
+    });
+    for (var v = 0; v <= 3.01; v += 0.5) {
+      s.appendChild(el("line", { x1: xL - 4, x2: xL, y1: Y(v), y2: Y(v), stroke: "#5f7180" }));
+      s.appendChild(el("text", { x: xL - 7, y: Y(v) + 4, "text-anchor": "end", "font-size": 11.5, fill: "#5f7180" }, num(v, 1)));
+    }
+    s.appendChild(el("text", { x: xL - 7, y: Y(3.3) + 4, "text-anchor": "end", "font-size": 11.5, fill: "#5f7180" }, "m"));
+    var last = D.chateaulin.H[D.chateaulin.H.length - 1].v;
+    var max = M.hp.reduce(function (a, b) { return b.h > a.h ? b : a; }, M.hp[0]);
+    var reps = [{ h: last, col: "#0b3c5d", l1: "maintenant", l2: num(last, 2) + " m" }];
+    if (max.h > last + 0.03) reps.push({ h: max.h, col: "#1f7bb6", l1: "pic prévu", l2: num(max.h, 2) + " m" });
+    reps.forEach(function (r) { r.y = Y(Math.max(hmin, Math.min(hmax, r.h))); r.yl = r.y; });
+    if (reps.length === 2 && reps[0].yl - reps[1].yl < 34) { var m = (reps[0].y + reps[1].y) / 2; reps[1].yl = m - 17; reps[0].yl = m + 17; }
+    reps.forEach(function (r) {
+      s.appendChild(el("line", { x1: xL - 2, x2: xL + wB + 2, y1: r.y, y2: r.y, stroke: r.col, "stroke-width": 3.5 }));
+      s.appendChild(el("path", { d: "M" + (xL + wB + 3) + " " + r.y + " L" + (xL + wB + 12) + " " + r.yl, stroke: r.col, fill: "none", "stroke-width": 1.5 }));
+      s.appendChild(el("text", { x: xL + wB + 15, y: r.yl - 2, "font-size": 11.5, fill: r.col }, r.l1));
+      s.appendChild(el("text", { x: xL + wB + 15, y: r.yl + 12, "font-size": 13, "font-weight": 700, fill: r.col }, r.l2));
+    });
+    // liste des impacts
+    var ici = impactDe(Math.max(last, max.h));
+    $("mpc-impacts").innerHTML = IMPACTS.slice().reverse().map(function (c) {
+      return '<li style="border-left-color:' + c.col + '"' + (c === ici ? ' class="mpc-ici"' : "") + "><b>" +
+        (c.h ? "dès " + num(c.h, 2) + " m · " : "moins de 1,30 m · ") + c.lbl + "</b>" + (c === ici ? " ◀" : "") + "<small>" + c.txt + "</small></li>";
+    }).join("");
+  }
+
+  /* ---------- rendu : tableau ---------- */
+  function tableau(D, M) {
+    var cum = cumul(M);
+    var lignes = ST.map(function (s) {
+      var q = D[s.k].Q, h = D[s.k].H, ql = q.length ? q[q.length - 1] : null, hl = h.length ? h[h.length - 1] : null;
+      var q3 = ql ? aT(q, ql.t - 3 * 36e5) : null;
+      var tend = ql && q3 != null ? (ql.v - q3 > 0 ? "+" : "−") + num(Math.abs(ql.v - q3), Math.abs(ql.v - q3) < 10 ? 1 : 0) : "–";
+      return "<tr><td><b>" + s.nom + "</b><br><small>" + s.det + "</small></td><td>" + (hl ? num(hl.v, 2) + " m" : "–") +
+        "</td><td>" + (ql ? num(ql.v, ql.v < 10 ? 1 : 0) + " m³/s" : "–") + "</td><td>" + tend + "</td><td>" +
+        (cum[s.k] ? "~" + cum[s.k] + " h" : "–") + "</td></tr>";
+    });
+    $("mpc-table").innerHTML = "<thead><tr><th>Station</th><th>Hauteur</th><th>Débit</th><th>en 3 h</th><th>Délai</th></tr></thead><tbody>" + lignes.join("") + "</tbody>";
+  }
+
+  /* ---------- chargement ---------- */
+  var dernier = null, minuteur = 0, largeur = 0;
+  function dessiner() { if (!dernier) return; var D = dernier[0], M = dernier[1]; largeur = $("mpc-widget").clientWidth;
+    tuiles(D, M); profil(D, M); graphique(D, M); jauge(D, M); tableau(D, M); }
+  window.addEventListener("resize", function () {
+    clearTimeout(minuteur); minuteur = setTimeout(function () { if ($("mpc-widget").clientWidth !== largeur) dessiner(); }, 200);
+  });
+  function actualiser() {
+    var D = {}, attentes = [];
+    ST.forEach(function (s) {
+      D[s.k] = { Q: [], H: [] };
+      attentes.push(charger(s.code, "Q").then(function (r) { D[s.k].Q = r; }));
+      attentes.push(charger(s.code, "H").then(function (r) { D[s.k].H = r; }));
+    });
+    Promise.all(attentes).then(function () {
+      var M = prevoir(D);
+      if (!M) { $("mpc-updated").textContent = "Mesures de Châteaulin indisponibles pour le moment (Hub'Eau). Nouvel essai dans 10 min."; return; }
+      dernier = [D, M]; dessiner();
+    });
+  }
+  actualiser();
+  setInterval(actualiser, 10 * 60000);
+})();
+</script>
+<script>
+  // Signale la hauteur du contenu à l'application pour que le cadre s'ajuste (pas de barre de défilement)
+  (function () {
+    if (window.parent === window) return;
+    var last = 0;
+    function envoyer() {
+      var h = Math.ceil(document.body.getBoundingClientRect().height);
+      if (h && h !== last) { last = h; window.parent.postMessage({ hydraulneHauteur: h }, "*"); }
+    }
+    if (window.ResizeObserver) new ResizeObserver(envoyer).observe(document.body);
+    window.addEventListener("load", envoyer);
+  })();
+</script>
+</body>
+</html>
