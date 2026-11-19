@@ -1,0 +1,147 @@
+{
+ "debut": "2026-11-19T22:17:16.785527+00:00",
+ "stations": {
+  "J360181001": {
+   "QmnJ": 9463,
+   "HIXnJ": 9461,
+   "QIXnJ": 9496,
+   "horaire_H": 54721,
+   "horaire_Q": 54721
+  },
+  "J361181001": {
+   "QmnJ": 0,
+   "HIXnJ": 0,
+   "QIXnJ": 0,
+   "horaire_H": 0,
+   "horaire_Q": 0
+  },
+  "J362401001": {
+   "QmnJ": 9497,
+   "HIXnJ": 9497,
+   "QIXnJ": 9497,
+   "horaire_H": 50417,
+   "horaire_Q": 50417
+  },
+  "J362401101": {
+   "QmnJ": 0,
+   "HIXnJ": 0,
+   "QIXnJ": 0,
+   "horaire_H": 0,
+   "horaire_Q": 0
+  },
+  "J363181001": {
+   "QmnJ": 867,
+   "HIXnJ": 7094,
+   "QIXnJ": 867,
+   "horaire_H": 141431,
+   "horaire_Q": 7065
+  },
+  "J363181002": {
+   "QmnJ": 0,
+   "HIXnJ": 0,
+   "QIXnJ": 0,
+   "horaire_H": 0,
+   "horaire_Q": 0
+  },
+  "J363181003": {
+   "QmnJ": 5713,
+   "HIXnJ": 5660,
+   "QIXnJ": 5712,
+   "horaire_H": 51283,
+   "horaire_Q": 51283
+  },
+  "J363181101": {
+   "QmnJ": 0,
+   "HIXnJ": 0,
+   "QIXnJ": 0,
+   "horaire_H": 0,
+   "horaire_Q": 0
+  },
+  "J381181001": {
+   "QmnJ": 9497,
+   "HIXnJ": 9497,
+   "QIXnJ": 9497,
+   "horaire_H": 60344,
+   "horaire_Q": 60341
+  },
+  "J381181002": {
+   "QmnJ": 0,
+   "HIXnJ": 0,
+   "QIXnJ": 0,
+   "horaire_H": 0,
+   "horaire_Q": 0
+  },
+  "J382181001": {
+   "QmnJ": 9497,
+   "HIXnJ": 9497,
+   "QIXnJ": 9497,
+   "horaire_H": 53422,
+   "horaire_Q": 53402
+  },
+  "J382182001": {
+   "QmnJ": 5711,
+   "HIXnJ": 5710,
+   "QIXnJ": 5710,
+   "horaire_H": 37467,
+   "horaire_Q": 37451
+  },
+  "J382183001": {
+   "QmnJ": 0,
+   "HIXnJ": 7448,
+   "QIXnJ": 0,
+   "horaire_H": 179581,
+   "horaire_Q": 0
+  },
+  "J3601810": {
+   "QmnJ": 18926,
+   "QIXnJ": 18992
+  },
+  "J3611810": {
+   "QmnJ": 0,
+   "QIXnJ": 0
+  },
+  "J3624010": {
+   "QmnJ": 18994,
+   "QIXnJ": 18994
+  },
+  "J3624011": {
+   "QmnJ": 0,
+   "QIXnJ": 0
+  },
+  "J3631810": {
+   "QmnJ": 13160,
+   "QIXnJ": 13158
+  },
+  "J3631811": {
+   "QmnJ": 0,
+   "QIXnJ": 0
+  },
+  "J3811810": {
+   "QmnJ": 18994,
+   "QIXnJ": 18994
+  },
+  "J3821810": {
+   "QmnJ": 18994,
+   "QIXnJ": 18994
+  },
+  "J3821820": {
+   "QmnJ": 11422,
+   "QIXnJ": 11420
+  },
+  "J3821830": {
+   "QmnJ": 0,
+   "QIXnJ": 0
+  }
+ },
+ "erreurs": [],
+ "hydroportail": {
+  "variante": {
+   "hydro_series[variableType]": "simple_and_interpolated_and_hourly_variable",
+   "hydro_series[simpleAndInterpolatedAndHourlyVariable]": "{g}",
+   "hydro_series[statusData]": "most_valid"
+  },
+  "entete": "navigateur",
+  "jours_par_requete": 366
+ },
+ "fin": "2026-11-19T22:48:00.566417+00:00"
+}
