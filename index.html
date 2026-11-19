@@ -150,6 +150,7 @@
 #mwm-widget #mwm-aulne small.mwm-date,#mwm-widget #mwm-nappe small.mwm-date{font-size:calc(9.5px*var(--k))}
 #mwm-widget .mwm-pill{display:inline-block;color:#fff;font-weight:700;font-size:calc(12px*var(--k));border-radius:calc(999px*var(--k));padding:calc(3px*var(--k)) calc(10px*var(--k))}
 #mwm-widget .mwm-coef{font-weight:800;color:var(--mwm-navy)}
+#mwm-widget .mwm-cf-fl{cursor:help;font-size:.85em;margin-right:.22em}   /* tendance du coefficient depuis la pleine mer précédente */
 #mwm-widget .mwm-vague{width:calc(22px*var(--k));height:calc(12px*var(--k));vertical-align:middle;margin:0 calc(3px*var(--k)) calc(2px*var(--k)) 0;overflow:visible}
 #mwm-widget .mwm-up{color:#1f7bb6;font-weight:700}
 #mwm-widget .mwm-down{color:#c56a1c;font-weight:700}
@@ -367,6 +368,28 @@
       '<polyline points="' + pts.join(" ") + '" fill="none" stroke="#9cb8cc" stroke-width="1.4"/>' +
       '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="2.6" fill="' + col + '" stroke="#fff" stroke-width="1"/></svg>';
   }
+  /* Tendance du coefficient : comparé à celui de la pleine mer de Brest précédente (vignette SHOM, ou à défaut — pleine
+     mer de la veille — prédictions SHOM conservées par l'appli). ↗ en hausse, ↘ en baisse, → identique. */
+  var pmArchive = [];                                   // [{ t, coef }] pleines mers de Brest déjà passées
+  function chargerPredictions() {
+    fetch("https://appli.antreizh.fr/data/maree-brest/predictions-shom.csv", { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.text() : ""; }).then(function (txt) {
+        pmArchive = txt.split("\n").map(function (l) { return l.split(";"); })
+          .filter(function (c) { return c[1] === "PM" && c[3] && /^\d{4}-/.test(c[0]); })
+          .map(function (c) { return { t: new Date(c[0]).getTime(), coef: +c[3] }; });
+        renderTide();
+      }).catch(function () {});
+  }
+  function flecheCoef(pm) {
+    var hB = function (e) { return (e.brest || e.date).getTime(); }, t0 = hB(pm), pr = null;
+    (tides || []).filter(function (e) { return e.type === "PM" && e.coef != null; })
+      .map(function (e) { return { t: hB(e), coef: e.coef }; }).concat(pmArchive)
+      .forEach(function (e) { if (e.t < t0 - 3 * 3600e3 && (!pr || e.t > pr.t)) pr = e; });   // la pleine mer d'avant (≈ 12 h 25 plus tôt)
+    if (!pr || t0 - pr.t > 18 * 3600e3) return "";
+    var d = pm.coef - pr.coef, fl = d > 0 ? "↗" : d < 0 ? "↘" : "→";
+    return '<span class="mwm-cf-fl" title="' + (d > 0 ? "En hausse" : d < 0 ? "En baisse" : "Stable") + " depuis la pleine mer précédente (coef. " +
+      pr.coef + ", " + new Date(pr.t).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }) + " à " + hm(new Date(pr.t)) + ')">' + fl + "</span>";
+  }
   function renderTide() {
     if (!tides) return;
     var now = new Date(), prev = null, next = null;
@@ -375,7 +398,7 @@
     if (!next) return na("mwm-tide");
     var rising = prev ? prev.type === "BM" : next.type === "PM";
     $("mwm-tide").innerHTML =
-      (pm ? '<span class="mwm-coef">Coef. ' + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span>" : "") +
+      (pm ? '<span class="mwm-coef">' + flecheCoef(pm) + "Coef. " + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span>" : "") +
       '<span title="' + (prev ? (prev.type === "PM" ? "Pleine mer " : "Basse mer ") + hm(prev.date) + " → " : "") + (next.type === "PM" ? "pleine mer " : "basse mer ") + hm(next.date) + '" class="' + (rising ? "mwm-up" : "mwm-down") + '">' + vague(phaseMaree(prev, next, now), rising ? "#1f7bb6" : "#c56a1c", "mwm-vague") + (rising ? "Montante" : "Descendante") + "</span>" +
       "<small>" + (next.type === "PM" ? "Pleine mer" : "Basse mer") + (estDemain(next.date, now) ? " demain " : " ") + hm(next.date) + "</small>";
   }
@@ -661,6 +684,7 @@
   tick(); prechargerAulne(); refreshAll();
   setInterval(refreshAll, CFG.refreshMinutes * 60000);
   setInterval(function () { tick(); renderTide(); }, 60000);
+  chargerPredictions(); setInterval(chargerPredictions, 6 * 60 * 60000);   // coefficients de la veille (tendance)
 })();
 </script>
 <!-- ===== fin du mini-widget ===== -->
@@ -1518,15 +1542,15 @@
 
 <section class="appli-onglet" id="o-cadran" role="tabpanel" aria-labelledby="b-cadran" hidden>
 <!-- Cadran de marée : page widgets/cadran-maree.html (même widget que sur le site antreizh.fr) -->
-<iframe class="appli-meteo" src="widgets/cadran-maree.html?v=148" title="Cadran de marée et de vent à Guily Glaz" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/cadran-maree.html?v=149" title="Cadran de marée et de vent à Guily Glaz" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-histo" role="tabpanel" aria-labelledby="b-histo" hidden>
 <!-- Histo cadran : page widgets/histo-cadran.html (rejeu de l'historique, même widget que sur le site antreizh.fr) -->
-<iframe class="appli-meteo" src="widgets/histo-cadran.html?v=148" title="Histo cadran : rejeu des marées et vents à Guily Glaz" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/histo-cadran.html?v=149" title="Histo cadran : rejeu des marées et vents à Guily Glaz" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-vent" role="tabpanel" aria-labelledby="b-vent" hidden>
 <!-- page externe (site antreizh.fr) : hauteur fixée à l'écran, défilement dans le cadre ; ?v= augmenté avec la version pour que les téléphones rechargent la page -->
-<iframe class="appli-meteo appli-externe" src="https://www.antreizh.fr/widgets/vent/widget-vent.html?v=148" title="Vent et pression à Lanvéoc-Poulmic" loading="lazy"></iframe>
+<iframe class="appli-meteo appli-externe" src="https://www.antreizh.fr/widgets/vent/widget-vent.html?v=149" title="Vent et pression à Lanvéoc-Poulmic" loading="lazy"></iframe>
 </section>
 <section class="appli-onglet" id="o-hydro" role="tabpanel" aria-labelledby="b-hydro" hidden>
 <!-- ===== Widget Hydro (identique à widget-hydro.html) ===== -->
@@ -2063,36 +2087,36 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=148" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=149" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=148" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=149" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=148" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=149" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=148" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=148" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=149" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=149" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=148" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=148" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=149" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=149" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-spezet" role="tabpanel" aria-labelledby="b-spezet" hidden>
-<iframe class="appli-meteo" src="meteo-spezet-nappe-pluie.html?v=148" title="Pluviométrie et nappe à Spézet" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-spezet-nappe-pluie.html?v=149" title="Pluviométrie et nappe à Spézet" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-ss-sp" role="tabpanel" aria-labelledby="b-ss-sp" hidden>
-<iframe class="appli-meteo" src="meteo-nappes-ss-sp.html?v=148" title="Nappes de Saint-Ségal et de Spézet : écart à la moyenne" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappes-ss-sp.html?v=149" title="Nappes de Saint-Ségal et de Spézet : écart à la moyenne" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 <section class="appli-onglet" id="o-onde-maree" role="tabpanel" aria-labelledby="b-onde-maree" hidden>
 <!-- Onde marée : page widgets/onde-maree.html (carte animée de la marée dans l'Aulne maritime, de Landévennec à Guily Glaz) -->
-<iframe class="appli-meteo" src="widgets/onde-maree.html?v=148" title="Onde marée : carte animée de la marée dans l'Aulne maritime" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/onde-maree.html?v=149" title="Onde marée : carte animée de la marée dans l'Aulne maritime" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-bulle" role="tabpanel" aria-labelledby="b-bulle" hidden>
 <!-- Bulle marée-vent : page widgets/bulle-maree-vent.html (bulle 3D des 24 dernières heures, mêmes mesures que le Cadran) -->
-<iframe class="appli-meteo" src="widgets/bulle-maree-vent.html?v=148" title="Bulle marée-vent : marée à Guily Glaz et vent des dernières 24 heures en 3D" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/bulle-maree-vent.html?v=149" title="Bulle marée-vent : marée à Guily Glaz et vent des dernières 24 heures en 3D" loading="lazy" scrolling="no"></iframe>
 </section>
 </main>
 

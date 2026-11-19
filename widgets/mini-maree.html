@@ -53,6 +53,7 @@
 #mwt-widget .mwt-r2{text-align:right}
 #mwt-widget .mwt-zoom{font-size:calc(10px*var(--k));margin-left:calc(4px*var(--k));color:#1f7bb6;text-decoration:underline;text-underline-offset:2px}
 #mwt-widget .mwt-coef{font-weight:800;color:var(--mwt-navy)}
+#mwt-widget .mwt-cf-fl{cursor:help;font-size:.85em;margin-right:.22em}   /* tendance du coefficient depuis la pleine mer précédente */
 #mwt-widget .mwt-vague{width:calc(16px*var(--k));height:calc(9px*var(--k));vertical-align:middle;margin:0 calc(2px*var(--k)) calc(2px*var(--k)) calc(3px*var(--k));overflow:visible}
 #mwt-widget .mwt-up{color:#1f7bb6;font-weight:700}
 #mwt-widget .mwt-down{color:#c56a1c;font-weight:700}
@@ -95,6 +96,9 @@
     var w = root.clientWidth; if (!w) return;
     var k = Math.max(0.75, Math.min(2.2, w / 340));                 // 340 px de large = taille de référence
     root.style.setProperty("--k", k.toFixed(3));
+    // rangée marée trop large (coefficient, flèche, sens de la marée sur une ligne) : on réduit un peu le texte
+    var rang = root.querySelector(".mwt-row");
+    for (var i = 0; rang && i < 8 && rang.scrollWidth > rang.clientWidth + 1 && k > 0.6; i++) root.style.setProperty("--k", (k *= 0.97).toFixed(3));
   }
   fit();
   if (window.ResizeObserver) new ResizeObserver(fit).observe(root);
@@ -201,6 +205,28 @@
       '<polyline points="' + pts.join(" ") + '" fill="none" stroke="#9cb8cc" stroke-width="1.4"/>' +
       '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="2.6" fill="' + col + '" stroke="#fff" stroke-width="1"/></svg>';
   }
+  /* Tendance du coefficient : comparé à celui de la pleine mer de Brest précédente (vignette SHOM, ou à défaut — pleine
+     mer de la veille — prédictions SHOM conservées par l'appli). ↗ en hausse, ↘ en baisse, → identique. */
+  var pmArchive = [];                                   // [{ t, coef }] pleines mers de Brest déjà passées
+  function chargerPredictions() {
+    fetch("https://appli.antreizh.fr/data/maree-brest/predictions-shom.csv", { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.text() : ""; }).then(function (txt) {
+        pmArchive = txt.split("\n").map(function (l) { return l.split(";"); })
+          .filter(function (c) { return c[1] === "PM" && c[3] && /^\d{4}-/.test(c[0]); })
+          .map(function (c) { return { t: new Date(c[0]).getTime(), coef: +c[3] }; });
+        renderTide();
+      }).catch(function () {});
+  }
+  function flecheCoef(pm) {
+    var hB = function (e) { return (e.brest || e.date).getTime(); }, t0 = hB(pm), pr = null;
+    (tides || []).filter(function (e) { return e.type === "PM" && e.coef != null; })
+      .map(function (e) { return { t: hB(e), coef: e.coef }; }).concat(pmArchive)
+      .forEach(function (e) { if (e.t < t0 - 3 * 3600e3 && (!pr || e.t > pr.t)) pr = e; });   // la pleine mer d'avant (≈ 12 h 25 plus tôt)
+    if (!pr || t0 - pr.t > 18 * 3600e3) return "";
+    var d = pm.coef - pr.coef, fl = d > 0 ? "↗" : d < 0 ? "↘" : "→";
+    return '<span class="mwt-cf-fl" title="' + (d > 0 ? "En hausse" : d < 0 ? "En baisse" : "Stable") + " depuis la pleine mer précédente (coef. " +
+      pr.coef + ", " + new Date(pr.t).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }) + " à " + hm(new Date(pr.t)) + ')">' + fl + "</span>";
+  }
   function renderTide() {
     if (!tides) return;
     var now = new Date(), prev = null, next = null;
@@ -209,9 +235,10 @@
     if (!next) return na("mwt-tide");
     var rising = prev ? prev.type === "BM" : next.type === "PM";
     $("mwt-tide").innerHTML =
-      (pm ? '<span class="mwt-coef">Coef. ' + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span>" : "") +
+      (pm ? '<span class="mwt-coef">' + flecheCoef(pm) + "Coef. " + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span>" : "") +
       '<span title="' + (prev ? (prev.type === "PM" ? "Pleine mer " : "Basse mer ") + hm(prev.date) + " → " : "") + (next.type === "PM" ? "pleine mer " : "basse mer ") + hm(next.date) + '" class="' + (rising ? "mwt-up" : "mwt-down") + '">' + vague(phaseMaree(prev, next, now), rising ? "#1f7bb6" : "#c56a1c", "mwt-vague") + (rising ? "Montante" : "Descendante") + "</span>";
     $("mwt-next").textContent = (next.type === "PM" ? "Pleine mer" : "Basse mer") + (estDemain(next.date, now) ? " demain " : " ") + hm(next.date);
+    fit();                                           // la rangée doit tenir sur une ligne
   }
   function loadTide() {
     var host = $("mwt-shom-host"); host.innerHTML = "";
@@ -238,6 +265,7 @@
   tick(); refreshAll();
   setInterval(refreshAll, CFG.refreshMinutes * 60000);
   setInterval(function () { tick(); renderTide(); }, 60000);
+  chargerPredictions(); setInterval(chargerPredictions, 6 * 60 * 60000);   // coefficients de la veille (tendance)
 })();
 </script>
 <script>
