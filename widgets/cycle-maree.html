@@ -90,6 +90,7 @@
 #mwc-widget .mwc-sub1 .mwc-note{display:block;font-size:.72em;font-weight:400;color:var(--mwc-muted);line-height:1.3;margin-top:calc(1px*var(--kh))}
 #mwc-widget #mwc-proch:empty{display:none}
 #mwc-widget .mwc-coef{font-weight:700;font-size:1em;color:var(--mwc-navy)!important}   /* même taille et graisse que « montante » */
+#mwc-widget .mwc-cf-fl{font-weight:700;cursor:help}   /* tendance du coefficient depuis la pleine mer précédente */
 #mwc-widget .mwc-shom-host iframe{position:absolute;left:-10000px;top:0;width:420px;height:700px;border:0;visibility:hidden}
 #mwc-widget .mwc-up{color:var(--mwc-blue)!important;font-weight:700}
 #mwc-widget .mwc-down{color:#c56a1c!important;font-weight:700}
@@ -146,6 +147,7 @@
     refreshMinutes: 5,              // le marégraphe de Guily Glaz mesure toutes les 5 minutes
     trouMinutes: 20,                // au-delà de cet écart entre deux mesures, la courbe est interrompue
     urlArchive: "https://appli.antreizh.fr/data/maree-guily-glaz/",   // historique archivé (trous Hub'Eau comblés via Vigicrues)
+    urlPredictions: "https://appli.antreizh.fr/data/maree-brest/predictions-shom.csv",   // coefficients SHOM conservés (veille comprise)
     shomPort: "BREST"               // port de référence SHOM (coefficient et prédictions)
   };
   /* ============================================================== */
@@ -495,9 +497,33 @@
   var trendHTML = "";
   // Prolongement du titre : « · Coef. 30 · ↑ montante · −0,2 m »
   var hauteurHTML = "";
+  /* Tendance du coefficient : comparé à celui de la pleine mer précédente (vignette SHOM, ou à défaut — pleine mer
+     de la veille — prédictions SHOM conservées par l'appli). ↗ en hausse, ↘ en baisse, → identique. */
+  var pmArchive = [];                                   // [{ t, coef }] pleines mers de Brest déjà passées
+  function chargerPredictions() {
+    fetch(CFG.urlPredictions, { cache: "no-cache" }).then(function (r) { return r.ok ? r.text() : ""; }).then(function (txt) {
+      pmArchive = txt.split("\n").map(function (l) { return l.split(";"); })
+        .filter(function (c) { return c[1] === "PM" && c[3] && /^\d{4}-/.test(c[0]); })
+        .map(function (c) { return { t: new Date(c[0]).getTime(), coef: +c[3] }; });
+      renderState();
+    }).catch(function () {});
+  }
+  function coefPrecedent(pm) {
+    var t0 = pm.date.getTime(), best = null;
+    (tides || []).filter(function (e) { return e.type === "PM" && e.coef != null; })
+      .map(function (e) { return { t: e.date.getTime(), coef: e.coef }; }).concat(pmArchive)
+      .forEach(function (e) { if (e.t < t0 - 3 * HEURE && (!best || e.t > best.t)) best = e; });   // la pleine mer d'avant (≈ 12 h 25 plus tôt)
+    return best && t0 - best.t < 18 * HEURE ? best : null;
+  }
+  function flecheCoef(pm) {
+    var pr = coefPrecedent(pm); if (!pr) return "";
+    var d = pm.coef - pr.coef, fl = d > 0 ? "↗" : d < 0 ? "↘" : "→";
+    return '<span class="mwc-cf-fl" title="' + (d > 0 ? "En hausse" : d < 0 ? "En baisse" : "Stable") + " depuis la pleine mer précédente (coef. " +
+      pr.coef + ", " + new Date(pr.t).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }) + " à " + hm(new Date(pr.t)) + ')">' + fl + "</span> ";
+  }
   function renderState() {
     var now = new Date(), pm = tides ? choisirCoef(tides, now) : null, parts = [];
-    if (pm) parts.push('<span class="mwc-coef">Coef. ' + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span>");
+    if (pm) parts.push('<span class="mwc-coef">' + flecheCoef(pm) + "Coef. " + pm.coef + (estDemain(pm.date, now) ? " (J+1)" : "") + "</span>");
     if (trendHTML) parts.push(trendHTML);
     if (hauteurHTML) parts.push(hauteurHTML);
     var html = parts.join("");
@@ -823,6 +849,7 @@
   root.querySelector(".mwc-table").addEventListener("toggle", fit);   // tableau déplié : on recalcule la place
   setInterval(load, CFG.refreshMinutes * 60000);                       // mesures de Guily Glaz
   setInterval(loadShom, 60 * 60000);                                   // prédictions SHOM : une fois par heure
+  chargerPredictions(); setInterval(chargerPredictions, 6 * 60 * 60000);   // coefficients de la veille (tendance)
   setInterval(tick, 60000);
 })();
 </script>
