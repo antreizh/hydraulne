@@ -1,0 +1,61 @@
+# Secours du marégraphe de Guily Glaz : toutes les heures, vérifie que Hub'Eau répond.
+# - Hub'Eau répond : rien à faire (les widgets lisent Hub'Eau en direct).
+# - Hub'Eau en panne : relance l'archivage (mesures reprises de Vigicrues) et republie data/, pour que le Cycle de
+#   marée, le Cadran et la Bulle, qui lisent alors cet historique, restent à jour à l'heure près.
+# Ajouté le 19/11/2026 après une panne de Hub'Eau de plus de 10 heures (réponse vide au lieu des mesures).
+# Lancement manuel possible : onglet « Actions » du dépôt > « Secours Guily Glaz » > « Run workflow ».
+name: Secours Guily Glaz
+
+on:
+  schedule:
+    - cron: "37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: actualisation-releves
+  cancel-in-progress: false
+
+jobs:
+  secours:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Hub'Eau répond-il ?
+        id: hubeau
+        run: |
+          url="https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=J382183001&grandeur_hydro=H&size=1&sort=desc&fields=date_obs,resultat_obs"
+          if curl -sf -m 40 "$url" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']; assert d; print('Dernière mesure Hub\'Eau :', d[0]['date_obs'])"; then
+            echo "panne=non" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Hub'Eau ne répond pas : archivage de secours (Vigicrues)"
+            echo "panne=oui" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.hubeau.outputs.panne == 'oui'
+
+      - name: Archiver les marées (mesures de Guily Glaz reprises de Vigicrues)
+        if: steps.hubeau.outputs.panne == 'oui'
+        run: python3 .github/scripts/archiver_maregraphe.py .
+
+      - name: Publier l'historique
+        if: steps.hubeau.outputs.panne == 'oui'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add -N data/ 2>/dev/null || true
+          if git diff --quiet -- data/; then
+            echo "Aucune mesure nouvelle."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git commit -m "Secours Guily Glaz : historique complété par Vigicrues ($(date -u +%Y-%m-%dT%H:%MZ))"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" >/dev/null || echo "Republication : demande refusée, elle se fera au prochain envoi."
