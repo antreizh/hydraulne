@@ -87,7 +87,7 @@
 /* « Marée : Guily Glaz · Port-Launay » : même taille, police et couleur que « Marée » */
 #mwc-widget .mwc-sub1{display:inline;margin:0;font-size:1em;font-weight:700;color:inherit}
 #mwc-widget .mwc-sub1 span{white-space:normal}
-#mwc-widget .mwc-sub1 .mwc-note{font-size:.72em;font-weight:400;color:var(--mwc-muted)}
+#mwc-widget .mwc-sub1 .mwc-note{display:block;font-size:.72em;font-weight:400;color:var(--mwc-muted);line-height:1.3;margin-top:calc(1px*var(--kh))}
 #mwc-widget #mwc-proch:empty{display:none}
 #mwc-widget .mwc-coef{font-weight:700;font-size:1em;color:var(--mwc-navy)!important}   /* même taille et graisse que « montante » */
 #mwc-widget .mwc-shom-host iframe{position:absolute;left:-10000px;top:0;width:420px;height:700px;border:0;visibility:hidden}
@@ -264,7 +264,7 @@
       .catch(function () {
         pts = []; ptsFit = []; theo = null;
         msgVide = "Mesures du marégraphe indisponibles pour le moment.";
-        hauteurHTML = ""; sousTitre("données indisponibles");
+        hauteurHTML = ""; sousTitre("Données indisponibles");
         trendHTML = ""; renderState(); draw();
       });
   }
@@ -504,7 +504,7 @@
     if ($("mwc-info").innerHTML !== html) { $("mwc-info").innerHTML = html; fit(); }
   }
 
-  // Sous-titre « Guily Glaz · Port-Launay, mesure à 09:10 » (la virgule reste en fin de ligne si le texte est coupé)
+  // Sous-titre : « Guily Glaz · Port-Launay » puis, sous la ligne du titre, une mention en petit (ex. « Relevés en différé… »)
   /* Prochaine pleine ou basse mer à Guily Glaz, d'après la courbe théorique :
      pleine mer = sommet de la courbe ; basse mer = arrivée au niveau plancher (début du palier de basse mer). */
   function prochaineMaree(now) {
@@ -529,13 +529,13 @@
       proch = '<span class="mwc-proch" title="Heure estimée à Guily Glaz (courbe théorique)">Prochaine ' +
         (pr.type === "PM" ? "pleine mer " : "basse mer ") + (demain ? "demain " : "") + "à " + hm(d) + "</span>";
     }
-    $("mwc-sub").innerHTML = "<span>Guily Glaz · Port-Launay" + (txt ? "," : "") + "</span>" + (txt ? ' <span class="mwc-note">' + txt + "</span>" : "");
+    $("mwc-sub").innerHTML = "<span>Guily Glaz · Port-Launay</span>" + (txt ? '<span class="mwc-note">' + txt + "</span>" : "");   // mention sous la ligne du titre
     $("mwc-proch").innerHTML = proch;                                  // sous le coefficient
   }
 
   /* ---- Valeur actuelle + tendance mesurée à Guily Glaz (30 dernières minutes) ---- */
   function summary() {
-    if (!pts.length) { trendHTML = ""; hauteurHTML = ""; sousTitre("pas encore de mesure"); renderState(); return; }
+    if (!pts.length) { trendHTML = ""; hauteurHTML = ""; sousTitre("Pas encore de mesure"); renderState(); return; }
     var last = pts[pts.length - 1], ref = null;
     for (var i = pts.length - 1; i >= 0; i--) if (last.t - pts[i].t >= 25 * MIN) { ref = pts[i]; break; }
     trendHTML = "";
@@ -546,7 +546,7 @@
     }
     // hauteur arrondie au décimètre, suivie de l'heure de la mesure
     hauteurHTML = '<span class="mwc-h">' + m1(last.v) + ' m <small class="mwc-hh">à ' + hm(last.t) + "</small></span>";
-    sousTitre(hubKO ? "relevés en différé (Hub'Eau indisponible)" : "");
+    sousTitre(hubKO ? "Relevés en différé (Hub'Eau indisponible)" : "");
     renderState();
   }
 
