@@ -1,13 +1,10 @@
 # Branche analyse-aulne uniquement (sans lien avec main ni avec l'appli) :
 # télécharge une fois l'historique hydrométrique de l'Aulne 2000-2025 (Hub'Eau + HydroPortail)
-# et l'enregistre dans donnees/ sur cette même branche. Lancé à chaque modification du script.
+# et l'enregistre dans donnees/ sur cette même branche. Lancement manuel uniquement.
 name: Historique Aulne
 
 on:
-  push:
-    branches: [analyse-aulne]
-    paths: ["scripts/**", ".github/workflows/historique-aulne.yml"]
-  workflow_dispatch:
+  workflow_dispatch:   # lancement manuel uniquement (téléchargement déjà fait le 19/11/2026)
 
 permissions:
   contents: write
