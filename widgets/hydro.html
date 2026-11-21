@@ -355,17 +355,17 @@
 
   /* ------------------------------------------------------------------ */
   /* ------------------------------------------------------------------
-     3) AULNE — hauteur d'eau à Châteaulin comparée aux mêmes dates depuis 2010
+     3) AULNE — hauteur d'eau à Châteaulin comparée à tous les jours des années précédentes depuis 2010 (année entière)
         (dernière hauteur mesurée vs hauteurs maximales journalières HIXnJ ;
          repli sur le débit moyen des 24 h vs débits moyens journaliers QmnJ si la hauteur manque)
      ------------------------------------------------------------------ */
   var CLASSES_RIV = [
     // Couleurs inversées : basses eaux en violet/bleu, hautes eaux (crue) en orange/rouge
-    { max: 0.10, lbl: "Très basses eaux", crit: "Critique (étiage)", col: "#5b2a86", ico: "🟣", msg: "Rivière à un niveau exceptionnellement bas pour la saison." },
-    { max: 0.25, lbl: "Basses eaux",      crit: "Préoccupant",       col: "#2f80c9", ico: "🔵", msg: "Niveau nettement inférieur à la normale de saison." },
-    { max: 0.40, lbl: "Plutôt bas",       crit: "Vigilance",         col: "#1aa39a", ico: "🟢", msg: "Niveau un peu en dessous de la normale de saison." },
-    { max: 0.60, lbl: "Normal",           crit: "Normal",            col: "#2e9e6a", ico: "🟢", msg: "Niveau habituel pour la saison." },
-    { max: 0.75, lbl: "Plutôt haut",      crit: "Normal",            col: "#e0b100", ico: "🟡", msg: "Niveau un peu au-dessus de la normale de saison." },
+    { max: 0.10, lbl: "Très basses eaux", crit: "Critique (étiage)", col: "#5b2a86", ico: "🟣", msg: "Rivière à un niveau exceptionnellement bas sur l'année." },
+    { max: 0.25, lbl: "Basses eaux",      crit: "Préoccupant",       col: "#2f80c9", ico: "🔵", msg: "Niveau nettement inférieur à la normale de l'année." },
+    { max: 0.40, lbl: "Plutôt bas",       crit: "Vigilance",         col: "#1aa39a", ico: "🟢", msg: "Niveau un peu en dessous de la normale de l'année." },
+    { max: 0.60, lbl: "Normal",           crit: "Normal",            col: "#2e9e6a", ico: "🟢", msg: "Niveau habituel sur l'année." },
+    { max: 0.75, lbl: "Plutôt haut",      crit: "Normal",            col: "#e0b100", ico: "🟡", msg: "Niveau un peu au-dessus de la normale de l'année." },
     { max: 0.90, lbl: "Hautes eaux",      crit: "Vigilance",         col: "#e67e22", ico: "🟠", msg: "Rivière haute : restez attentifs aux bulletins de crue." },
     { max: 1.01, lbl: "Très hautes eaux", crit: "Critique (crue)",   col: "#c0392b", ico: "🔴", msg: "Niveau exceptionnellement haut : consultez Vigicrues." }
   ];
@@ -390,6 +390,14 @@
     return Object.keys(byYear).filter(function (y) { return byYear[y].length >= 5; }).map(function (y) {
       var a = byYear[y]; return a.reduce(function (s, x) { return s + x; }, 0) / a.length;
     });
+  }
+  // Valeurs de TOUS les jours des années précédentes (année entière, toutes saisons confondues), depuis le 21/11/2026
+  function refsAnnee(hist, tRef) {
+    var an = new Date(tRef).getUTCFullYear(), refs = hist.filter(function (r) { return r.y < an; });
+    var out = refs.map(function (r) { return r.v; });
+    out.debut = refs.length ? Math.min.apply(null, refs.map(function (r) { return r.y; })) : an;
+    out.fin = an - 1;
+    return out;
   }
   function obs(r) {
     return (r.data || []).filter(function (x) { return x.resultat_obs != null; })
@@ -418,9 +426,11 @@
 
       // Situation : selon la hauteur, sinon selon le débit
       // situation calculée sur la hauteur du moment (dernière mesure, toutes les 5 min)
-      var refs = h.length ? refsSaison(elab(res[2]), h[0].t) : [], vNow = h.length ? h[0].v : null, surH = true;
-      if (refs.length < 5) { refs = q.length ? refsSaison(elab(res[3]), q[0].t) : []; vNow = qNow; surH = false; }
-      if (refs.length < 5 || vNow == null) throw new Error("historique insuffisant");
+      var MINJ = 3 * 365;                                   // au moins 3 années de valeurs journalières
+      var refs = h.length ? refsAnnee(elab(res[2]), h[0].t) : [], vNow = h.length ? h[0].v : null, surH = true;
+      if (refs.length < MINJ) { refs = q.length ? refsAnnee(elab(res[3]), q[0].t) : []; vNow = qNow; surH = false; }
+      if (refs.length < MINJ || vNow == null) throw new Error("historique insuffisant");
+      var periode = "de " + refs.debut + " à " + refs.fin + " (année entière)";
       var below = 0, eq = 0;
       refs.forEach(function (x) { if (x < vNow) below++; else if (x === vNow) eq++; });
       var p = (below + eq / 2) / refs.length;
@@ -449,16 +459,16 @@
         '<div class="mwh-badge" style="background:' + cls.col + '"><div class="mwh-badge-ico">' + cls.ico + "</div><div>" +
         '<div class="mwh-badge-lbl">Criticité · ' + esc(cls.lbl) + '</div><div class="mwh-badge-val">' + info("aulne") + cls.crit + "</div></div></div>" +
         '<p class="mwh-msg">' + cls.msg + " " +
-        (below === 0 ? quoi + " " + moins + " que toutes les " + refs.length + " années mesurées à la même période."
-          : below === refs.length ? quoi + " " + plus + " que toutes les " + refs.length + " années mesurées à la même période."
-          : quoi + " " + plus + " que " + Math.round(p * 100) + " % des " + refs.length + " années mesurées à la même période.") + "</p>" +
+        (below === 0 ? quoi + " " + moins + " que tous les jours mesurés " + periode + "."
+          : below === refs.length ? quoi + " " + plus + " que tous les jours mesurés " + periode + "."
+          : quoi + " " + plus + " que " + Math.round(p * 100) + " % des jours mesurés " + periode + ".") + "</p>" +
         '<div class="mwh-gauge" role="img" aria-label="Position ' + (surH ? "de la hauteur" : "du débit") + " : " + esc(cls.lbl) + '">' +
           '<div class="mwh-gauge-bar">' + bar + '</div><div class="mwh-gauge-pin" style="left:' + Math.max(2, Math.min(98, p * 100)) + '%"></div>' +
           '<div class="mwh-gauge-legend"><span>Étiage</span><span>Normal</span><span>Crue</span></div></div>' +
         '<dl class="mwh-kv">' +
           (h.length ? "<dt>Hauteur à l'échelle</dt><dd>" + m(h[0].v) + "</dd>" : "") +
-          (surH ? "<dt>Normale de saison</dt><dd>≈ " + m(med) + "</dd><dt>Hauteur max. 24 h</dt><dd>" + m(hMax) + "</dd>"
-                : "<dt>Débit (moy. 24 h)</dt><dd>" + m3(qNow) + "</dd><dt>Normale de saison</dt><dd>≈ " + m3(med) + "</dd>") +
+          (surH ? "<dt>Médiane annuelle</dt><dd>≈ " + m(med) + "</dd><dt>Hauteur max. 24 h</dt><dd>" + m(hMax) + "</dd>"
+                : "<dt>Débit (moy. 24 h)</dt><dd>" + m3(qNow) + "</dd><dt>Médiane annuelle</dt><dd>≈ " + m3(med) + "</dd>") +
           (trend ? "<dt>Hauteur sur 24 h</dt><dd>" + trend + "</dd>" : "") +
           (surH && q.length ? "<dt>Débit</dt><dd>" + m3(q[0].v) + "</dd>" : "") +
           "<dt>Dernière mesure</dt><dd>" + dmy(lastT) + " " + hm(lastT) + "</dd>" +
@@ -494,7 +504,7 @@
         }));
       } },
     aulne: { titre: "Niveau de l'Aulne · Châteaulin",
-      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières des mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
+      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières de tous les jours des années 2010 à 2025 (année entière, toutes saisons confondues). Le pourcentage est la part des jours où la hauteur était plus basse.",
       lignes: function () { return lignesRang(CLASSES_RIV); } },
     nappe: { titre: "Nappe · Saint-Ségal",
       texte: "Dernier niveau journalier de la nappe, comparé aux mêmes dates (± 10 jours) des années précédentes (depuis 2004). Le pourcentage est la part des années où le niveau était plus bas.",

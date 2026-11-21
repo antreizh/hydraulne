@@ -201,6 +201,15 @@
     refs.forEach(function (x) { if (x < vNow) below++; else if (x === vNow) eq++; });
     return (below + eq / 2) / refs.length;
   }
+  // Rang d'une valeur parmi TOUS les jours des années précédentes (année entière, toutes saisons confondues) :
+  // 0 = plus bas que tous les jours, 1 = plus haut que tous (situation de l'Aulne, depuis le 21/11/2026)
+  function rangAnnuel(hist, tRef, vNow) {
+    var an = new Date(tRef).getUTCFullYear(), refs = hist.filter(function (r) { return r.y < an; });
+    if (refs.length < 3 * 365) return null;
+    var below = 0, eq = 0;
+    refs.forEach(function (r) { if (r.v < vNow) below++; else if (r.v === vNow) eq++; });
+    return (below + eq / 2) / refs.length;
+  }
   // Ligne « variation par rapport à J-7 » : flèche + valeur signée
   function varJ7(txt, signe, prefixe, cls) {
     var fl = signe > 0 ? "↗" : signe < 0 ? "↘" : "→";
@@ -503,14 +512,14 @@
       }
       var parts = [cmVs(1, 1, "J-1"), cmVs(7, 3, "J-7")].filter(Boolean);
       // Situation (étiage … crue) selon la HAUTEUR d'eau du moment (dernière mesure),
-      // classée parmi les hauteurs maximales journalières des mêmes dates (± 10 jours) des années précédentes.
+      // classée parmi les hauteurs maximales journalières de tous les jours des années précédentes (année entière).
       // Repli sur le débit si la hauteur n'est pas disponible.
       var p = null, base = "";
       if (h.length && histH.length) {
-        p = rangSaison(histH, h[0].t, h[0].v, 5);            // hauteur du moment (dernière mesure), comme le widget Hydro
+        p = rangAnnuel(histH, h[0].t, h[0].v);               // hauteur du moment (dernière mesure), comme le widget Hydro
         if (p != null) base = "hauteur du moment (" + num(h[0].v / 1000, 2) + " m à " + hm(new Date(h[0].t)) + ")";
       }
-      if (p == null) { p = rangSaison(hist, q[0].t, qNow, 5); if (p != null) base = "débit moyen des 24 dernières heures"; }
+      if (p == null) { p = rangAnnuel(hist, q[0].t, qNow); if (p != null) base = "débit moyen des 24 dernières heures"; }
       if (p == null) throw 0;
       var c = classe(AULNE, p);
       // Variation du débit du jour (moyenne 24 h) en % : vs J-7 et vs le même jour de l'année N-1
@@ -533,8 +542,8 @@
       var qLast = q[0].v;
       var debit = ["débit " + num(qLast / 1000, 1) + " m³/s"]                 // une seule décimale
         .concat([pctVs(q1, "J-1"), pctVs(q7, "J-7"), pctVs(mN1 && mN1.v, "N-1")].filter(Boolean));
-      $("mwm-aulne").title = "Situation selon la " + base + ", comparée aux mêmes dates des années précédentes : " +
-        Math.round(p * 100) + " % des années étaient plus basses.";
+      $("mwm-aulne").title = "Situation selon la " + base + ", comparée à tous les jours des années précédentes (année entière) : " +
+        Math.round(p * 100) + " % des jours étaient plus bas.";
       $("mwm-aulne").innerHTML = pill(c.crit, c.col, "aulne") +
         '<small class="mwm-date">mesure du ' + jourCourt(new Date(q[0].t)) + " à " + hm(new Date(q[0].t)) + "</small>";
       // ligne débit : valeur + variations en % ; elle peut passer sur 2 lignes, sans couper une variation
@@ -592,7 +601,7 @@
         }));
       } },
     aulne: { titre: "Niveau de l'Aulne · Châteaulin",
-      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières des mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
+      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières de tous les jours des années 2010 à 2025 (année entière, toutes saisons confondues). Le pourcentage est la part des jours où la hauteur était plus basse.",
       lignes: function () { return lignesRang(AULNE); } },
     nappe: { titre: "Nappe · Saint-Ségal",
       texte: "Dernier niveau journalier de la nappe, comparé aux mêmes dates (± 10 jours) des années précédentes (depuis 2004). Le pourcentage est la part des années où le niveau était plus bas.",

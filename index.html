@@ -257,6 +257,15 @@
     refs.forEach(function (x) { if (x < vNow) below++; else if (x === vNow) eq++; });
     return (below + eq / 2) / refs.length;
   }
+  // Rang d'une valeur parmi TOUS les jours des années précédentes (année entière, toutes saisons confondues) :
+  // 0 = plus bas que tous les jours, 1 = plus haut que tous (situation de l'Aulne, depuis le 21/11/2026)
+  function rangAnnuel(hist, tRef, vNow) {
+    var an = new Date(tRef).getUTCFullYear(), refs = hist.filter(function (r) { return r.y < an; });
+    if (refs.length < 3 * 365) return null;
+    var below = 0, eq = 0;
+    refs.forEach(function (r) { if (r.v < vNow) below++; else if (r.v === vNow) eq++; });
+    return (below + eq / 2) / refs.length;
+  }
   // Ligne « variation par rapport à J-7 » : flèche + valeur signée
   function varJ7(txt, signe, prefixe, cls) {
     var fl = signe > 0 ? "↗" : signe < 0 ? "↘" : "→";
@@ -559,14 +568,14 @@
       }
       var parts = [cmVs(1, 1, "J-1"), cmVs(7, 3, "J-7")].filter(Boolean);
       // Situation (étiage … crue) selon la HAUTEUR d'eau du moment (dernière mesure),
-      // classée parmi les hauteurs maximales journalières des mêmes dates (± 10 jours) des années précédentes.
+      // classée parmi les hauteurs maximales journalières de tous les jours des années précédentes (année entière).
       // Repli sur le débit si la hauteur n'est pas disponible.
       var p = null, base = "";
       if (h.length && histH.length) {
-        p = rangSaison(histH, h[0].t, h[0].v, 5);            // hauteur du moment (dernière mesure), comme le widget Hydro
+        p = rangAnnuel(histH, h[0].t, h[0].v);               // hauteur du moment (dernière mesure), comme le widget Hydro
         if (p != null) base = "hauteur du moment (" + num(h[0].v / 1000, 2) + " m à " + hm(new Date(h[0].t)) + ")";
       }
-      if (p == null) { p = rangSaison(hist, q[0].t, qNow, 5); if (p != null) base = "débit moyen des 24 dernières heures"; }
+      if (p == null) { p = rangAnnuel(hist, q[0].t, qNow); if (p != null) base = "débit moyen des 24 dernières heures"; }
       if (p == null) throw 0;
       var c = classe(AULNE, p);
       // Variation du débit du jour (moyenne 24 h) en % : vs J-7 et vs le même jour de l'année N-1
@@ -589,8 +598,8 @@
       var qLast = q[0].v;
       var debit = ["débit " + num(qLast / 1000, 1) + " m³/s"]                 // une seule décimale
         .concat([pctVs(q1, "J-1"), pctVs(q7, "J-7"), pctVs(mN1 && mN1.v, "N-1")].filter(Boolean));
-      $("mwm-aulne").title = "Situation selon la " + base + ", comparée aux mêmes dates des années précédentes : " +
-        Math.round(p * 100) + " % des années étaient plus basses.";
+      $("mwm-aulne").title = "Situation selon la " + base + ", comparée à tous les jours des années précédentes (année entière) : " +
+        Math.round(p * 100) + " % des jours étaient plus bas.";
       $("mwm-aulne").innerHTML = pill(c.crit, c.col, "aulne") +
         '<small class="mwm-date">mesure du ' + jourCourt(new Date(q[0].t)) + " à " + hm(new Date(q[0].t)) + "</small>";
       // ligne débit : valeur + variations en % ; elle peut passer sur 2 lignes, sans couper une variation
@@ -648,7 +657,7 @@
         }));
       } },
     aulne: { titre: "Niveau de l'Aulne · Châteaulin",
-      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières des mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
+      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières de tous les jours des années 2010 à 2025 (année entière, toutes saisons confondues). Le pourcentage est la part des jours où la hauteur était plus basse.",
       lignes: function () { return lignesRang(AULNE); } },
     nappe: { titre: "Nappe · Saint-Ségal",
       texte: "Dernier niveau journalier de la nappe, comparé aux mêmes dates (± 10 jours) des années précédentes (depuis 2004). Le pourcentage est la part des années où le niveau était plus bas.",
@@ -1543,15 +1552,15 @@
 
 <section class="appli-onglet" id="o-cadran" role="tabpanel" aria-labelledby="b-cadran" hidden>
 <!-- Cadran de marée : page widgets/cadran-maree.html (même widget que sur le site antreizh.fr) -->
-<iframe class="appli-meteo" src="widgets/cadran-maree.html?v=150" title="Cadran de marée et de vent à Guily Glaz" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/cadran-maree.html?v=151" title="Cadran de marée et de vent à Guily Glaz" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-histo" role="tabpanel" aria-labelledby="b-histo" hidden>
 <!-- Histo cadran : page widgets/histo-cadran.html (rejeu de l'historique, même widget que sur le site antreizh.fr) -->
-<iframe class="appli-meteo" src="widgets/histo-cadran.html?v=150" title="Histo cadran : rejeu des marées et vents à Guily Glaz" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/histo-cadran.html?v=151" title="Histo cadran : rejeu des marées et vents à Guily Glaz" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-vent" role="tabpanel" aria-labelledby="b-vent" hidden>
 <!-- page externe (site antreizh.fr) : hauteur fixée à l'écran, défilement dans le cadre ; ?v= augmenté avec la version pour que les téléphones rechargent la page -->
-<iframe class="appli-meteo appli-externe" src="https://www.antreizh.fr/widgets/vent/widget-vent.html?v=150" title="Vent et pression à Lanvéoc-Poulmic" loading="lazy"></iframe>
+<iframe class="appli-meteo appli-externe" src="https://www.antreizh.fr/widgets/vent/widget-vent.html?v=151" title="Vent et pression à Lanvéoc-Poulmic" loading="lazy"></iframe>
 </section>
 <section class="appli-onglet" id="o-hydro" role="tabpanel" aria-labelledby="b-hydro" hidden>
 <!-- ===== Widget Hydro (identique à widget-hydro.html) ===== -->
@@ -1902,17 +1911,17 @@
 
   /* ------------------------------------------------------------------ */
   /* ------------------------------------------------------------------
-     3) AULNE — hauteur d'eau à Châteaulin comparée aux mêmes dates depuis 2010
+     3) AULNE — hauteur d'eau à Châteaulin comparée à tous les jours des années précédentes depuis 2010 (année entière)
         (dernière hauteur mesurée vs hauteurs maximales journalières HIXnJ ;
          repli sur le débit moyen des 24 h vs débits moyens journaliers QmnJ si la hauteur manque)
      ------------------------------------------------------------------ */
   var CLASSES_RIV = [
     // Couleurs inversées : basses eaux en violet/bleu, hautes eaux (crue) en orange/rouge
-    { max: 0.10, lbl: "Très basses eaux", crit: "Critique (étiage)", col: "#5b2a86", ico: "🟣", msg: "Rivière à un niveau exceptionnellement bas pour la saison." },
-    { max: 0.25, lbl: "Basses eaux",      crit: "Préoccupant",       col: "#2f80c9", ico: "🔵", msg: "Niveau nettement inférieur à la normale de saison." },
-    { max: 0.40, lbl: "Plutôt bas",       crit: "Vigilance",         col: "#1aa39a", ico: "🟢", msg: "Niveau un peu en dessous de la normale de saison." },
-    { max: 0.60, lbl: "Normal",           crit: "Normal",            col: "#2e9e6a", ico: "🟢", msg: "Niveau habituel pour la saison." },
-    { max: 0.75, lbl: "Plutôt haut",      crit: "Normal",            col: "#e0b100", ico: "🟡", msg: "Niveau un peu au-dessus de la normale de saison." },
+    { max: 0.10, lbl: "Très basses eaux", crit: "Critique (étiage)", col: "#5b2a86", ico: "🟣", msg: "Rivière à un niveau exceptionnellement bas sur l'année." },
+    { max: 0.25, lbl: "Basses eaux",      crit: "Préoccupant",       col: "#2f80c9", ico: "🔵", msg: "Niveau nettement inférieur à la normale de l'année." },
+    { max: 0.40, lbl: "Plutôt bas",       crit: "Vigilance",         col: "#1aa39a", ico: "🟢", msg: "Niveau un peu en dessous de la normale de l'année." },
+    { max: 0.60, lbl: "Normal",           crit: "Normal",            col: "#2e9e6a", ico: "🟢", msg: "Niveau habituel sur l'année." },
+    { max: 0.75, lbl: "Plutôt haut",      crit: "Normal",            col: "#e0b100", ico: "🟡", msg: "Niveau un peu au-dessus de la normale de l'année." },
     { max: 0.90, lbl: "Hautes eaux",      crit: "Vigilance",         col: "#e67e22", ico: "🟠", msg: "Rivière haute : restez attentifs aux bulletins de crue." },
     { max: 1.01, lbl: "Très hautes eaux", crit: "Critique (crue)",   col: "#c0392b", ico: "🔴", msg: "Niveau exceptionnellement haut : consultez Vigicrues." }
   ];
@@ -1937,6 +1946,14 @@
     return Object.keys(byYear).filter(function (y) { return byYear[y].length >= 5; }).map(function (y) {
       var a = byYear[y]; return a.reduce(function (s, x) { return s + x; }, 0) / a.length;
     });
+  }
+  // Valeurs de TOUS les jours des années précédentes (année entière, toutes saisons confondues), depuis le 21/11/2026
+  function refsAnnee(hist, tRef) {
+    var an = new Date(tRef).getUTCFullYear(), refs = hist.filter(function (r) { return r.y < an; });
+    var out = refs.map(function (r) { return r.v; });
+    out.debut = refs.length ? Math.min.apply(null, refs.map(function (r) { return r.y; })) : an;
+    out.fin = an - 1;
+    return out;
   }
   function obs(r) {
     return (r.data || []).filter(function (x) { return x.resultat_obs != null; })
@@ -1965,9 +1982,11 @@
 
       // Situation : selon la hauteur, sinon selon le débit
       // situation calculée sur la hauteur du moment (dernière mesure, toutes les 5 min)
-      var refs = h.length ? refsSaison(elab(res[2]), h[0].t) : [], vNow = h.length ? h[0].v : null, surH = true;
-      if (refs.length < 5) { refs = q.length ? refsSaison(elab(res[3]), q[0].t) : []; vNow = qNow; surH = false; }
-      if (refs.length < 5 || vNow == null) throw new Error("historique insuffisant");
+      var MINJ = 3 * 365;                                   // au moins 3 années de valeurs journalières
+      var refs = h.length ? refsAnnee(elab(res[2]), h[0].t) : [], vNow = h.length ? h[0].v : null, surH = true;
+      if (refs.length < MINJ) { refs = q.length ? refsAnnee(elab(res[3]), q[0].t) : []; vNow = qNow; surH = false; }
+      if (refs.length < MINJ || vNow == null) throw new Error("historique insuffisant");
+      var periode = "de " + refs.debut + " à " + refs.fin + " (année entière)";
       var below = 0, eq = 0;
       refs.forEach(function (x) { if (x < vNow) below++; else if (x === vNow) eq++; });
       var p = (below + eq / 2) / refs.length;
@@ -1996,16 +2015,16 @@
         '<div class="mwh-badge" style="background:' + cls.col + '"><div class="mwh-badge-ico">' + cls.ico + "</div><div>" +
         '<div class="mwh-badge-lbl">Criticité · ' + esc(cls.lbl) + '</div><div class="mwh-badge-val">' + info("aulne") + cls.crit + "</div></div></div>" +
         '<p class="mwh-msg">' + cls.msg + " " +
-        (below === 0 ? quoi + " " + moins + " que toutes les " + refs.length + " années mesurées à la même période."
-          : below === refs.length ? quoi + " " + plus + " que toutes les " + refs.length + " années mesurées à la même période."
-          : quoi + " " + plus + " que " + Math.round(p * 100) + " % des " + refs.length + " années mesurées à la même période.") + "</p>" +
+        (below === 0 ? quoi + " " + moins + " que tous les jours mesurés " + periode + "."
+          : below === refs.length ? quoi + " " + plus + " que tous les jours mesurés " + periode + "."
+          : quoi + " " + plus + " que " + Math.round(p * 100) + " % des jours mesurés " + periode + ".") + "</p>" +
         '<div class="mwh-gauge" role="img" aria-label="Position ' + (surH ? "de la hauteur" : "du débit") + " : " + esc(cls.lbl) + '">' +
           '<div class="mwh-gauge-bar">' + bar + '</div><div class="mwh-gauge-pin" style="left:' + Math.max(2, Math.min(98, p * 100)) + '%"></div>' +
           '<div class="mwh-gauge-legend"><span>Étiage</span><span>Normal</span><span>Crue</span></div></div>' +
         '<dl class="mwh-kv">' +
           (h.length ? "<dt>Hauteur à l'échelle</dt><dd>" + m(h[0].v) + "</dd>" : "") +
-          (surH ? "<dt>Normale de saison</dt><dd>≈ " + m(med) + "</dd><dt>Hauteur max. 24 h</dt><dd>" + m(hMax) + "</dd>"
-                : "<dt>Débit (moy. 24 h)</dt><dd>" + m3(qNow) + "</dd><dt>Normale de saison</dt><dd>≈ " + m3(med) + "</dd>") +
+          (surH ? "<dt>Médiane annuelle</dt><dd>≈ " + m(med) + "</dd><dt>Hauteur max. 24 h</dt><dd>" + m(hMax) + "</dd>"
+                : "<dt>Débit (moy. 24 h)</dt><dd>" + m3(qNow) + "</dd><dt>Médiane annuelle</dt><dd>≈ " + m3(med) + "</dd>") +
           (trend ? "<dt>Hauteur sur 24 h</dt><dd>" + trend + "</dd>" : "") +
           (surH && q.length ? "<dt>Débit</dt><dd>" + m3(q[0].v) + "</dd>" : "") +
           "<dt>Dernière mesure</dt><dd>" + dmy(lastT) + " " + hm(lastT) + "</dd>" +
@@ -2041,7 +2060,7 @@
         }));
       } },
     aulne: { titre: "Niveau de l'Aulne · Châteaulin",
-      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières des mêmes dates (± 10 jours) des années 2010 à 2025. Le pourcentage est la part des années où la hauteur était plus basse.",
+      texte: "Hauteur d'eau du moment (dernière mesure, toutes les 5 minutes), comparée aux hauteurs maximales journalières de tous les jours des années 2010 à 2025 (année entière, toutes saisons confondues). Le pourcentage est la part des jours où la hauteur était plus basse.",
       lignes: function () { return lignesRang(CLASSES_RIV); } },
     nappe: { titre: "Nappe · Saint-Ségal",
       texte: "Dernier niveau journalier de la nappe, comparé aux mêmes dates (± 10 jours) des années précédentes (depuis 2004). Le pourcentage est la part des années où le niveau était plus bas.",
@@ -2088,40 +2107,40 @@
 
 <!-- ===== Tableaux météo et nappe : pages séparées (meteo-*.html), affichées dans des cadres, un onglet chacun ===== -->
 <section class="appli-onglet" id="o-pluie-temperature" role="tabpanel" aria-labelledby="b-pluie-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=150" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluie-temperature.html?v=151" title="Pluie et température du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-pluviometrie" role="tabpanel" aria-labelledby="b-pluviometrie" hidden>
-<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=150" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-pluviometrie.html?v=151" title="Pluviométrie du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-temperature" role="tabpanel" aria-labelledby="b-temperature" hidden>
-<iframe class="appli-meteo" src="meteo-temperature.html?v=150" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-temperature.html?v=151" title="Température moyenne du secteur de Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-nappe-pluie" role="tabpanel" aria-labelledby="b-nappe-pluie" hidden>
-<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=150" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=150" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappe-30-jours.html?v=151" title="Nappe de Saint-Ségal sur les 30 derniers jours" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-correlation-nappe-pluie.html?v=151" title="Réponse de la nappe de Saint-Ségal à la pluie, par mois" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-correlation" role="tabpanel" aria-labelledby="b-correlation" hidden>
-<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=150" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
-<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=150" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-graphique-nappe-pluie.html?v=151" title="Graphique nappe et pluie à Saint-Ségal" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-reponse-nappe-10mm.html?v=151" title="Réponse de la nappe à 10 mm de pluie tombés le jour J (2015-2025)" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-spezet" role="tabpanel" aria-labelledby="b-spezet" hidden>
-<iframe class="appli-meteo" src="meteo-spezet-nappe-pluie.html?v=150" title="Pluviométrie et nappe à Spézet" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-spezet-nappe-pluie.html?v=151" title="Pluviométrie et nappe à Spézet" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-ss-sp" role="tabpanel" aria-labelledby="b-ss-sp" hidden>
-<iframe class="appli-meteo" src="meteo-nappes-ss-sp.html?v=150" title="Nappes de Saint-Ségal et de Spézet : écart à la moyenne" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="meteo-nappes-ss-sp.html?v=151" title="Nappes de Saint-Ségal et de Spézet : écart à la moyenne" loading="lazy" scrolling="no"></iframe>
 </section>
 <!-- ===== fin des tableaux météo ===== -->
 <section class="appli-onglet" id="o-onde-maree" role="tabpanel" aria-labelledby="b-onde-maree" hidden>
 <!-- Onde marée : page widgets/onde-maree.html (carte animée de la marée dans l'Aulne maritime, de Landévennec à Guily Glaz) -->
-<iframe class="appli-meteo" src="widgets/onde-maree.html?v=150" title="Onde marée : carte animée de la marée dans l'Aulne maritime" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/onde-maree.html?v=151" title="Onde marée : carte animée de la marée dans l'Aulne maritime" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-bulle" role="tabpanel" aria-labelledby="b-bulle" hidden>
 <!-- Bulle marée-vent : page widgets/bulle-maree-vent.html (bulle 3D des 24 dernières heures, mêmes mesures que le Cadran) -->
-<iframe class="appli-meteo" src="widgets/bulle-maree-vent.html?v=150" title="Bulle marée-vent : marée à Guily Glaz et vent des dernières 24 heures en 3D" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/bulle-maree-vent.html?v=151" title="Bulle marée-vent : marée à Guily Glaz et vent des dernières 24 heures en 3D" loading="lazy" scrolling="no"></iframe>
 </section>
 <section class="appli-onglet" id="o-propagation" role="tabpanel" aria-labelledby="b-propagation" hidden>
 <!-- Propagation crue : page widgets/propagation-crue.html (prévision 16 h de la hauteur de l'Aulne à Châteaulin, modèle aulne_prevision v2) -->
-<iframe class="appli-meteo" src="widgets/propagation-crue.html?v=150" title="Propagation crue : prévision de la hauteur de l'Aulne à Châteaulin" loading="lazy" scrolling="no"></iframe>
+<iframe class="appli-meteo" src="widgets/propagation-crue.html?v=151" title="Propagation crue : prévision de la hauteur de l'Aulne à Châteaulin" loading="lazy" scrolling="no"></iframe>
 </section>
 </main>
 
