@@ -469,21 +469,63 @@
   }
   function finPrechargement() { IDS_AULNE.forEach(function (id) { $(id).classList.remove("mwm-ancien"); }); }
 
+  /* Instantané publié par l'appli toutes les 3 heures (workflow « Instantané Aulne », data/aulne/chateaulin.json,
+     depuis le 27/11/2026) : affiché aussitôt, car Hub'Eau peut mettre plus de 20 s à répondre, surtout le matin.
+     Les dernières mesures lues en direct le remplacent dès qu'elles arrivent. Les valeurs journalières depuis 2010
+     (les requêtes les plus lourdes) sont reprises de l'instantané ; Hub'Eau n'est interrogé pour elles qu'en son absence. */
+  var URL_INSTANTANE = "https://appli.antreizh.fr/data/aulne/chateaulin.json";
+  var tAulne = 0;                                        // instant de la mesure affichée : jamais remplacée par plus ancienne
+  function obsInstantane(s) {                            // { t0, p: [[minutes, valeur]] } -> { data } du plus récent au plus ancien
+    var d = [];
+    if (s && s.p) for (var i = s.p.length - 1; i >= 0; i--) d.push({ date_obs: new Date(s.t0 + s.p[i][0] * 60000).toISOString(), resultat_obs: s.p[i][1] });
+    return { data: d };
+  }
+  function elabInstantane(s) {                           // { d0, v: [valeur par jour] } -> { data }
+    var d = [];
+    if (s && s.v) {
+      var p = s.d0.split("-"), t0 = Date.UTC(+p[0], +p[1] - 1, +p[2]);
+      s.v.forEach(function (v, i) { if (v != null) d.push({ date_obs_elab: new Date(t0 + i * 864e5).toISOString().slice(0, 10), resultat_obs_elab: v }); });
+    }
+    return { data: d };
+  }
   function loadAulne() {
     var b = "https://hubeau.eaufrance.fr/api/v2/hydrometrie/", st = encodeURIComponent(CFG.stationAulne);
-    Promise.all([
-      getJSON(b + "observations_tr?code_entite=" + st + "&grandeur_hydro=Q&date_debut_obs=" +
-        encodeURIComponent(new Date(Date.now() - 8.5 * 864e5).toISOString().slice(0, 19) + "Z") +
-        "&size=5000&sort=desc&format=json"),
-      getJSON(b + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=QmnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json"),
-      // hauteur d'eau à l'échelle (mm) sur 8 jours : sert aux variations en cm
-      getJSON(b + "observations_tr?code_entite=" + st + "&grandeur_hydro=H&date_debut_obs=" +
-        encodeURIComponent(new Date(Date.now() - 8.5 * 864e5).toISOString().slice(0, 19) + "Z") +
-        "&size=5000&sort=desc&format=json").catch(function () { return { data: [] }; }),
-      // hauteur maximale de chaque jour depuis 2010 (mm) : sert à situer la hauteur actuelle par rapport aux mêmes dates
-      getJSON(b + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=HIXnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json")
-        .catch(function () { return { data: [] }; })
-    ]).then(function (res) {
+    var vide = function () { return { data: [] }; };
+    var depuis = encodeURIComponent(new Date(Date.now() - 8.5 * 864e5).toISOString().slice(0, 19) + "Z");
+    // 1) instantané de l'appli : affichage immédiat
+    var inst = fetch(URL_INSTANTANE, { cache: "no-cache" }).then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; }).then(function (j) {
+        if (!j || !(j.q || j.h)) return null;
+        var res = [obsInstantane(j.q), elabInstantane(j.qmnj), obsInstantane(j.h), elabInstantane(j.hixnj)];
+        try { afficherAulne(res); } catch (e) {}
+        return res;
+      });
+    // 2) dernières mesures en direct (débit et hauteur sur 8 jours : variations J-1 / J-7)
+    var direct = Promise.all([
+      getJSON(b + "observations_tr?code_entite=" + st + "&grandeur_hydro=Q&date_debut_obs=" + depuis + "&size=5000&sort=desc&format=json").catch(vide),
+      getJSON(b + "observations_tr?code_entite=" + st + "&grandeur_hydro=H&date_debut_obs=" + depuis + "&size=5000&sort=desc&format=json").catch(vide)
+    ]);
+    Promise.all([direct, inst]).then(function (r) {
+      var d = r[0], s = r[1];
+      // valeurs journalières depuis 2010 (débit moyen QmnJ, hauteur maximale HIXnJ) : celles de l'instantané, sinon Hub'Eau
+      var histo = s && s[1].data.length && s[3].data.length ? Promise.resolve([s[1], s[3]]) : Promise.all([
+        getJSON(b + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=QmnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json").catch(vide),
+        getJSON(b + "obs_elab?code_entite=" + st + "&grandeur_hydro_elab=HIXnJ&fields=date_obs_elab,resultat_obs_elab&size=20000&format=json").catch(vide)
+      ]);
+      return histo.then(function (hh) {
+        afficherAulne([d[0].data.length || !s ? d[0] : s[0], hh[0], d[1].data.length || !s ? d[1] : s[2], hh[1]]);
+      });
+    }).catch(function () {
+      // échec : on garde la mesure déjà affichée (instantané ou mémoire du navigateur), sinon « indisponible »
+      if (tAulne || $("mwm-aulne").classList.contains("mwm-ancien")) {
+        if (!tAulne) IDS_AULNE.forEach(function (id) { $(id).title = "Mesure précédente : actualisation impossible pour le moment"; });
+        return;
+      }
+      na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = "";
+    });
+  }
+  // res = [débit 8 j (Q), débit moyen journalier (QmnJ), hauteur 8 j (H), hauteur maximale journalière (HIXnJ)], au format Hub'Eau
+  function afficherAulne(res) {
       var q = (res[0].data || []).filter(function (r) { return r.resultat_obs != null; })
         .map(function (r) { return { t: new Date(r.date_obs).getTime(), v: r.resultat_obs }; });
       if (!q.length) throw 0;
@@ -499,6 +541,8 @@
       var h = (res[2].data || []).filter(function (r) { return r.resultat_obs != null; })
         .map(function (r) { return { t: new Date(r.date_obs).getTime(), v: r.resultat_obs }; })
         .sort(function (a, b) { return b.t - a.t; });
+      var tMes = Math.max(q[0].t, h.length ? h[0].t : 0);
+      if (tMes < tAulne) return;                          // une mesure plus récente est déjà affichée
       function procheDe(t, tol) {
         var best = null;
         h.forEach(function (r) { var d = Math.abs(r.t - t); if (d <= tol && (!best || d < best.d)) best = { r: r, d: d }; });
@@ -570,15 +614,7 @@
       // ligne pleine largeur, en italique ; elle peut passer sur 2 lignes, sans couper une variation
       $("mwm-aulne-var").innerHTML = parts.length ? "hauteur " + parts.map(function (s) { return '<span class="mwm-nw">' + s + "</span>"; }).join(" · ") : "";
       $("mwm-aulne-var").title = h.length ? "Hauteur d'eau à l'échelle de la station, mesure de " + hm(new Date(h[0].t)) + infoN1 : "";
-      finPrechargement(); memoriserAulne();
-    }).catch(function () {
-      // échec : on garde la mesure précédente si elle est affichée, sinon « indisponible »
-      if ($("mwm-aulne").classList.contains("mwm-ancien")) {
-        IDS_AULNE.forEach(function (id) { $(id).title = "Mesure précédente : actualisation impossible pour le moment"; });
-        return;
-      }
-      na("mwm-aulne"); $("mwm-aulne-debit").textContent = ""; $("mwm-aulne-var").textContent = "";
-    });
+      tAulne = tMes; finPrechargement(); memoriserAulne();
   }
 
   /* ---------------- Échelles de situation (icône ⓘ) ---------------- */
