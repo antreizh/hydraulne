@@ -377,15 +377,45 @@
     vigilance: { o: 1, lbl: "Vigilance", col: "#e0b100" }, alerte: { o: 2, lbl: "Alerte", col: "#e67e22" },
     alerte_renforcee: { o: 3, lbl: "Alerte renforcée", col: "#d64535" }, crise: { o: 4, lbl: "Crise", col: "#8e1b3e" }
   };
-  function loadVigi() {
-    getJSON("https://api.vigieau.gouv.fr/api/zones?lon=" + CFG.vigieauLon + "&lat=" + CFG.vigieauLat +
-      "&commune=" + CFG.vigieauInsee + "&profil=" + CFG.vigieauProfil).then(function (z) {
-      z = (Array.isArray(z) ? z : z ? [z] : []).filter(function (x) { return x && GRAV[x.niveauGravite]; });
-      if (!z.length) { $("mwm-vigi").innerHTML = pill("Aucune restriction", "#2e9e6a", "vigi"); return; }
+  /* Pré-affichage de la situation VigiEau (depuis le 28/11/2026), comme pour l'Aulne et la nappe :
+     1) mémoire du navigateur (dernière situation affichée, atténuée) ; 2) copie de la réponse VigiEau publiée par
+     l'appli toutes les 3 heures (workflow « Instantané Aulne », data/vigieau/chateaulin.json) ; 3) VigiEau en direct,
+     qui a toujours le dernier mot. Si VigiEau ne répond pas, la situation déjà affichée est conservée. */
+  var CLE_VIGI = "antreizh-mwm-vigi", vigiDirect = false, vigiAffiche = false;
+  function prechargerVigi() {
+    try {
+      var m = JSON.parse(localStorage.getItem(CLE_VIGI) || "null");
+      if (!m || Date.now() - m.t > 7 * 864e5) return;
+      $("mwm-vigi").innerHTML = m.h; $("mwm-vigi").classList.add("mwm-ancien");
+      $("mwm-vigi").title = "Situation précédente, actualisation en cours…";
+    } catch (e) {}
+  }
+  function afficherVigi(z, titre) {
+    z = (Array.isArray(z) ? z : z ? [z] : []).filter(function (x) { return x && GRAV[x.niveauGravite]; });
+    if (!z.length) $("mwm-vigi").innerHTML = pill("Aucune restriction", "#2e9e6a", "vigi");
+    else {
       z.sort(function (a, b) { return GRAV[b.niveauGravite].o - GRAV[a.niveauGravite].o; });
       var g = GRAV[z[0].niveauGravite];
       $("mwm-vigi").innerHTML = pill(g.lbl, g.col, "vigi");
-    }).catch(function () { na("mwm-vigi"); });
+    }
+    $("mwm-vigi").classList.remove("mwm-ancien"); $("mwm-vigi").title = titre || "";
+    vigiAffiche = true;
+    try { localStorage.setItem(CLE_VIGI, JSON.stringify({ t: Date.now(), h: $("mwm-vigi").innerHTML })); } catch (e) {}
+  }
+  function loadVigi() {
+    fetch("https://appli.antreizh.fr/data/vigieau/chateaulin.json", { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        if (j && Array.isArray(j.zones) && !vigiDirect)
+          afficherVigi(j.zones, "Situation VigiEau relevée le " + new Date(j.maj).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ", vérification en cours…");
+      }).catch(function () {});
+    getJSON("https://api.vigieau.gouv.fr/api/zones?lon=" + CFG.vigieauLon + "&lat=" + CFG.vigieauLat +
+      "&commune=" + CFG.vigieauInsee + "&profil=" + CFG.vigieauProfil).then(function (z) {
+      vigiDirect = true; afficherVigi(z);
+    }).catch(function () {
+      if (vigiAffiche) { if (!vigiDirect) $("mwm-vigi").title = "Situation relevée par l'appli : VigiEau ne répond pas pour le moment"; return; }
+      if ($("mwm-vigi").classList.contains("mwm-ancien")) { $("mwm-vigi").title = "Situation précédente : VigiEau ne répond pas pour le moment"; return; }
+      na("mwm-vigi");
+    });
   }
 
   /* ---------------- 3) Nappe ---------------- */
@@ -725,7 +755,7 @@
   }
   function tick() { var d = new Date(); $("mwm-time").textContent = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + hm(d); }
   function refreshAll() { loadTide(); loadVigi(); loadNappe(); loadAulne(); }
-  tick(); prechargerAulne(); prechargerNappe(); refreshAll();
+  tick(); prechargerVigi(); prechargerAulne(); prechargerNappe(); refreshAll();
   setInterval(refreshAll, CFG.refreshMinutes * 60000);
   setInterval(function () { tick(); renderTide(); }, 60000);
   chargerPredictions(); setInterval(chargerPredictions, 6 * 60 * 60000);   // coefficients de la veille (tendance)

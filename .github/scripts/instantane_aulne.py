@@ -19,12 +19,16 @@ rubrique « Nappe » du mini-widget, dans data/nappe/saint-segal.json :
   maj    : heure du passage (ISO)
   niveau : niveau journalier NGF (m)          { "d0": "AAAA-MM-JJ", "v": [valeur ou null, un par jour], "prof": profondeur du dernier jour }
   tr     : dernière mesure télétransmise     { "date_mesure", "niveau_eau_ngf", "profondeur_nappe" }
+
+Depuis le 28/11/2026 aussi, la réponse VigiEau pour Châteaulin (ligne « Situation eau » du mini-widget et carte du widget
+Hydro), telle quelle, dans data/vigieau/chateaulin.json : { "maj", "url", "zones": [réponse de l'API] }.
 """
 import datetime as dt
 import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -34,6 +38,8 @@ RACINE = sys.argv[1] if len(sys.argv) > 1 else "."
 SORTIE = os.path.join(RACINE, "data", "aulne", "chateaulin.json")
 BSS = "03103X0047/PZ"
 SORTIE_NAPPE = os.path.join(RACINE, "data", "nappe", "saint-segal.json")
+URL_VIGIEAU = "https://api.vigieau.gouv.fr/api/zones?lon=-4.0903&lat=48.1966&commune=29026&profil=particulier"
+SORTIE_VIGIEAU = os.path.join(RACINE, "data", "vigieau", "chateaulin.json")
 
 
 def lire(url, essais=3):
@@ -120,6 +126,44 @@ def nappe():
           f"{SORTIE_NAPPE} écrit ({os.path.getsize(SORTIE_NAPPE) // 1024} Ko)")
 
 
+def vigieau():
+    """Copie de la réponse VigiEau (mêmes paramètres que les widgets). Échec : fichier précédent conservé."""
+    print("vigieau …")
+    zones = None
+    for i in range(3):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(URL_VIGIEAU, headers={"Accept": "application/json"}), timeout=60) as r:
+                zones = json.load(r)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code == 404:                  # réponse « pas de zone » : les widgets la traitent en direct, on n'écrit rien
+                print("VigiEau : 404, instantané inchangé")
+                return
+            print(f"  essai {i + 1} : {e}")
+        except Exception as e:
+            print(f"  essai {i + 1} : {e}")
+        time.sleep(10 * (i + 1))
+    if zones is None:
+        print("::warning::VigiEau injoignable, instantané inchangé")
+        return
+    if not isinstance(zones, list):
+        zones = [zones] if zones else []
+    ancien = {}
+    if os.path.exists(SORTIE_VIGIEAU):
+        with open(SORTIE_VIGIEAU, encoding="utf-8") as f:
+            ancien = json.load(f)
+    # on réécrit au moins une fois par jour, pour que l'heure du relevé reste récente
+    if ancien.get("zones") == zones and ancien.get("maj", "")[:10] == dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d"):
+        print("VigiEau : rien de nouveau")
+        return
+    os.makedirs(os.path.dirname(SORTIE_VIGIEAU), exist_ok=True)
+    with open(SORTIE_VIGIEAU, "w", encoding="utf-8") as f:
+        json.dump({"maj": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "url": URL_VIGIEAU, "zones": zones},
+                  f, ensure_ascii=False, separators=(",", ":"))
+    niveaux = ", ".join(sorted({str(z.get("niveauGravite")) for z in zones if isinstance(z, dict)})) or "aucune restriction"
+    print(f"VigiEau : {len(zones)} zone(s) ({niveaux}) · {SORTIE_VIGIEAU} écrit ({os.path.getsize(SORTIE_VIGIEAU) // 1024} Ko)")
+
+
 def main():
     ancien = {}
     if os.path.exists(SORTIE):
@@ -154,3 +198,4 @@ def main():
 if __name__ == "__main__":
     main()
     nappe()
+    vigieau()

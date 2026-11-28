@@ -81,6 +81,7 @@
 #mwh-widget .mwh-body{flex:1}
 #mwh-widget .mwh-src{margin:calc(12px*var(--k)) 0 0;padding-top:calc(8px*var(--k));border-top:1px solid var(--mwh-line);font-size:calc(11.5px*var(--k));color:var(--mwh-muted)}
 #mwh-widget .mwh-muted{color:var(--mwh-muted);font-size:calc(13px*var(--k))}
+#mwh-widget .mwh-ancien{opacity:.55;transition:opacity .3s}
 #mwh-widget .mwh-err{font-size:calc(14px*var(--k));color:var(--mwh-muted);background:#f6f8fa;border-radius:calc(12px*var(--k));padding:calc(10px*var(--k)) calc(12px*var(--k))}
 
 /* chargement */
@@ -230,10 +231,36 @@
     }).join("");
   }
 
+  /* Pré-affichage de la situation VigiEau (depuis le 28/11/2026), comme pour l'Aulne et la nappe :
+     1) mémoire du navigateur (dernière situation affichée, atténuée) ; 2) copie de la réponse VigiEau publiée par
+     l'appli toutes les 3 heures (workflow « Instantané Aulne », data/vigieau/chateaulin.json) ; 3) VigiEau en direct,
+     qui a toujours le dernier mot. Si VigiEau ne répond pas, la situation déjà affichée est conservée. */
+  var CLE_VIGI_H = "antreizh-mwh-vigi", vigiDirectH = false, vigiAfficheH = false;
+  (function prechargerVigieau() {
+    try {
+      var m = JSON.parse(localStorage.getItem(CLE_VIGI_H) || "null");
+      if (!m || Date.now() - m.t > 7 * 864e5) return;
+      $("mwh-vigi").innerHTML = m.h; $("mwh-vigi").classList.add("mwh-ancien");
+      $("mwh-vigi").title = "Situation précédente, actualisation en cours…";
+    } catch (e) {}
+  })();
   function loadVigieau() {
     var url = "https://api.vigieau.gouv.fr/api/zones?lon=" + CFG.vigieauLon + "&lat=" + CFG.vigieauLat +
       "&commune=" + CFG.vigieauInsee + "&profil=" + CFG.vigieauProfil;
-    getJSON(url).then(function (zones) {
+    fetch("https://appli.antreizh.fr/data/vigieau/chateaulin.json", { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        if (j && Array.isArray(j.zones) && !vigiDirectH)
+          afficherVigieau(j.zones, "Situation VigiEau relevée le " + new Date(j.maj).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ", vérification en cours…");
+      }).catch(function () {});
+    getJSON(url).then(function (zones) { vigiDirectH = true; afficherVigieau(zones); }).catch(function (e) {
+      if (vigiAfficheH) { if (!vigiDirectH) $("mwh-vigi").title = "Situation relevée par l'appli : VigiEau ne répond pas pour le moment"; return; }
+      if ($("mwh-vigi").classList.contains("mwh-ancien")) { $("mwh-vigi").title = "Situation précédente : VigiEau ne répond pas pour le moment"; return; }
+      fail("mwh-vigi", e && e.status === 404 ? "Données VigiEau indisponibles pour ce secteur." :
+        "Impossible de joindre VigiEau pour le moment.", "https://vigieau.gouv.fr/");
+    });
+  }
+  function afficherVigieau(zones, titre) {
+      $("mwh-vigi").classList.remove("mwh-ancien"); $("mwh-vigi").title = titre || ""; vigiAfficheH = true;
       if (!Array.isArray(zones)) zones = zones ? [zones] : [];
       zones = zones.filter(function (z) { return z && GRAV[z.niveauGravite]; });
       if (!zones.length) {
@@ -241,6 +268,7 @@
           '<div class="mwh-badge" style="background:#2e9e6a"><div class="mwh-badge-ico">😊</div><div>' +
           '<div class="mwh-badge-lbl">Situation</div><div class="mwh-badge-val">' + info("vigi") + 'Aucune restriction</div></div></div>' +
           '<p class="mwh-msg">Aucun arrêté sécheresse en vigueur à Châteaulin. Les bons gestes restent de mise !</p>';
+        memoriserVigieau();
         return;
       }
       zones.sort(function (a, b) { return GRAV[b.niveauGravite].o - GRAV[a.niveauGravite].o; });
@@ -268,10 +296,10 @@
         (fin ? '<div class="mwh-muted">Arrêté valable jusqu\'au ' + fin +
           (a.cheminFichier ? ' · <a href="' + esc(a.cheminFichier) + '" target="_blank" rel="noopener">lire l\'arrêté</a>' : "") + "</div>" : "") +
         (list ? "<details><summary>Ce qui est interdit ou limité (" + usages.length + ")</summary><ul>" + list + "</ul></details>" : "");
-    }).catch(function (e) {
-      fail("mwh-vigi", e && e.status === 404 ? "Données VigiEau indisponibles pour ce secteur." :
-        "Impossible de joindre VigiEau pour le moment.", "https://vigieau.gouv.fr/");
-    });
+      memoriserVigieau();
+  }
+  function memoriserVigieau() {
+    try { localStorage.setItem(CLE_VIGI_H, JSON.stringify({ t: Date.now(), h: $("mwh-vigi").innerHTML })); } catch (e) {}
   }
 
   /* ------------------------------------------------------------------
