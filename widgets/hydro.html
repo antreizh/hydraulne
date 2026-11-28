@@ -235,7 +235,7 @@
      1) mémoire du navigateur (dernière situation affichée, atténuée) ; 2) copie de la réponse VigiEau publiée par
      l'appli toutes les 3 heures (workflow « Instantané Aulne », data/vigieau/chateaulin.json) ; 3) VigiEau en direct,
      qui a toujours le dernier mot. Si VigiEau ne répond pas, la situation déjà affichée est conservée. */
-  var CLE_VIGI_H = "antreizh-mwh-vigi", vigiDirectH = false, vigiAfficheH = false;
+  var CLE_VIGI_H = "antreizh-mwh-vigi", vigiDirectH = false, vigiAfficheH = false, vigiEchecH = false;
   (function prechargerVigieau() {
     try {
       var m = JSON.parse(localStorage.getItem(CLE_VIGI_H) || "null");
@@ -250,9 +250,11 @@
     fetch("https://appli.antreizh.fr/data/vigieau/chateaulin.json", { cache: "no-cache" })
       .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
         if (j && Array.isArray(j.zones) && !vigiDirectH)
-          afficherVigieau(j.zones, "Situation VigiEau relevée le " + new Date(j.maj).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ", vérification en cours…");
+          afficherVigieau(j.zones, "Situation VigiEau relevée le " + new Date(j.maj).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) +
+            (vigiEchecH ? " (VigiEau ne répond pas pour le moment)" : ", vérification en cours…"));
       }).catch(function () {});
     getJSON(url).then(function (zones) { vigiDirectH = true; afficherVigieau(zones); }).catch(function (e) {
+      vigiEchecH = true;
       if (vigiAfficheH) { if (!vigiDirectH) $("mwh-vigi").title = "Situation relevée par l'appli : VigiEau ne répond pas pour le moment"; return; }
       if ($("mwh-vigi").classList.contains("mwh-ancien")) { $("mwh-vigi").title = "Situation précédente : VigiEau ne répond pas pour le moment"; return; }
       fail("mwh-vigi", e && e.status === 404 ? "Données VigiEau indisponibles pour ce secteur." :

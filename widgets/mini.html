@@ -381,7 +381,7 @@
      1) mémoire du navigateur (dernière situation affichée, atténuée) ; 2) copie de la réponse VigiEau publiée par
      l'appli toutes les 3 heures (workflow « Instantané Aulne », data/vigieau/chateaulin.json) ; 3) VigiEau en direct,
      qui a toujours le dernier mot. Si VigiEau ne répond pas, la situation déjà affichée est conservée. */
-  var CLE_VIGI = "antreizh-mwm-vigi", vigiDirect = false, vigiAffiche = false;
+  var CLE_VIGI = "antreizh-mwm-vigi", vigiDirect = false, vigiAffiche = false, vigiEchec = false;
   function prechargerVigi() {
     try {
       var m = JSON.parse(localStorage.getItem(CLE_VIGI) || "null");
@@ -406,12 +406,14 @@
     fetch("https://appli.antreizh.fr/data/vigieau/chateaulin.json", { cache: "no-cache" })
       .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
         if (j && Array.isArray(j.zones) && !vigiDirect)
-          afficherVigi(j.zones, "Situation VigiEau relevée le " + new Date(j.maj).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ", vérification en cours…");
+          afficherVigi(j.zones, "Situation VigiEau relevée le " + new Date(j.maj).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) +
+            (vigiEchec ? " (VigiEau ne répond pas pour le moment)" : ", vérification en cours…"));
       }).catch(function () {});
     getJSON("https://api.vigieau.gouv.fr/api/zones?lon=" + CFG.vigieauLon + "&lat=" + CFG.vigieauLat +
       "&commune=" + CFG.vigieauInsee + "&profil=" + CFG.vigieauProfil).then(function (z) {
       vigiDirect = true; afficherVigi(z);
     }).catch(function () {
+      vigiEchec = true;
       if (vigiAffiche) { if (!vigiDirect) $("mwm-vigi").title = "Situation relevée par l'appli : VigiEau ne répond pas pour le moment"; return; }
       if ($("mwm-vigi").classList.contains("mwm-ancien")) { $("mwm-vigi").title = "Situation précédente : VigiEau ne répond pas pour le moment"; return; }
       na("mwm-vigi");
