@@ -395,12 +395,62 @@
     { max: .80, crit: "Bonne", col: "#1aa39a" }, { max: .90, crit: "Très bonne", col: "#2f80c9" },
     { max: 1.01, crit: "Très bonne", col: "#1d4f91" }
   ];
+  /* Pré-affichage de la nappe (depuis le 28/11/2026), comme pour l'Aulne :
+     1) mémoire du navigateur (dernière situation affichée, atténuée) ; 2) instantané publié par l'appli toutes les
+     3 heures (workflow « Instantané Aulne », data/nappe/saint-segal.json) ; 3) Hub'Eau en direct. La chronique
+     journalière depuis 2004 (requête lourde, lente le matin) est reprise de l'instantané ; seule la dernière mesure
+     télétransmise est alors demandée en direct. Une mesure affichée n'est jamais remplacée par une plus ancienne. */
+  var URL_INST_NAPPE = "https://appli.antreizh.fr/data/nappe/saint-segal.json";
+  var CLE_NAPPE = "antreizh-mwm-nappe", IDS_NAPPE = ["mwm-nappe", "mwm-nappe-var"], tNappe = 0;
+  function memoriserNappe() {
+    try {
+      var m = { t: Date.now() };
+      IDS_NAPPE.forEach(function (id) { m[id] = $(id).innerHTML; });
+      localStorage.setItem(CLE_NAPPE, JSON.stringify(m));
+    } catch (e) {}
+  }
+  function prechargerNappe() {
+    try {
+      var m = JSON.parse(localStorage.getItem(CLE_NAPPE) || "null");
+      if (!m || Date.now() - m.t > 7 * 864e5) return;
+      IDS_NAPPE.forEach(function (id) { if (m[id] != null) { $(id).innerHTML = m[id]; $(id).classList.add("mwm-ancien"); } });
+      $("mwm-nappe").title = "Mesure précédente, actualisation en cours…";
+    } catch (e) {}
+  }
+  function chroniqueInstantane(n) {                     // { d0, v: [niveau par jour], prof } -> { data } au format Hub'Eau
+    var d = [];
+    if (n && n.v) {
+      var p = n.d0.split("-"), t0 = Date.UTC(+p[0], +p[1] - 1, +p[2]);
+      n.v.forEach(function (v, i) { if (v != null) d.push({ date_mesure: new Date(t0 + i * 864e5).toISOString().slice(0, 10), niveau_nappe_eau: v }); });
+      if (d.length) d[d.length - 1].profondeur_nappe = n.prof;
+    }
+    return { data: d };
+  }
   function loadNappe() {
-    // Chronique journalière (historique, criticité, variations) + dernière mesure télétransmise (avec l'heure)
-    var tr = getJSON("https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques_tr?code_bss=" + encodeURIComponent(CFG.bss) +
-      "&size=1&sort=desc").then(function (j) { return (j.data || [])[0] || null; }).catch(function () { return null; });
-    Promise.all([getJSON("https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques?code_bss=" + encodeURIComponent(CFG.bss) +
-      "&fields=date_mesure,niveau_nappe_eau,profondeur_nappe&size=20000&sort=asc"), tr]).then(function (res) {
+    var url = "https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/";
+    // dernière mesure télétransmise (avec l'heure) : toujours en direct, requête légère
+    var tr = getJSON(url + "chroniques_tr?code_bss=" + encodeURIComponent(CFG.bss) + "&size=1&sort=desc")
+      .then(function (j) { return (j.data || [])[0] || null; }).catch(function () { return null; });
+    var inst = fetch(URL_INST_NAPPE, { cache: "no-cache" }).then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; }).then(function (j) {
+        if (!j || !j.niveau) return null;
+        var c = chroniqueInstantane(j.niveau);
+        try { afficherNappe([c, j.tr]); } catch (e) {}
+        return { chronique: c, tr: j.tr };
+      });
+    inst.then(function (s) {
+      // chronique journalière : celle de l'instantané, sinon Hub'Eau (lourde)
+      var chron = s && s.chronique.data.length ? Promise.resolve(s.chronique) :
+        getJSON(url + "chroniques?code_bss=" + encodeURIComponent(CFG.bss) + "&fields=date_mesure,niveau_nappe_eau,profondeur_nappe&size=20000&sort=asc");
+      return Promise.all([chron, tr]).then(function (res) { afficherNappe([res[0], res[1] || (s && s.tr)]); });
+    }).catch(function () {
+      if (tNappe) return;                                              // l'instantané reste affiché
+      if ($("mwm-nappe").classList.contains("mwm-ancien")) { $("mwm-nappe").title = "Mesure précédente : actualisation impossible pour le moment"; return; }
+      na("mwm-nappe"); $("mwm-nappe-var").textContent = "";
+    });
+  }
+  // res = [chronique journalière { data }, dernière mesure télétransmise (ou null)]
+  function afficherNappe(res) {
       var j = res[0], dtr = res[1];
       var d = (j.data || []).filter(function (r) { return r.niveau_nappe_eau != null && r.date_mesure; }).map(function (r) {
         var p = r.date_mesure.split("-"); return { t: Date.UTC(+p[0], +p[1] - 1, +p[2]), y: +p[0], v: r.niveau_nappe_eau, prof: r.profondeur_nappe };
@@ -431,12 +481,16 @@
         quand = "mesure du " + jourCourt(ttr) + (/T\d/.test(dtr.date_mesure) ? " à " + hm(ttr) : "");
         if (dtr.profondeur_nappe != null) prof = dtr.profondeur_nappe;
       }
+      var tMes = Math.max(last.t, ttr && !isNaN(ttr) ? ttr.getTime() : 0);
+      if (tMes < tNappe) return;                                        // une mesure plus récente est déjà affichée
       $("mwm-nappe").innerHTML = pill(c.crit, c.col, "nappe") +
         '<small class="mwm-date">' + quand + "</small>" +
         (prof != null ? "<small><i>eau à " + num(prof, 2) + " m sous la surface</i></small>" : "");
       // ligne pleine largeur, en italique ; elle peut passer sur 2 lignes, sans couper une variation
       $("mwm-nappe-var").innerHTML = parts.map(function (s) { return '<span class="mwm-nw">' + s + "</span>"; }).join(" · ");
-    }).catch(function () { na("mwm-nappe"); $("mwm-nappe-var").textContent = ""; });
+      tNappe = tMes; $("mwm-nappe").title = "";
+      IDS_NAPPE.forEach(function (id) { $(id).classList.remove("mwm-ancien"); });
+      memoriserNappe();
   }
 
   /* ---------------- 4) Aulne ---------------- */
@@ -671,7 +725,7 @@
   }
   function tick() { var d = new Date(); $("mwm-time").textContent = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + hm(d); }
   function refreshAll() { loadTide(); loadVigi(); loadNappe(); loadAulne(); }
-  tick(); prechargerAulne(); refreshAll();
+  tick(); prechargerAulne(); prechargerNappe(); refreshAll();
   setInterval(refreshAll, CFG.refreshMinutes * 60000);
   setInterval(function () { tick(); renderTide(); }, 60000);
   chargerPredictions(); setInterval(chargerPredictions, 6 * 60 * 60000);   // coefficients de la veille (tendance)

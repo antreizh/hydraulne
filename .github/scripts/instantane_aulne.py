@@ -13,17 +13,27 @@ Format (heures en UTC) :
   qmnj   : débit moyen journalier (l/s)      { "d0": "AAAA-MM-JJ", "v": [valeur ou null, un par jour] }
   hixnj  : hauteur maximale journalière (mm) { "d0": "AAAA-MM-JJ", "v": [...] }
 Une série que Hub'Eau ne rend pas est reprise du fichier précédent (l'instantané ne se dégrade jamais).
+
+Depuis le 28/11/2026, même principe pour la nappe de Saint-Ségal (piézomètre de Kergadalen 03103X0047/PZ),
+rubrique « Nappe » du mini-widget, dans data/nappe/saint-segal.json :
+  maj    : heure du passage (ISO)
+  niveau : niveau journalier NGF (m)          { "d0": "AAAA-MM-JJ", "v": [valeur ou null, un par jour], "prof": profondeur du dernier jour }
+  tr     : dernière mesure télétransmise     { "date_mesure", "niveau_eau_ngf", "profondeur_nappe" }
 """
 import datetime as dt
 import json
 import os
 import sys
 import time
+import urllib.parse
 import urllib.request
 
 STATION = "J382182001"
 BASE = "https://hubeau.eaufrance.fr/api/v2/hydrometrie/"
-SORTIE = os.path.join(sys.argv[1] if len(sys.argv) > 1 else ".", "data", "aulne", "chateaulin.json")
+RACINE = sys.argv[1] if len(sys.argv) > 1 else "."
+SORTIE = os.path.join(RACINE, "data", "aulne", "chateaulin.json")
+BSS = "03103X0047/PZ"
+SORTIE_NAPPE = os.path.join(RACINE, "data", "nappe", "saint-segal.json")
 
 
 def lire(url, essais=3):
@@ -66,6 +76,50 @@ def elab(grandeur):
     return {"d0": d0.isoformat(), "v": [round(x) if isinstance(x, float) and x.is_integer() else x for x in v]}
 
 
+def nappe():
+    """Instantané de la nappe de Saint-Ségal (mêmes requêtes que le mini-widget)."""
+    ancien = {}
+    if os.path.exists(SORTIE_NAPPE):
+        with open(SORTIE_NAPPE, encoding="utf-8") as f:
+            ancien = json.load(f)
+    bss = urllib.parse.quote(BSS, safe="")
+    neuf = {"maj": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "bss": BSS}
+    print("nappe …")
+    d = lire(f"https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques?code_bss={bss}"
+             "&fields=date_mesure,niveau_nappe_eau,profondeur_nappe&size=20000&sort=asc")
+    niveau = None
+    if d:
+        vals = {r["date_mesure"][:10]: r for r in d if r.get("niveau_nappe_eau") is not None and r.get("date_mesure")}
+        if vals:
+            jours = sorted(vals)
+            d0 = dt.date.fromisoformat(jours[0])
+            n = (dt.date.fromisoformat(jours[-1]) - d0).days + 1
+            v = []
+            for i in range(n):
+                r = vals.get((d0 + dt.timedelta(days=i)).isoformat())
+                v.append(r["niveau_nappe_eau"] if r else None)
+            niveau = {"d0": d0.isoformat(), "v": v, "prof": vals[jours[-1]].get("profondeur_nappe")}
+    if niveau is None:
+        print("::warning::Nappe : chronique indisponible sur Hub'Eau, reprise de l'instantané précédent")
+        niveau = ancien.get("niveau")
+    neuf["niveau"] = niveau
+    print("nappe (temps réel) …")
+    t = lire(f"https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques_tr?code_bss={bss}&size=1&sort=desc")
+    neuf["tr"] = ({k: t[0].get(k) for k in ("date_mesure", "niveau_eau_ngf", "profondeur_nappe")} if t else ancien.get("tr"))
+    if not niveau:
+        print("::warning::Nappe : aucune donnée, instantané inchangé")
+        return
+    if ancien and {k: v for k, v in neuf.items() if k != "maj"} == {k: v for k, v in ancien.items() if k != "maj"}:
+        print("Nappe : rien de nouveau")
+        return
+    os.makedirs(os.path.dirname(SORTIE_NAPPE), exist_ok=True)
+    with open(SORTIE_NAPPE, "w", encoding="utf-8") as f:
+        json.dump(neuf, f, separators=(",", ":"))
+    dern = dt.date.fromisoformat(niveau["d0"]) + dt.timedelta(days=len(niveau["v"]) - 1)
+    print(f"Nappe : niveau journalier jusqu'au {dern} · temps réel {(neuf.get('tr') or {}).get('date_mesure')} · "
+          f"{SORTIE_NAPPE} écrit ({os.path.getsize(SORTIE_NAPPE) // 1024} Ko)")
+
+
 def main():
     ancien = {}
     if os.path.exists(SORTIE):
@@ -99,3 +153,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    nappe()

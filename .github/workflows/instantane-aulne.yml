@@ -1,5 +1,6 @@
-# Instantané de l'Aulne à Châteaulin : toutes les 3 heures, copie des mesures Hub'Eau utiles au mini-widget
-# « Situation hydrologique » dans data/aulne/chateaulin.json. Le widget l'affiche aussitôt (Hub'Eau peut mettre
+# Instantané de l'Aulne à Châteaulin et de la nappe de Saint-Ségal : toutes les 3 heures, copie des mesures Hub'Eau
+# utiles au mini-widget « Situation hydrologique » dans data/aulne/chateaulin.json et data/nappe/saint-segal.json (nappe
+# depuis le 28/11/2026). Le widget l'affiche aussitôt (Hub'Eau peut mettre
 # plus de 20 s à répondre, surtout le matin), puis le complète par les dernières mesures lues en direct.
 # Ajouté le 27/11/2026. Lancement manuel possible : onglet « Actions » > « Instantané Aulne » > « Run workflow ».
 name: Instantané Aulne
@@ -24,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lire Hub'Eau (Aulne à Châteaulin)
+      - name: Lire Hub'Eau (Aulne à Châteaulin, nappe de Saint-Ségal)
         run: python3 .github/scripts/instantane_aulne.py .
 
       - name: Publier l'instantané
@@ -32,14 +33,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           git add -N data/ 2>/dev/null || true
-          if git diff --quiet -- data/aulne/; then
+          if git diff --quiet -- data/; then
             echo "Instantané inchangé."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/aulne/
-          git commit -m "Instantané Aulne ($(date -u +%Y-%m-%dT%H:%MZ))"
+          git add data/
+          git commit -m "Instantané Aulne et nappe ($(date -u +%Y-%m-%dT%H:%MZ))"
           for i in 1 2 3; do
             git pull --rebase origin main && git push origin HEAD:main && break
             sleep $((i * 15))
